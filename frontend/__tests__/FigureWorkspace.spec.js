@@ -2379,9 +2379,91 @@ describe("detecting a script's data and figures", () => {
       },
     });
     await openDetect(u);
-    expect(screen.getByTestId("fw-detect-skipped")).toHaveTextContent(
-      "Some scripts were not analyzed due to file size or unreadable source."
+    expect(screen.getByTestId("fw-detect-skipped-list")).toHaveTextContent(
+      "scripts/huge.py — too large to read in full"
     );
+  });
+
+  it("names a path two resources both claim, and proposes nothing from it",
+     async () => {
+    // The draft holds the same CSV twice -- an import and a hand-made
+    // Dataset, say. Which one `read_csv("data/raw.csv")` means is a question
+    // about the draft, not about the code, so nothing is proposed and the
+    // file is named.
+    const u = user();
+    const ctx = renderWorkspace({
+      ...WITH_BOTH_ENDS,
+      datasets: [
+        { id: "d0", readme: "raw data", files: ["data/raw.csv"] },
+        { id: "d1", readme: "the same file again", files: ["data/raw.csv"] },
+      ],
+      ...cached([READS, SAVES]),
+    });
+    await openDetect(u);
+
+    expect(
+      screen.queryByTestId("fw-detect-pick-input_datasets:data/raw.csv")
+    ).toBeNull();
+    expect(screen.getByTestId("fw-detect-skipped-list")).toHaveTextContent(
+      "data/raw.csv — claimed by more than one resource already"
+    );
+    // The rest of the same script's evidence still answers.
+    expect(
+      screen.getByTestId("fw-detect-pick-output_figures:figures/dos.png")
+    ).toBeInTheDocument();
+    expect(ctx.addMany).not.toHaveBeenCalled();
+    expect(ctx.addEdge).not.toHaveBeenCalled();
+  });
+
+  it("says which cap stopped a wrapper, not just that something did",
+     async () => {
+    // Five hops of shell wrapper, and the follower stops at four. "Not
+    // analyzed" would be true and useless; the reason is the hop cap and it
+    // is what the curator needs in order to know nothing is broken.
+    const u = user();
+    const chain = Array.from({ length: 6 }, (unused, index) =>
+      `scripts/step_${index}.sh`);
+    renderWorkspace({
+      ...WITH_BOTH_ENDS,
+      scripts: [{ id: "s0", readme: "a deep pipeline", files: [chain[0]] }],
+      rccAnalysisCache: {
+        path: "/proj",
+        data: {
+          code_links: [],
+          shell_calls: chain.slice(0, 5).map((from, index) => ({
+            from, to: chain[index + 1], line: index + 1, command: "bash",
+          })),
+        },
+      },
+    });
+    await openDetect(u);
+
+    expect(screen.getByTestId("fw-detect-skipped-list")).toHaveTextContent(
+      "scripts/step_5.sh — further down the chain than this follows"
+    );
+  });
+
+  it("heads the diagnostic with something true of everything under it",
+     async () => {
+    // The heading used to blame file size and unreadable source for every
+    // entry, including the ones that were read perfectly well and simply
+    // could not be matched or followed.
+    const u = user();
+    renderWorkspace({
+      ...WITH_BOTH_ENDS,
+      datasets: [
+        { id: "d0", readme: "raw data", files: ["data/raw.csv"] },
+        { id: "d1", readme: "the same file again", files: ["data/raw.csv"] },
+      ],
+      ...cached([READS]),
+    });
+    await openDetect(u);
+
+    const note = screen.getByTestId("fw-detect-skipped");
+    expect(note).toHaveTextContent(
+      /some files were not used\. each one is named below, with why\./i
+    );
+    expect(note).not.toHaveTextContent(/due to file size or unreadable source/i);
   });
 
   it("writes nothing when the review is cancelled", async () => {
@@ -2495,6 +2577,80 @@ describe("proposing an artifact a script's code named", () => {
 
   const KEY = "output_datasets:derived/clean.csv";
   const FIG_KEY = "output_figures:figures/new_figure.png";
+
+  // A script that reads a table, edits it and writes it back names the same
+  // path twice. That is ONE dataset with two arrows -- consumed going in,
+  // produced coming out -- and it used to become two records holding the
+  // same file, neither of which got an arrow at all: the step that attaches
+  // the edge afterwards finds the new artifact by its path, found two, and
+  // stopped.
+  const ROUND_TRIP = [
+    { script: SOURCE, path: "data/table.csv", mode: "read",
+      call: "pandas.read_csv", literal: "data/table.csv",
+      line: 8, cell: null },
+    { script: SOURCE, path: "data/table.csv", mode: "write",
+      call: "DataFrame.to_csv", literal: "data/table.csv",
+      line: 51, cell: null },
+  ];
+  const IN_KEY = "input_datasets:data/table.csv";
+  const OUT_KEY = "output_datasets:data/table.csv";
+
+  it("makes one resource for a file the script both reads and writes",
+     async () => {
+    const u = user();
+    renderLive(ROUND_TRIP);
+    await u.click(await screen.findByTestId("fw-detect-s0"));
+    await u.click(screen.getByTestId(`fw-detect-pick-${IN_KEY}`));
+    await u.click(screen.getByTestId(`fw-detect-pick-${OUT_KEY}`));
+    // One description answers for the one record; the second row edits the
+    // same draft, because it is the same file.
+    fireEvent.change(screen.getByTestId(`fw-detect-field-${IN_KEY}-readme`), {
+      target: { value: "the working table" },
+    });
+    await u.click(screen.getByTestId("fw-detect-apply"));
+
+    const datasets = await screen.findByTestId("live-datasets");
+    expect(datasets).toHaveTextContent("data/table.csv");
+    // One record, not two holding the same file.
+    expect(datasets.textContent.trim().split(" ")).toHaveLength(1);
+  });
+
+  it("gives that one resource both of its arrows", async () => {
+    const u = user();
+    renderLive(ROUND_TRIP);
+    await u.click(await screen.findByTestId("fw-detect-s0"));
+    await u.click(screen.getByTestId(`fw-detect-pick-${IN_KEY}`));
+    await u.click(screen.getByTestId(`fw-detect-pick-${OUT_KEY}`));
+    fireEvent.change(screen.getByTestId(`fw-detect-field-${IN_KEY}-readme`), {
+      target: { value: "the working table" },
+    });
+    await u.click(screen.getByTestId("fw-detect-apply"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("live-edges")).not.toHaveTextContent("none")
+    );
+    const drawn = screen.getByTestId("live-edges").textContent.trim().split(" ");
+    // A reverse-direction pair about one dataset: into the script, and back
+    // out of it. Both are arrows Qresp already allows between two resources.
+    expect(drawn).toHaveLength(2);
+    expect(drawn.some((edge) => edge.endsWith(">s0:consumes"))).toBe(true);
+    expect(drawn.some((edge) => edge.startsWith("s0>"))).toBe(true);
+    expect(drawn.some((edge) => edge.endsWith(":links_to"))).toBe(true);
+  });
+
+  it("still refuses the batch when that one record is short a field",
+     async () => {
+    const u = user();
+    renderLive(ROUND_TRIP);
+    await u.click(await screen.findByTestId("fw-detect-s0"));
+    await u.click(screen.getByTestId(`fw-detect-pick-${IN_KEY}`));
+    await u.click(screen.getByTestId(`fw-detect-pick-${OUT_KEY}`));
+    await u.click(screen.getByTestId("fw-detect-apply"));
+
+    expect(screen.getByTestId("fw-detect-blocked")).toBeInTheDocument();
+    expect(screen.getByTestId("live-datasets")).toHaveTextContent("none");
+    expect(screen.getByTestId("live-edges")).toHaveTextContent("none");
+  });
 
   it("offers the fields the record needs, with what the code answered "
      + "already filled in", async () => {

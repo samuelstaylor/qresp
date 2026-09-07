@@ -1,4 +1,6 @@
 import {
+  aiDetections,
+  ambiguousPaths,
   cappedSources,
   describeChain,
   sourceClosure,
@@ -211,11 +213,46 @@ describe("what one script's code says", () => {
     expect(detectionsFor([], "s0", alike, [])).toEqual([]);
   });
 
-  it("refuses a path that two artifacts both claim", () => {
+  it("abstains from a path two artifacts both claim, and names it", () => {
+    // OLD CONTRACT: an ambiguous path was offered as a NEW dataset -- "not
+    // attached to a guess". That is worse than a guess. Accepting it made a
+    // THIRD artifact holding the same path, and the edge that was the whole
+    // point never arrived: the code that finds the new artifact afterwards
+    // looks it up by that same path, now finds three, and gives up.
+    //
+    // REPLACEMENT CONTRACT: an ambiguous path is not proposed at all, and
+    // the file is named in the same diagnostic that names everything else
+    // this could not read. The curator resolves the duplicate, not Qresp.
     const shared = { ...BY_ID, d1: { id: "d1", files: ["data/raw.csv"] } };
-    const [item] = detectionsFor([READ], "s0", shared, []);
-    // Ambiguous: it is proposed as new rather than attached to a guess.
-    expect(item.existingId).toBe("");
+    expect(detectionsFor([READ], "s0", shared, [])).toEqual([]);
+    expect(ambiguousPaths([READ], "s0", shared)).toEqual([
+      { path: "data/raw.csv", reason: "ambiguous_path" },
+    ]);
+  });
+
+  it("still attaches when exactly one artifact claims the path", () => {
+    const [item] = detectionsFor([READ], "s0", BY_ID, []);
+    expect(item.existingId).toBe("d0");
+    expect(ambiguousPaths([READ], "s0", BY_ID)).toEqual([]);
+  });
+
+  it("only calls a path ambiguous among artifacts of the kind it would be",
+     () => {
+    // A Script that lists the CSV among its own files is not a second
+    // Dataset claiming it. Only the datasets are counted for a dataset.
+    const alsoScript = {
+      ...BY_ID,
+      s1: { id: "s1", files: ["scripts/other.py", "data/raw.csv"] },
+    };
+    expect(ambiguousPaths([READ], "s0", alsoScript)).toEqual([]);
+    const [item] = detectionsFor([READ], "s0", alsoScript, []);
+    expect(item.existingId).toBe("d0");
+  });
+
+  it("reports an ambiguous path once, however many lines read it", () => {
+    const shared = { ...BY_ID, d1: { id: "d1", files: ["data/raw.csv"] } };
+    const twice = [READ, { ...READ, line: 44 }];
+    expect(ambiguousPaths(twice, "s0", shared)).toHaveLength(1);
   });
 
   it("does not offer a relationship that already runs that way", () => {
@@ -520,5 +557,80 @@ describe("following a shell wrapper to the source that does the work", () => {
     ];
     const [item] = detectionsFor(links, "s0", byId, [], CALLS);
     expect(item.evidences[0].via).toEqual([]);
+  });
+});
+
+// The server has already refused an answer that named a file the scan did not
+// find, claimed a relationship the file's type cannot have, or cited an
+// excerpt it was not sent. These are the checks the DRAFT makes afterwards,
+// where the server cannot see: what this curator's resources already hold.
+describe("an answer from the model, checked against the draft", () => {
+  const asked = (over) => ({
+    relation: "input_dataset",
+    target_path: "data/raw.csv",
+    confidence: "medium",
+    rationale: "the wrapper passes it in",
+    excerptId: "e1",
+    ...over,
+  });
+
+  it("attaches to the one artifact that claims the path", () => {
+    const [item] = aiDetections([asked()], "s0", BY_ID, [], []);
+    expect(item.existingId).toBe("d0");
+    expect(item.edge).toEqual({ from: "d0", to: "s0", type: "consumes" });
+    expect(item.assisted).toBe(true);
+  });
+
+  it("drops a suggestion for a path two artifacts both claim", () => {
+    // The same rule the parsed side follows. Which resource the model meant
+    // is not something a confidence score settles, and proposing a third
+    // record holding that path is not an answer to it either.
+    const shared = { ...BY_ID, d1: { id: "d1", files: ["data/raw.csv"] } };
+    expect(aiDetections([asked()], "s0", shared, [], [])).toEqual([]);
+  });
+
+  it("proposes a new resource when nothing claims the path", () => {
+    const [item] = aiDetections(
+      [asked({ target_path: "data/other.csv" })], "s0", BY_ID, [], []);
+    expect(item.existingId).toBe("");
+    expect(item.edge).toBeNull();
+    expect(item.kind).toBe("dataset");
+  });
+
+  it("has no vocabulary for a Tool, whatever the model says", () => {
+    expect(
+      aiDetections([asked({ relation: "uses_tool" })], "s0", BY_ID, [], [])
+    ).toEqual([]);
+    expect(
+      aiDetections([asked({ relation: "output_tool" })], "s0", BY_ID, [], [])
+    ).toEqual([]);
+  });
+
+  it("says nothing the parser already said", () => {
+    const parsed = detectionsFor([READ], "s0", BY_ID, []);
+    expect(aiDetections([asked()], "s0", BY_ID, [], parsed)).toEqual([]);
+  });
+
+  it("does not offer a relationship that already runs that way", () => {
+    const edges = [{ from: "d0", to: "s0", type: "consumes" }];
+    expect(aiDetections([asked()], "s0", BY_ID, edges, [])).toEqual([]);
+  });
+
+  it("ignores a malformed answer instead of guessing at it", () => {
+    expect(aiDetections([null, {}, asked({ target_path: "" })],
+                        "s0", BY_ID, [], [])).toEqual([]);
+    expect(aiDetections(null, "s0", BY_ID, [], [])).toEqual([]);
+  });
+
+  it("never lets an answer claim more confidence than it is allowed", () => {
+    const [item] = aiDetections(
+      [asked({ confidence: "high" })], "s0", BY_ID, [], []);
+    expect(item.confidence).toBe("low");
+  });
+
+  it("offers one row however many times the answer repeats itself", () => {
+    expect(
+      aiDetections([asked(), asked()], "s0", BY_ID, [], [])
+    ).toHaveLength(1);
   });
 });

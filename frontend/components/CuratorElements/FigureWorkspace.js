@@ -61,6 +61,7 @@ import axios from "axios";
 import {
   aiDetectionKey,
   aiDetections,
+  ambiguousPaths,
   cappedSources,
   describeChain,
   describeEvidence,
@@ -682,6 +683,13 @@ const SKIP_WORDS = {
   size_limit: "too large to read in full",
   parse_error: "could not be read as source",
   source_cap: "beyond the number of source files reviewed at once",
+  // Read perfectly well; simply further away than a wrapper is followed.
+  hop_cap: "further down the chain than this follows",
+  closure_cap: "beyond the number of files followed from one script",
+  // Read perfectly well, and understood -- but the draft holds this path
+  // twice, so which resource the arrow belongs to is not this reader's
+  // question to answer.
+  ambiguous_path: "claimed by more than one resource already",
 };
 
 const DetectDialog = ({
@@ -766,9 +774,12 @@ const DetectDialog = ({
             data-testid="fw-detect-skipped"
             sx={{ mb: 1.5, py: 0.5 }}
           >
+            {/* True of every line under it. The heading used to blame
+                file size and unreadable source for all of them, including
+                the files that were read perfectly well and could not be
+                followed or matched. */}
             <Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>
-              Some scripts were not analyzed due to file size or unreadable
-              source.
+              Some files were not used. Each one is named below, with why.
             </Typography>
             {/* By name, and why. A file that was not read is not the same as
                 a file with nothing in it, and only one of those is safe to
@@ -1296,6 +1307,10 @@ const FigureWorkspace = () => {
     ? codeSkipped
         .concat(cappedSources(byId[detectFor]))
         .concat(closure.skipped)
+        // ...and the lines that WERE understood but name a path this draft
+        // stores twice. Nothing is proposed from those, so without this the
+        // curator sees silence where the code was perfectly clear.
+        .concat(ambiguousPaths(codeLinks, detectFor, byId, shellCalls))
     : [];
 
   const detections = useMemo(
@@ -1311,6 +1326,15 @@ const FigureWorkspace = () => {
   // Parsed and assisted items live in one selection, so they need one key.
   const keyOf = (item) =>
     item.assisted ? aiDetectionKey(item) : detectionKey(item);
+
+  // WHICH RECORD A ROW IS EDITING.
+  //
+  // Selection is per ROW -- a curator may want the arrow in only one
+  // direction -- but the fields belong to the RESOURCE. A file a script both
+  // reads and writes appears as an input row and an output row, and those
+  // are two arrows about one dataset: one description, typed once, and both
+  // rows are complete together.
+  const draftKeyOf = (item) => `${item.kind}:${item.path}`;
 
   // The wire's name for a group, for telling the server what the parser
   // already found so it is never restated as a suggestion.
@@ -1352,7 +1376,7 @@ const FigureWorkspace = () => {
     setDetectPicked((was) => ({ ...was, [key]: !was[key] }));
 
   const detectionDraft = (item) => {
-    const key = keyOf(item);
+    const key = draftKeyOf(item);
     const stored = detectDrafts[key];
     if (stored) return stored;
     // Seeded from what the code already answered: the image file, or the
@@ -1361,7 +1385,7 @@ const FigureWorkspace = () => {
   };
 
   const setDetectionField = (item, field, value) => {
-    const key = keyOf(item);
+    const key = draftKeyOf(item);
     const current = detectionDraft(item);
     setDetectDrafts((was) => ({
       ...was,
@@ -1635,9 +1659,20 @@ const FigureWorkspace = () => {
     ["chart", "dataset"].forEach((type) => {
       const mine = proposals.filter((item) => item.kind === type);
       if (!mine.length) return;
-      const records = mine.map((item) =>
+      // ONE RECORD PER FILE. Two rows can name the same path -- read on one
+      // line, written on another -- and that is one resource with an arrow
+      // each way. Making it twice put two records holding the same file in
+      // the draft, and left both arrows unattachable: the step below finds
+      // the new artifact BY that path.
+      const firstForPath = new Map();
+      mine.forEach((item) => {
+        if (!firstForPath.has(item.path)) firstForPath.set(item.path, item);
+      });
+      const records = Array.from(firstForPath.values()).map((item) =>
         toRecord(type, detectionDraft(item)));
-      mine.forEach((item, index) => {
+      // Every arrow, though: the rows were chosen one at a time and each one
+      // is a relationship the curator asked for.
+      mine.forEach((item) => {
         plan.push({
           type,
           // How the new artifact will be recognised once the reducer has

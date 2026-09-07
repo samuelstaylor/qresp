@@ -48,6 +48,11 @@ export const MAX_CLOSURE = 30;
 export const SKIP_SOURCE_CAP = "source_cap";
 export const SKIP_HOP_CAP = "hop_cap";
 export const SKIP_CLOSURE_CAP = "closure_cap";
+// Not a file that could not be READ -- a file whose OWNER cannot be decided,
+// because two artifacts in this draft store the same path. Reported through
+// the same channel, because from the curator's side it is the same fact:
+// this line of code was understood, and no proposal could be made from it.
+export const SKIP_AMBIGUOUS = "ambiguous_path";
 
 /**
  * EVERY RCC source file of a Script artifact, in a stable order.
@@ -106,18 +111,27 @@ const pathsOf = (artifact, id) => {
   return out;
 };
 
+/** Every artifact of these kinds that stores this exact path. */
+export const ownersOf = (path, byId, kinds) => {
+  const wanted = clean(path);
+  return Object.keys(byId || {}).filter(
+    (id) =>
+      kinds.includes(prefixOf(id)) && pathsOf(byId[id], id).includes(wanted)
+  );
+};
+
 /**
  * The artifact a path belongs to, or "" when it is not exactly one artifact's.
  *
  * Two artifacts storing the same path is a real possibility, and it makes the
  * arrow ambiguous rather than obvious. An ambiguous arrow is refused.
+ *
+ * Callers that need to tell "nobody has this path" from "several do" ask
+ * `ownersOf` -- the difference decides whether a proposal is offered or
+ * withheld, and this function cannot express it.
  */
 export const ownerOf = (path, byId, kinds) => {
-  const wanted = clean(path);
-  const owners = Object.keys(byId || {}).filter(
-    (id) =>
-      kinds.includes(prefixOf(id)) && pathsOf(byId[id], id).includes(wanted)
-  );
+  const owners = ownersOf(path, byId, kinds);
   return owners.length === 1 ? owners[0] : "";
 };
 
@@ -131,6 +145,17 @@ const FIGURE_WRITERS = ["savefig"];
 
 const writesAnImage = (call) =>
   FIGURE_WRITERS.some((name) => String(call || "").endsWith(name));
+
+// WHAT ONE LINE WOULD BECOME: the group it belongs to and the kind of
+// artifact on the other end. Shared, so the list of proposals and the list of
+// paths abstained from are always talking about the same thing.
+const shapeOf = (link) => {
+  if (link.mode === "read") return { group: GROUP_INPUT, kind: "dataset" };
+  if (writesAnImage(link.call)) return { group: GROUP_FIGURE, kind: "chart" };
+  return { group: GROUP_OUTPUT, kind: "dataset" };
+};
+
+const kindsFor = (kind) => [kind === "chart" ? CHART : DATASET];
 
 export const GROUP_INPUT = "input_datasets";
 export const GROUP_FIGURE = "output_figures";
@@ -275,21 +300,15 @@ export const detectionsFor = (links, scriptId, byId, edges, shellCalls) => {
       via: chains.get(link.script) || [],
     };
 
-    let group;
-    let kind;
-    if (link.mode === "read") {
-      group = GROUP_INPUT;
-      kind = "dataset";
-    } else if (writesAnImage(link.call)) {
-      group = GROUP_FIGURE;
-      kind = "chart";
-    } else {
-      group = GROUP_OUTPUT;
-      kind = "dataset";
-    }
+    const { group, kind } = shapeOf(link);
 
-    const existingId = ownerOf(
-      link.path, byId, [kind === "chart" ? CHART : DATASET]);
+    const owners = ownersOf(link.path, byId, kindsFor(kind));
+    // Two artifacts already store this path. Which one the arrow belongs to
+    // is the curator's question, not this reader's, and proposing a third
+    // artifact holding the same path is not an answer to it. The file is
+    // named instead -- see `ambiguousPaths`.
+    if (owners.length > 1) return;
+    const existingId = owners[0] || "";
 
     // The arrow, in the order it will be stored. `links_to` for a dataset a
     // script produced is the generic directional edge on purpose: "this
@@ -348,6 +367,35 @@ export const detectionsFor = (links, scriptId, byId, edges, shellCalls) => {
         : 1
     )
   );
+  return out;
+};
+
+/**
+ * The paths this refused to propose anything for, because more than one
+ * artifact in the draft already stores each of them.
+ *
+ * Deliberately a separate list rather than a disabled row: nothing about the
+ * code is wrong, and there is no decision for the curator to make HERE. What
+ * they need is the filename and the reason, in the same place they are told
+ * about a source that was too large or could not be parsed.
+ */
+export const ambiguousPaths = (links, scriptId, byId, shellCalls) => {
+  const script = (byId || {})[scriptId];
+  const start = sourcesOf(script).slice(0, MAX_SOURCES);
+  if (!start.length) return [];
+  const { sources: reachable } = sourceClosure(start, shellCalls);
+  const sources = new Set(reachable);
+
+  const seen = new Set();
+  const out = [];
+  (links || []).forEach((link) => {
+    if (!link || !link.path || !sources.has(link.script)) return;
+    const { kind } = shapeOf(link);
+    if (ownersOf(link.path, byId, kindsFor(kind)).length < 2) return;
+    if (seen.has(link.path)) return;
+    seen.add(link.path);
+    out.push({ path: link.path, reason: SKIP_AMBIGUOUS });
+  });
   return out;
 };
 
@@ -441,8 +489,12 @@ export const aiDetections = (suggestions, scriptId, byId, edges, already) => {
     if (!shape || !path) return;
     if (parsed.has(`${shape.group}:${path}`)) return;
 
-    const existingId = ownerOf(
-      path, byId, [shape.kind === "chart" ? CHART : DATASET]);
+    const owners = ownersOf(path, byId, kindsFor(shape.kind));
+    // The same rule the parsed side follows. Which resource the model meant
+    // is not something a confidence score settles, and proposing a third
+    // record holding that path is not an answer to it either.
+    if (owners.length > 1) return;
+    const existingId = owners[0] || "";
     if (existingId === scriptId) return;
     const from = shape.direction === "into" ? existingId : scriptId;
     const to = shape.direction === "into" ? scriptId : existingId;
