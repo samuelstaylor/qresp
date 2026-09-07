@@ -2543,6 +2543,15 @@ describe("proposing an artifact a script's code named", () => {
             .map((e) => `${e.from}>${e.to}:${e.type}`)
             .join(" ") || "none"}
         </span>
+        {/* Which edge OWNS the feedback mark, read straight off the record:
+            the badge in the rows says the same thing, and this says it
+            without opening every row to look. */}
+        <span data-testid="live-feedback">
+          {((workflow || {}).edges || [])
+            .filter((e) => e.feedback)
+            .map((e) => `${e.from}>${e.to}`)
+            .join(" ") || "none"}
+        </span>
       </div>
     );
   };
@@ -2615,7 +2624,44 @@ describe("proposing an artifact a script's code named", () => {
     expect(datasets.textContent.trim().split(" ")).toHaveLength(1);
   });
 
-  it("gives that one resource both of its arrows", async () => {
+  it("gives that one resource both of its arrows, once the loop is agreed",
+     async () => {
+    // OLD CONTRACT: both arrows landed the moment Add was pressed. That was
+    // wrong, and only looked right because a brand-new artifact used to be
+    // unable to close a loop -- which stopped being true when one record
+    // started receiving every arrow the batch asked for. The pair IS a
+    // cycle, and a cycle is asked about.
+    //
+    // REPLACEMENT CONTRACT: the arrow that closes nothing goes in, the one
+    // that closes the loop is asked about, and both are there afterwards.
+    const u = user();
+    renderLive(ROUND_TRIP);
+    await u.click(await screen.findByTestId("fw-detect-s0"));
+    await u.click(screen.getByTestId(`fw-detect-pick-${IN_KEY}`));
+    await u.click(screen.getByTestId(`fw-detect-pick-${OUT_KEY}`));
+    fireEvent.change(screen.getByTestId(`fw-detect-field-${IN_KEY}-readme`), {
+      target: { value: "the working table" },
+    });
+    await u.click(screen.getByTestId("fw-detect-apply"));
+    await u.click(await screen.findByTestId("fw-loop-confirm"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("live-edges")).toHaveTextContent(":links_to")
+    );
+    const drawn = screen.getByTestId("live-edges").textContent.trim().split(" ");
+    // A reverse-direction pair about one dataset: into the script, and back
+    // out of it. Both are arrows Qresp already allows between two resources.
+    expect(drawn).toHaveLength(2);
+    expect(drawn.some((edge) => edge.endsWith(">s0:consumes"))).toBe(true);
+    expect(drawn.some((edge) => edge.startsWith("s0>"))).toBe(true);
+    expect(drawn.some((edge) => edge.endsWith(":links_to"))).toBe(true);
+  });
+
+  it("asks about the loop when the dataset is the one it just proposed",
+     async () => {
+    // The arrows are the same two arrows. That the dataset did not exist a
+    // moment ago changes nothing about what they mean together, and the
+    // curator is asked here exactly as they are when it did exist.
     const u = user();
     renderLive(ROUND_TRIP);
     await u.click(await screen.findByTestId("fw-detect-s0"));
@@ -2626,16 +2672,59 @@ describe("proposing an artifact a script's code named", () => {
     });
     await u.click(screen.getByTestId("fw-detect-apply"));
 
+    expect(await screen.findByTestId("fw-loop-dialog")).toBeInTheDocument();
+    // One arrow is in already -- it closed nothing. The other is waiting.
     await waitFor(() =>
-      expect(screen.getByTestId("live-edges")).not.toHaveTextContent("none")
+      expect(screen.getByTestId("live-edges")).toHaveTextContent(":consumes")
+    );
+    expect(screen.getByTestId("live-edges")).not.toHaveTextContent(":links_to");
+  });
+
+  it("marks only the arrow that closes it, once approved", async () => {
+    const u = user();
+    renderLive(ROUND_TRIP);
+    await u.click(await screen.findByTestId("fw-detect-s0"));
+    await u.click(screen.getByTestId(`fw-detect-pick-${IN_KEY}`));
+    await u.click(screen.getByTestId(`fw-detect-pick-${OUT_KEY}`));
+    fireEvent.change(screen.getByTestId(`fw-detect-field-${IN_KEY}-readme`), {
+      target: { value: "the working table" },
+    });
+    await u.click(screen.getByTestId("fw-detect-apply"));
+    await u.click(await screen.findByTestId("fw-loop-confirm"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("live-edges")).toHaveTextContent(":links_to")
     );
     const drawn = screen.getByTestId("live-edges").textContent.trim().split(" ");
-    // A reverse-direction pair about one dataset: into the script, and back
-    // out of it. Both are arrows Qresp already allows between two resources.
     expect(drawn).toHaveLength(2);
-    expect(drawn.some((edge) => edge.endsWith(">s0:consumes"))).toBe(true);
-    expect(drawn.some((edge) => edge.startsWith("s0>"))).toBe(true);
-    expect(drawn.some((edge) => edge.endsWith(":links_to"))).toBe(true);
+    // Still one dataset: the loop question did not make a second one.
+    expect(screen.getByTestId("live-datasets").textContent.trim().split(" "))
+      .toHaveLength(1);
+    expect(screen.getByTestId("live-feedback")).toHaveTextContent("s0>d0");
+    expect(screen.getByTestId("live-feedback")).not.toHaveTextContent("d0>s0");
+  });
+
+  it("leaves the loop arrow out when it is declined", async () => {
+    const u = user();
+    renderLive(ROUND_TRIP);
+    await u.click(await screen.findByTestId("fw-detect-s0"));
+    await u.click(screen.getByTestId(`fw-detect-pick-${IN_KEY}`));
+    await u.click(screen.getByTestId(`fw-detect-pick-${OUT_KEY}`));
+    fireEvent.change(screen.getByTestId(`fw-detect-field-${IN_KEY}-readme`), {
+      target: { value: "the working table" },
+    });
+    await u.click(screen.getByTestId("fw-detect-apply"));
+    await u.click(await screen.findByTestId("fw-loop-cancel"));
+
+    // The established batch semantics, unchanged: the arrow that was never
+    // in question stays, and the dataset it needed stays with it.
+    await waitFor(() =>
+      expect(screen.getByTestId("live-edges")).toHaveTextContent(":consumes")
+    );
+    expect(screen.getByTestId("live-edges")).not.toHaveTextContent(":links_to");
+    expect(screen.getByTestId("live-datasets").textContent.trim().split(" "))
+      .toHaveLength(1);
+    expect(screen.getByTestId("live-feedback")).toHaveTextContent("none");
   });
 
   it("still refuses the batch when that one record is short a field",
@@ -3430,5 +3519,218 @@ describe("a script whose work is one line down", () => {
     expect(
       screen.getByTestId("fw-detect-arrow-input_datasets:data/spectra.csv")
     ).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A SCRIPT THAT READS AND WRITES THE SAME DATASET.
+//
+//     df = pd.read_csv("data/table.csv")
+//     df.to_csv("data/table.csv")
+//
+// One file, two lines, two arrows -- and together they are a typed cycle:
+//
+//     Dataset -> Script   consumes
+//     Script  -> Dataset  links_to
+//
+// This became reachable in ONE review when read and write references started
+// being merged by path, so the batch has to ask about the loop exactly the
+// way drawing the second arrow by hand does.
+describe("a script that reads and writes the same dataset", () => {
+  const SOURCE = "scripts/roundtrip.py";
+  const READS = {
+    script: SOURCE, path: "data/table.csv", mode: "read",
+    call: "pandas.read_csv", literal: "data/table.csv", line: 8, cell: null,
+  };
+  const WRITES = {
+    script: SOURCE, path: "data/table.csv", mode: "write",
+    call: "DataFrame.to_csv", literal: "data/table.csv", line: 51, cell: null,
+  };
+  const IN_KEY = "input_datasets:data/table.csv";
+  const OUT_KEY = "output_datasets:data/table.csv";
+
+  // The dataset already exists, so nothing here is about creating artifacts:
+  // both ends are present and only the edges are in question.
+  const BASE = {
+    scripts: [{ id: "s0", readme: "roundtrip.py", files: [SOURCE] }],
+    datasets: [{ id: "d0", readme: "the working table",
+                 files: ["data/table.csv"] }],
+    workflow: { nodes: [], edges: [] },
+    rccAnalysisCache: {
+      path: "/proj", data: { code_links: [READS, WRITES] },
+    },
+  };
+
+  const openDetect = async (u) => u.click(screen.getByTestId("fw-detect-s0"));
+
+  it("shows the file once in each direction, told apart by its row", async () => {
+    const u = user();
+    renderWorkspace(BASE);
+    await openDetect(u);
+
+    expect(screen.getByTestId(`fw-detect-arrow-${IN_KEY}`))
+      .toHaveTextContent("Dataset → Script (consumes)");
+    expect(screen.getByTestId(`fw-detect-arrow-${OUT_KEY}`))
+      .toHaveTextContent("Script → Dataset (links_to)");
+    // Both rows are about the ONE dataset that already exists.
+    expect(screen.getByTestId(`fw-detect-state-${IN_KEY}`))
+      .toHaveTextContent("Existing Dataset");
+    expect(screen.getByTestId(`fw-detect-state-${OUT_KEY}`))
+      .toHaveTextContent("Existing Dataset");
+  });
+
+  it("adds only the consumes arrow when only the input is chosen", async () => {
+    const u = user();
+    const ctx = renderWorkspace(BASE);
+    await openDetect(u);
+    await u.click(screen.getByTestId(`fw-detect-pick-${IN_KEY}`));
+    await u.click(screen.getByTestId("fw-detect-apply"));
+
+    // Nothing to loop back to yet, so nothing to ask about.
+    expect(screen.queryByTestId("fw-loop-dialog")).toBeNull();
+    expect(ctx.addEdge).toHaveBeenCalledTimes(1);
+    expect(ctx.addEdge).toHaveBeenCalledWith({
+      from: "d0", to: "s0", type: "consumes",
+    });
+    expect(ctx.addMany).not.toHaveBeenCalled();
+  });
+
+  it("adds only the links_to arrow when only the output is chosen", async () => {
+    const u = user();
+    const ctx = renderWorkspace(BASE);
+    await openDetect(u);
+    await u.click(screen.getByTestId(`fw-detect-pick-${OUT_KEY}`));
+    await u.click(screen.getByTestId("fw-detect-apply"));
+
+    expect(screen.queryByTestId("fw-loop-dialog")).toBeNull();
+    expect(ctx.addEdge).toHaveBeenCalledTimes(1);
+    expect(ctx.addEdge).toHaveBeenCalledWith({
+      from: "s0", to: "d0", type: "links_to",
+    });
+    expect(ctx.addMany).not.toHaveBeenCalled();
+  });
+
+  it("asks before writing the arrow that closes the loop", async () => {
+    const u = user();
+    const ctx = renderWorkspace(BASE);
+    await openDetect(u);
+    await u.click(screen.getByTestId(`fw-detect-pick-${IN_KEY}`));
+    await u.click(screen.getByTestId(`fw-detect-pick-${OUT_KEY}`));
+    await u.click(screen.getByTestId("fw-detect-apply"));
+
+    expect(await screen.findByTestId("fw-loop-dialog")).toBeInTheDocument();
+    // The arrow that closes it is NOT written before the answer.
+    const written = ctx.addEdge.mock.calls.map(([edge]) => edge);
+    expect(written).not.toContainEqual(
+      expect.objectContaining({ from: "s0", to: "d0" })
+    );
+    // The dialog names the arrow it is asking about, in the direction it
+    // would be stored.
+    expect(screen.getByTestId("fw-loop-dialog")).toHaveTextContent(
+      /Script: roundtrip\.py → links to → Dataset: the working table/
+    );
+  });
+
+  it("makes both arrows once, and marks only the one that closes the loop",
+     async () => {
+    const u = user();
+    const ctx = renderWorkspace(BASE);
+    await openDetect(u);
+    await u.click(screen.getByTestId(`fw-detect-pick-${IN_KEY}`));
+    await u.click(screen.getByTestId(`fw-detect-pick-${OUT_KEY}`));
+    await u.click(screen.getByTestId("fw-detect-apply"));
+    await u.click(await screen.findByTestId("fw-loop-confirm"));
+
+    const written = ctx.addEdge.mock.calls.map(([edge]) => edge);
+    expect(written).toHaveLength(2);
+    // The arrow that was already possible: no feedback field at all, not
+    // even `false`. The mark belongs to the edge the curator answered for.
+    expect(written).toContainEqual({
+      from: "d0", to: "s0", type: "consumes",
+    });
+    expect(written).toContainEqual({
+      from: "s0", to: "d0", type: "links_to", feedback: true,
+    });
+    // One dataset, and it was already there.
+    expect(ctx.addMany).not.toHaveBeenCalled();
+  });
+
+  it("writes no cycle arrow when the loop is declined", async () => {
+    const u = user();
+    const ctx = renderWorkspace(BASE);
+    await openDetect(u);
+    await u.click(screen.getByTestId(`fw-detect-pick-${IN_KEY}`));
+    await u.click(screen.getByTestId(`fw-detect-pick-${OUT_KEY}`));
+    await u.click(screen.getByTestId("fw-detect-apply"));
+    await u.click(await screen.findByTestId("fw-loop-cancel"));
+
+    const written = ctx.addEdge.mock.calls.map(([edge]) => edge);
+    // ESTABLISHED BATCH SEMANTICS, unchanged here: refusing the loop is not
+    // a reason to throw away the other choice, so the arrow that was never
+    // in question stays. Only the loop arrow is dropped.
+    expect(written).toEqual([{ from: "d0", to: "s0", type: "consumes" }]);
+  });
+
+  it("writes nothing at all when the review is cancelled", async () => {
+    const u = user();
+    const ctx = renderWorkspace(BASE);
+    await openDetect(u);
+    await u.click(screen.getByTestId(`fw-detect-pick-${IN_KEY}`));
+    await u.click(screen.getByTestId(`fw-detect-pick-${OUT_KEY}`));
+    await u.click(screen.getByTestId("fw-detect-cancel"));
+
+    expect(screen.queryByTestId("fw-detect-dialog")).toBeNull();
+    expect(screen.queryByTestId("fw-loop-dialog")).toBeNull();
+    expect(ctx.addEdge).not.toHaveBeenCalled();
+    expect(ctx.addMany).not.toHaveBeenCalled();
+    expect(ctx.del).not.toHaveBeenCalled();
+    expect(ctx.unlink).not.toHaveBeenCalled();
+  });
+
+  it("says 'feedback loop' in words on the arrow that owns it", () => {
+    renderWorkspace({
+      ...BASE,
+      workflow: {
+        nodes: [],
+        edges: [
+          { from: "d0", to: "s0", type: "consumes" },
+          { from: "s0", to: "d0", type: "links_to", feedback: true },
+        ],
+      },
+    });
+
+    openAllRows();
+    expect(screen.getAllByTestId("fw-feedback-s0-d0")[0])
+      .toHaveTextContent(/feedback loop/i);
+    // The arrow going the other way never gained one.
+    expect(screen.queryAllByTestId("fw-feedback-d0-s0")).toHaveLength(0);
+  });
+
+  it("keeps the surviving arrow unmarked when the other one is removed", () => {
+    // Removing `consumes` leaves `links_to` alone: it still carries the mark
+    // the curator gave it, and nothing re-derives feedback from the shape of
+    // the graph.
+    renderWorkspace({
+      ...BASE,
+      workflow: {
+        nodes: [],
+        edges: [{ from: "s0", to: "d0", type: "links_to", feedback: true }],
+      },
+    });
+
+    openAllRows();
+    expect(screen.getAllByTestId("fw-feedback-s0-d0")[0]).toBeInTheDocument();
+    expect(screen.queryAllByTestId("fw-feedback-d0-s0")).toHaveLength(0);
+  });
+
+  it("loses the marker when the feedback arrow itself is removed", () => {
+    renderWorkspace({
+      ...BASE,
+      workflow: { nodes: [],
+                  edges: [{ from: "d0", to: "s0", type: "consumes" }] },
+    });
+
+    openAllRows();
+    expect(screen.queryAllByTestId(/^fw-feedback-/)).toHaveLength(0);
   });
 });

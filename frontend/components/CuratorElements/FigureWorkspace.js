@@ -1730,7 +1730,35 @@ const FigureWorkspace = () => {
       if (!hasEdge(edges, edge.from, edge.to)) made.push(edge);
     });
     awaiting.current = still.length ? still : null;
-    if (made.length) applyEdges(made);
+    if (!made.length) return;
+
+    // A NEW ARTIFACT CAN CLOSE A LOOP.
+    //
+    // It could not when this was written: one that had just been created had
+    // no other edges. It has two the moment a script reads and writes the
+    // same file -- `consumes` in and `links_to` back out, about the one
+    // dataset -- and those two ARE the loop.
+    //
+    // Same split as every other path: the arrow that closes it is asked
+    // about rather than written, and the answer is what marks it.
+    const running = edges.slice();
+    const safe = [];
+    const loops = [];
+    made.forEach((edge) => {
+      if (closesLoop(running, edge)) loops.push(edge);
+      else safe.push(edge);
+      running.push(edge);
+    });
+    if (safe.length) applyEdges(safe);
+    if (loops.length) {
+      // Merged, not replaced: one apply can raise a loop about an artifact
+      // that already existed AND one about an artifact it just made, and the
+      // curator should be asked once about both.
+      setLoopAsk((pending) => ({
+        safe: [],
+        loops: (pending ? pending.loops : []).concat(loops),
+      }));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [charts, scripts, datasets, tools, heads]);
 
