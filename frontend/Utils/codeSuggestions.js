@@ -24,11 +24,17 @@ import {
 const clean = (value) => String(value == null ? "" : value).trim();
 
 // Files this can do something with. `.py` and `.ipynb` are PARSED -- their
-// literal paths become the certain suggestions below. `.sh` is not parseable
-// this way at all: a shell line builds its paths at run time, which is
-// exactly the case the optional AI second opinion exists for. A Script whose
-// only file is a shell script therefore has a source, and its row's action
-// stays live, even though the parser will find nothing in it.
+// literal paths become the certain suggestions below.
+//
+// `.sh` holds no such path of its own: a shell line builds its arguments at
+// run time. What it does hold is what it literally RUNS, and `sourceClosure`
+// follows that -- `python scripts/plot.py` and the rest -- to the Python or
+// notebook that does the reading and writing. So a Script whose only file is
+// a shell script has a source and its row's action stays live: the answer
+// comes from one line down, attributed to the wrapper that was pressed.
+//
+// Where a line does not state what it runs, that is the end of it. Nothing
+// guesses at the rest.
 const PARSED_SUFFIXES = [".py", ".ipynb"];
 const SHELL_SUFFIXES = [".sh"];
 const SOURCE_SUFFIXES = PARSED_SUFFIXES.concat(SHELL_SUFFIXES);

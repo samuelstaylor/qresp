@@ -896,10 +896,6 @@ const DetectDialog = ({
             </Box>
           ))
         )}
-        {/* THE SECOND OPINION, asked for and never volunteered.
-            It sits below the parsed evidence because that is the order they
-            are worth: what the code states, then what a model thinks a
-            shell line might mean. */}
       </DialogContent>
       <DialogActions sx={{ flexWrap: "wrap", gap: 1 }}>
         {/* ONE SENTENCE, and only once an add has been refused. What is
