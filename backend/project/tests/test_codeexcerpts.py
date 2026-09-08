@@ -202,3 +202,60 @@ class WhatTheCuratorIsShown(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AShellLineThatStatesNoConnection(unittest.TestCase):
+    """A wrapper that only sets a variable has nothing to be unresolved about.
+
+    The static reader already refuses it: an assignment is not a command, so
+    nothing is followed. The question this answers is the OTHER half -- what
+    the optional second opinion is allowed to see.
+
+    A line like `PDOSFILE='pdos-GW.dat'` names a file and states nothing
+    about it: not that it is read, not that it is written, not that anything
+    runs. Handing it to a model as "an unresolved path" is an invitation to
+    invent the very relationship the whole design refuses to guess at, and
+    the answer would come back with a path the scan does know, which is
+    exactly the shape that survives validation.
+    """
+
+    SH = "\n".join([
+        "#!/bin/bash",
+        "PDOSFILE='pdos-GW.dat'",
+        "OUTDIR=figures/",
+        'printf "plotting %s\\n" "$PDOSFILE"',
+    ])
+
+    def test_an_assignment_is_not_evidence_of_a_connection(self):
+        manifest, summary = codeexcerpts.build_manifest(
+            {"scripts/pdos-GW.sh": self.SH}, [], [])
+        self.assertEqual([], manifest["excerpts"])
+        self.assertEqual([], manifest["unresolved_paths"])
+        self.assertEqual(0, summary["excerpt_count"])
+        self.assertEqual(0, summary["unresolved_count"])
+
+    def test_a_line_that_does_state_something_is_still_sent(self):
+        # The case this exists for: a path the parser could not tie down,
+        # on a line that really does run something.
+        text = "\n".join([
+            "SCRIPT=plot.py",
+            'python "$SCRIPT" data/pdos-GW.dat',
+        ])
+        manifest, unused = codeexcerpts.build_manifest({"run.sh": text}, [], [])
+        lines = [excerpt["line"] for excerpt in manifest["excerpts"]]
+        self.assertEqual([2], lines)
+        self.assertIn("data/pdos-GW.dat", manifest["unresolved_paths"])
+        # ...and the assignment above it is not what was asked about.
+        self.assertNotIn("plot.py", manifest["unresolved_paths"])
+
+    def test_python_is_untouched_by_this(self):
+        # An assignment in PYTHON is ordinary evidence: `path = "a.csv"` on
+        # one line and `read_csv(path)` on the next is exactly the case the
+        # static reader cannot follow and the model can be asked about.
+        text = "\n".join([
+            "path = 'data/pdos-GW.dat'",
+            "df = pandas.read_csv(path)",
+        ])
+        manifest, unused = codeexcerpts.build_manifest({"scripts/plot.py": text}, [], [])
+        self.assertEqual(1, len(manifest["excerpts"]))
+        self.assertIn("data/pdos-GW.dat", manifest["unresolved_paths"])

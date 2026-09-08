@@ -70,6 +70,15 @@ SENSITIVE = (
 # This is belt-and-braces behind the line rule above, not the main defence.
 LONG_SECRET = re.compile(r"[A-Za-z0-9+/_-]{32,}={0,2}")
 
+# A shell line that only sets a variable: NAME=value, or `export NAME=value`.
+# It names a file and says nothing whatever about it -- not that it is read,
+# not that it is written, not that anything runs. `codelinks` refuses it as a
+# command for the same reason.
+SHELL_ASSIGNMENT = re.compile(
+    r"^\s*(?:export\s+|local\s+|declare\s+(?:-\w+\s+)*|readonly\s+)?"
+    r"[A-Za-z_][A-Za-z0-9_]*=[^;&|]*$"
+)
+
 # Something shaped like a file: a name with an extension, no spaces. It is
 # deliberately loose -- this is what gets ASKED about, never what gets
 # believed, and the answer is checked against the real scan afterwards.
@@ -165,7 +174,17 @@ def _windows(lines, wanted):
     return [w[:MAX_EXCERPT_LINES] for w in windows]
 
 
-def _from_text(path, text, cell, resolved, start_index):
+def _states_nothing(line, language):
+    """Is this a line that names a file without saying anything about it?
+
+    Only asked of shell. A variable assignment there is not a command and is
+    not evidence; in Python the same shape -- `path = "a.csv"` above a
+    `read_csv(path)` -- is the whole reason this bundle exists.
+    """
+    return language == "shell" and bool(SHELL_ASSIGNMENT.match(line))
+
+
+def _from_text(path, text, cell, resolved, start_index, language=""):
     """Excerpts and tokens from one unit of source."""
     lines = str(text or "").splitlines()
     interesting = []
@@ -173,6 +192,8 @@ def _from_text(path, text, cell, resolved, start_index):
     for number, raw in enumerate(lines, start=1):
         safe = _safe_line(raw)
         if not safe:
+            continue
+        if _states_nothing(safe, language):
             continue
         found = [token for token in _tokens_in(safe) if token not in resolved]
         if not found:
@@ -185,7 +206,7 @@ def _from_text(path, text, cell, resolved, start_index):
         body = []
         for number in window:
             safe = _safe_line(lines[number - 1])
-            if safe:
+            if safe and not _states_nothing(safe, language):
                 body.append(safe)
         if not body:
             continue
@@ -231,11 +252,13 @@ def build_manifest(sources, resolved_paths, candidates):
                 continue
             for cell_number, source in cells:
                 found, seen = _from_text(
-                    path, source, cell_number, resolved, len(excerpts))
+                    path, source, cell_number, resolved, len(excerpts),
+                    language)
                 excerpts.extend(found)
                 tokens.extend(seen)
         else:
-            found, seen = _from_text(path, text, None, resolved, len(excerpts))
+            found, seen = _from_text(
+                path, text, None, resolved, len(excerpts), language)
             excerpts.extend(found)
             tokens.extend(seen)
 

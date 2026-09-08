@@ -3510,6 +3510,189 @@ describe("a script whose work is one line down", () => {
     );
   });
 
+  it("follows jupyter nbconvert into a notebook, cell and line", async () => {
+    // `jupyter nbconvert --execute notebooks/plot.ipynb` is as literal as
+    // `python plot.py`. The notebook's CODE CELLS are read -- never run --
+    // and what they say arrives with the cell it was in.
+    const u = user();
+    const NOTEBOOK = "notebooks/plot.ipynb";
+    const inCell = (over) => ({
+      script: NOTEBOOK, cell: 3, ...over,
+    });
+    renderWorkspace({
+      ...BASE,
+      ...cached(
+        [
+          inCell({ path: "data/spectra.csv", mode: "read",
+                   call: "pandas.read_csv", literal: "data/spectra.csv",
+                   line: 2 }),
+          inCell({ path: "figures/dos.png", mode: "write",
+                   call: "matplotlib.pyplot.savefig",
+                   literal: "figures/dos.png", line: 11 }),
+          inCell({ path: "derived/clean.csv", mode: "write",
+                   call: "DataFrame.to_csv", literal: "derived/clean.csv",
+                   line: 14 }),
+        ],
+        [{ from: "pipeline.sh", to: NOTEBOOK, line: 6, command: "jupyter" }]
+      ),
+    });
+    await u.click(screen.getByTestId("fw-detect-s0"));
+
+    // All three kinds of evidence, from cells, on the script that was
+    // pressed.
+    expect(
+      screen.getByTestId("fw-detect-arrow-input_datasets:data/spectra.csv")
+    ).toHaveTextContent("Dataset → Script (consumes)");
+    expect(
+      screen.getByTestId("fw-detect-arrow-output_figures:figures/dos.png")
+    ).toHaveTextContent("Script → Figure (generates)");
+    expect(
+      screen.getByTestId("fw-detect-arrow-output_datasets:derived/clean.csv")
+    ).toHaveTextContent("Script → Dataset (links_to)");
+
+    // The cell is part of where it was found, not rounded off to a line.
+    expect(
+      screen.getByTestId("fw-detect-source-input_datasets:data/spectra.csv")
+    ).toHaveTextContent(
+      'notebooks/plot.ipynb, cell 3, line 2 — pandas.read_csv("data/spectra.csv")'
+    );
+    await u.click(screen.getByTestId("fw-detect-followed-toggle"));
+    expect(screen.getByTestId("fw-detect-followed")).toHaveTextContent(
+      "pipeline.sh:6 runs notebooks/plot.ipynb"
+    );
+  });
+
+  it("shows every link of the chain for a wrapper two deep", async () => {
+    // Wrapper, wrapper, notebook: the curator can follow the whole way from
+    // the file they pressed to the cell that did the work.
+    const u = user();
+    const NOTEBOOK = "notebooks/plot.ipynb";
+    renderWorkspace({
+      ...BASE,
+      ...cached(
+        [{ script: NOTEBOOK, cell: 2, path: "data/spectra.csv", mode: "read",
+           call: "pandas.read_csv", literal: "data/spectra.csv", line: 9 }],
+        [
+          { from: "pipeline.sh", to: "scripts/stage.sh", line: 3,
+            command: "bash" },
+          { from: "scripts/stage.sh", to: NOTEBOOK, line: 7,
+            command: "jupyter" },
+        ]
+      ),
+    });
+    await u.click(screen.getByTestId("fw-detect-s0"));
+    await u.click(screen.getByTestId("fw-detect-followed-toggle"));
+
+    const followed = screen.getByTestId("fw-detect-followed");
+    // The wrapper the curator pressed...
+    expect(followed).toHaveTextContent("pipeline.sh (this script's own file)");
+    // ...every hop, in order...
+    expect(followed).toHaveTextContent(
+      "pipeline.sh:3 runs scripts/stage.sh → scripts/stage.sh:7 runs " +
+        "notebooks/plot.ipynb"
+    );
+    // ...and the cell at the end of it, against the matched artifact.
+    expect(
+      screen.getByTestId("fw-detect-source-input_datasets:data/spectra.csv")
+    ).toHaveTextContent("notebooks/plot.ipynb, cell 2, line 9");
+    expect(
+      screen.getByTestId("fw-detect-evidence-input_datasets:data/spectra.csv")
+    ).toHaveTextContent("data/spectra.csv");
+  });
+
+  it("makes no connection from a wrapper that only sets a variable",
+     async () => {
+    // PDOSFILE='pdos-GW.dat' names a file and says nothing about it. The
+    // parser follows nothing, proposes nothing, and invents no child script
+    // to hang it on.
+    const u = user();
+    renderWorkspace({
+      ...BASE,
+      // Nothing was resolved out of the wrapper: no links, no calls.
+      ...cached([], []),
+    });
+    await u.click(screen.getByTestId("fw-detect-s0"));
+
+    expect(screen.getByTestId("fw-detect-empty")).toBeInTheDocument();
+    expect(screen.queryAllByTestId(/^fw-detect-pick-/)).toHaveLength(0);
+    // The draft is untouched: still one Script, and it is the one pressed.
+    expect(screen.getAllByTestId(/^fw-node-/).map((el) => el.dataset.artifact))
+      .toEqual(["c0", "s0", "d0"]);
+  });
+
+  it("names what it stopped at, and invents nothing to replace it",
+     async () => {
+    // A wrapper whose target the scan could not tie down: the file is named
+    // with a reason, and no Script appears for it.
+    const u = user();
+    renderWorkspace({
+      ...BASE,
+      rccAnalysisCache: {
+        path: "/proj",
+        data: {
+          code_links: [],
+          code_scan: {
+            skipped: [{ path: "scripts/generated.py", reason: "parse_error" }],
+          },
+        },
+      },
+    });
+    await u.click(screen.getByTestId("fw-detect-s0"));
+
+    expect(screen.getByTestId("fw-detect-skipped-list")).toHaveTextContent(
+      "scripts/generated.py — could not be read as source"
+    );
+    expect(screen.queryAllByTestId(/^fw-detect-pick-/)).toHaveLength(0);
+    expect(screen.getAllByTestId(/^fw-node-/).map((el) => el.dataset.artifact))
+      .toEqual(["c0", "s0", "d0"]);
+  });
+
+  it("keeps the pressed wrapper as the only script end of every arrow",
+     async () => {
+    // Two hops and a notebook, and the draft ALREADY holds a Script for the
+    // file in the middle. Following it is not a relationship: no arrow is
+    // drawn between two scripts, and every arrow still ends at the wrapper
+    // the curator pressed.
+    const u = user();
+    const ctx = renderWorkspace({
+      ...BASE,
+      scripts: [
+        { id: "s0", readme: "the pipeline", files: ["pipeline.sh"] },
+        { id: "s1", readme: "the plotting step", files: ["scripts/plot.py"] },
+      ],
+      ...cached([READS, SAVES], RUNS),
+    });
+    await u.click(screen.getByTestId("fw-detect-s0"));
+
+    // Only the dataset and the figure are offered. Following pipeline.sh to
+    // plot.py said nothing about plot.py itself, and the draft already
+    // holding a Script for it changes none of that.
+    const keys = screen.getAllByTestId(/^fw-detect-pick-/)
+      .map((el) => el.dataset.testid.replace("fw-detect-pick-", ""))
+      .sort();
+    expect(keys).toEqual([
+      "input_datasets:data/spectra.csv",
+      "output_figures:figures/dos.png",
+    ]);
+
+    await u.click(screen.getByTestId(`fw-detect-pick-${keys[0]}`));
+    await u.click(screen.getByTestId(`fw-detect-pick-${keys[1]}`));
+    await u.click(screen.getByTestId("fw-detect-apply"));
+
+    const drawn = ctx.addEdge.mock.calls.map(([edge]) => edge);
+    expect(drawn).toEqual(
+      expect.arrayContaining([
+        { from: "d0", to: "s0", type: "consumes" },
+        { from: "s0", to: "c0", type: "generates" },
+      ])
+    );
+    // Nothing between the two scripts, in either direction.
+    drawn.forEach((edge) => {
+      expect([edge.from, edge.to]).not.toContain("s1");
+    });
+    expect(ctx.addMany).not.toHaveBeenCalled();
+  });
+
   it("works with no provider anywhere near it", async () => {
     const u = user();
     renderWorkspace({ ...BASE, ...cached([READS, SAVES], RUNS) });
