@@ -3050,7 +3050,19 @@ describe("a script reviewed across all of its sources", () => {
 // nothing a parser can use, and a curator may ask a model to look at those
 // lines instead -- explicitly, once, having been shown exactly what would be
 // sent. It never replaces the parsed evidence and never looks like it.
-describe("asking about what the parser could not resolve", () => {
+// THE REVIEW ASKS NOBODY ANYTHING.
+//
+// There was an optional second opinion here: a consent screen, a bounded
+// bundle of excerpts, and a model's reading of the lines a parser could not
+// resolve. Live staging showed what that bundle really contains for an
+// ordinary script -- `open(self.filename)`, some numerical work, a
+// matplotlib import -- generic implementation with no literal artifact path
+// in it and nothing that says read, write or figure. A workflow edge cannot
+// rest on that, and asking anyway invites a Dataset to be associated with a
+// Figure because both were mentioned in the same file.
+//
+// What the parser states outright is unchanged and is now the only answer.
+describe("the detection review reaches no provider at all", () => {
   afterEach(() => jest.resetAllMocks());
 
   const SHELL = "scripts/run.sh";
@@ -3059,8 +3071,7 @@ describe("asking about what the parser could not resolve", () => {
   const BASE = {
     charts: [{ id: "c0", caption: "Density of states",
                imageFile: "figures/dos.png" }],
-    scripts: [{ id: "s0", readme: "the pipeline",
-                files: [SHELL, DRIVER] }],
+    scripts: [{ id: "s0", readme: "the wrapper", files: [SHELL] }],
     datasets: [{ id: "d0", readme: "raw data", files: ["data/raw.csv"] }],
     workflow: { nodes: [], edges: [] },
     fileServerPath: "/proj",
@@ -3070,273 +3081,84 @@ describe("asking about what the parser could not resolve", () => {
     script: DRIVER, path: "data/raw.csv", mode: "read",
     call: "pandas.read_csv", literal: "data/raw.csv", line: 12, cell: null,
   };
+  const RUNS = [
+    { from: SHELL, to: DRIVER, line: 3, command: "python" },
+  ];
 
-  const cached = (links) => ({
-    rccAnalysisCache: { path: "/proj", data: { code_links: links } },
+  const cached = (links, calls) => ({
+    rccAnalysisCache: {
+      path: "/proj",
+      data: { code_links: links, shell_calls: calls },
+    },
   });
 
-  const SUMMARY = {
-    sources: [SHELL],
-    excerpt_count: 1,
-    candidate_count: 2,
-    unresolved_count: 1,
-    excerpts: [{
-      path: SHELL, line: 3, cell: null,
-      text: "python plot.py data/raw.csv figures/dos.png",
-    }],
-  };
-
-  const ANSWER = [{
-    target_path: "figures/dos.png",
-    target_id: "c0",
-    target_type: "chart",
-    relation: "output_figure",
-    excerpt_id: "e1",
-    rationale: "plot.py is given this path as its output",
-    confidence: "low",
-  }];
-
-  const openAsk = async (u) => {
-    await u.click(screen.getByTestId("fw-detect-s0"));
-    await u.click(screen.getByTestId("fw-detect-ask"));
-    return screen.findByTestId("fw-ask-consent");
-  };
-
-  it("offers the ask, and sends nothing until it is pressed", async () => {
+  it("offers no way to ask, and says nothing about AI", async () => {
     const u = user();
-    renderWorkspace({ ...BASE, ...cached([READ]) });
+    renderWorkspace({ ...BASE, ...cached([READ], RUNS) });
     await u.click(screen.getByTestId("fw-detect-s0"));
 
-    expect(screen.getByTestId("fw-detect-ask")).toHaveTextContent(
-      "Ask AI about unresolved connections"
-    );
-    expect(axios.post).not.toHaveBeenCalled();
-    // The parsed evidence is there already, without asking anyone.
-    expect(
-      screen.getByTestId("fw-detect-arrow-input_datasets:data/raw.csv")
-    ).toBeInTheDocument();
-  });
-
-  it("shows exactly what would be sent, and sends nothing yet", async () => {
-    const u = user();
-    axios.post.mockResolvedValue({ data: { summary: SUMMARY, sent: false } });
-    renderWorkspace({ ...BASE, ...cached([READ]) });
-    await openAsk(u);
-
-    // The request that built this was a preview: nothing left for a model.
-    expect(axios.post).toHaveBeenCalledTimes(1);
-    expect(axios.post.mock.calls[0][0]).toBe(
-      "/api/curation/suggest-connections"
-    );
-    expect(axios.post.mock.calls[0][1].preview).toBe(true);
-    expect(axios.post.mock.calls[0][1].consent).toBeUndefined();
-
-    const dialog = within(screen.getByTestId("fw-ask-consent"));
-    expect(screen.getByTestId("fw-ask-sources")).toHaveTextContent(SHELL);
-    // The excerpt itself, not a count of excerpts.
-    expect(screen.getByTestId("fw-ask-excerpts")).toHaveTextContent(
-      "python plot.py data/raw.csv figures/dos.png"
-    );
-    expect(screen.getByTestId("fw-ask-consent")).toHaveTextContent(
-      "Never sent: your datasets, your images, notebook output"
-    );
-    // And it cannot be sent until the box is ticked.
-    expect(dialog.getByTestId("fw-ask-send")).toBeDisabled();
-  });
-
-  it("sends only after the box is ticked", async () => {
-    const u = user();
-    axios.post
-      .mockResolvedValueOnce({ data: { summary: SUMMARY, sent: false } })
-      .mockResolvedValueOnce({ data: { suggestions: ANSWER, sent: true } });
-    renderWorkspace({ ...BASE, ...cached([READ]) });
-    await openAsk(u);
-
-    await u.click(screen.getByTestId("fw-ask-agree"));
-    await u.click(screen.getByTestId("fw-ask-send"));
-
-    await waitFor(() => expect(axios.post).toHaveBeenCalledTimes(2));
-    expect(axios.post.mock.calls[1][1].consent).toBe(true);
-    // Consent is per request: the box starts clear every time.
-    // Sorted, so the same record is always described the same way.
-    expect(axios.post.mock.calls[1][1].script).toEqual({
-      id: "s0", sources: [DRIVER, SHELL],
-    });
-  });
-
-  it("declining sends nothing and changes nothing", async () => {
-    const u = user();
-    const ctx = renderWorkspace({ ...BASE, ...cached([READ]) });
-    axios.post.mockResolvedValue({ data: { summary: SUMMARY, sent: false } });
-    await openAsk(u);
-    await u.click(screen.getByTestId("fw-ask-cancel"));
-
+    expect(screen.queryByTestId("fw-detect-ask")).toBeNull();
     expect(screen.queryByTestId("fw-ask-consent")).toBeNull();
-    expect(axios.post).toHaveBeenCalledTimes(1);
-    expect(axios.post.mock.calls[0][1].preview).toBe(true);
-    expect(ctx.addEdge).not.toHaveBeenCalled();
-    expect(ctx.addMany).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("fw-detect-ask-notice")).toBeNull();
+    expect(screen.queryByText(/ask ai/i)).toBeNull();
+    expect(screen.queryByText(/ai-assisted/i)).toBeNull();
+    expect(screen.getByTestId("fw-detect-dialog")).not.toHaveTextContent(
+      /\bAI\b|Gemini/
+    );
   });
 
-  it("keeps an answer visibly apart from the parsed evidence", async () => {
+  it("sends nothing anywhere, whatever the curator does in it", async () => {
     const u = user();
-    axios.post
-      .mockResolvedValueOnce({ data: { summary: SUMMARY, sent: false } })
-      .mockResolvedValueOnce({ data: { suggestions: ANSWER, sent: true } });
-    renderWorkspace({ ...BASE, ...cached([READ]) });
-    await openAsk(u);
-    await u.click(screen.getByTestId("fw-ask-agree"));
-    await u.click(screen.getByTestId("fw-ask-send"));
-
-    const key = "ai:output_figure:figures/dos.png";
-    await waitFor(() =>
-      expect(screen.getByTestId(`fw-detect-ai-${key}`)).toHaveTextContent(
-        "AI-assisted"
-      )
-    );
-    const dialog = within(screen.getByTestId("fw-detect-dialog"));
-    expect(dialog.getByText("AI-assisted suggestions")).toBeInTheDocument();
-    // Its own group, not mixed in with what the code stated.
-    expect(dialog.getByText("Input datasets")).toBeInTheDocument();
-    expect(screen.getByTestId(`fw-detect-why-${key}`)).toHaveTextContent(
-      "Low confidence — plot.py is given this path as its output"
-    );
-    expect(screen.getByTestId(`fw-detect-arrow-${key}`)).toHaveTextContent(
-      "Script → Figure (generates)"
-    );
-    // And nothing was created by any of it.
-    expect(screen.queryByTestId("fw-unlink-s0-c0")).toBeNull();
-  });
-
-  it("makes exactly one edge when an answer is approved", async () => {
-    const u = user();
-    axios.post
-      .mockResolvedValueOnce({ data: { summary: SUMMARY, sent: false } })
-      .mockResolvedValueOnce({ data: { suggestions: ANSWER, sent: true } });
-    const ctx = renderWorkspace({ ...BASE, ...cached([READ]) });
-    await openAsk(u);
-    await u.click(screen.getByTestId("fw-ask-agree"));
-    await u.click(screen.getByTestId("fw-ask-send"));
-
-    const key = "ai:output_figure:figures/dos.png";
-    await screen.findByTestId(`fw-detect-pick-${key}`);
-    await u.click(screen.getByTestId(`fw-detect-pick-${key}`));
-    await u.click(screen.getByTestId("fw-detect-apply"));
-
-    expect(ctx.addEdge).toHaveBeenCalledTimes(1);
-    expect(ctx.addEdge).toHaveBeenCalledWith({
-      from: "s0", to: "c0", type: "generates",
-    });
-    expect(ctx.addMany).not.toHaveBeenCalled();
-  });
-
-  it("does not repeat what the parser already found", async () => {
-    const u = user();
-    axios.post
-      .mockResolvedValueOnce({ data: { summary: SUMMARY, sent: false } })
-      .mockResolvedValueOnce({
-        data: {
-          suggestions: [{
-            target_path: "data/raw.csv", target_id: "d0",
-            target_type: "dataset", relation: "input_dataset",
-            excerpt_id: "e1", confidence: "medium",
-          }],
-          sent: true,
-        },
-      });
-    renderWorkspace({ ...BASE, ...cached([READ]) });
-    await openAsk(u);
-    await u.click(screen.getByTestId("fw-ask-agree"));
-    await u.click(screen.getByTestId("fw-ask-send"));
-
-    await waitFor(() =>
-      expect(screen.getByTestId("fw-detect-ask-notice")).toHaveTextContent(
-        "Nothing further was suggested"
-      )
-    );
-    // The parsed one stands, and there is no assisted copy of it.
-    expect(
-      screen.getByTestId("fw-detect-arrow-input_datasets:data/raw.csv")
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByTestId("fw-detect-ai-ai:input_dataset:data/raw.csv")
-    ).toBeNull();
-  });
-
-  it("tells the curator when the provider is unavailable, and keeps the "
-     + "parsed evidence", async () => {
-    const u = user();
-    axios.post
-      .mockResolvedValueOnce({ data: { summary: SUMMARY, sent: false } })
-      .mockRejectedValueOnce({
-        response: { status: 503,
-                    data: { error: "AI suggestions are not configured on "
-                                   + "this server." } },
-      });
-    const ctx = renderWorkspace({ ...BASE, ...cached([READ]) });
-    await openAsk(u);
-    await u.click(screen.getByTestId("fw-ask-agree"));
-    await u.click(screen.getByTestId("fw-ask-send"));
-
-    await waitFor(() =>
-      expect(screen.getByTestId("fw-detect-ask-notice")).toHaveTextContent(
-        "not configured on this server"
-      )
-    );
-    // The parsed suggestion is untouched, and nothing was created.
-    expect(
-      screen.getByTestId("fw-detect-arrow-input_datasets:data/raw.csv")
-    ).toBeInTheDocument();
-    expect(ctx.addEdge).not.toHaveBeenCalled();
-    expect(ctx.addMany).not.toHaveBeenCalled();
-  });
-
-  it("keeps the required-field contract for a target that does not exist",
-     async () => {
-    const u = user();
-    axios.post
-      .mockResolvedValueOnce({ data: { summary: SUMMARY, sent: false } })
-      .mockResolvedValueOnce({
-        data: {
-          suggestions: [{
-            target_path: "derived/new.csv", target_id: "",
-            target_type: "dataset", relation: "output_dataset",
-            excerpt_id: "e1", confidence: "low",
-          }],
-          sent: true,
-        },
-      });
-    const ctx = renderWorkspace({ ...BASE, ...cached([READ]) });
-    await openAsk(u);
-    await u.click(screen.getByTestId("fw-ask-agree"));
-    await u.click(screen.getByTestId("fw-ask-send"));
-
-    const key = "ai:output_dataset:derived/new.csv";
-    await screen.findByTestId(`fw-detect-state-${key}`);
-    expect(screen.getByTestId(`fw-detect-state-${key}`)).toHaveTextContent(
-      "Proposed Dataset"
-    );
-    await u.click(screen.getByTestId(`fw-detect-pick-${key}`));
-    // Prefilled with the path, and still asking for what a Dataset needs.
-    expect(screen.getByTestId(`fw-detect-field-${key}-files`)).toHaveValue(
-      "derived/new.csv"
-    );
-    await u.click(screen.getByTestId("fw-detect-apply"));
-    expect(screen.getByTestId("fw-detect-blocked")).toHaveTextContent(
-      "1 selected item needs details before it can be added"
-    );
-    expect(ctx.addMany).not.toHaveBeenCalled();
-    expect(ctx.addEdge).not.toHaveBeenCalled();
-  });
-
-  it("still offers no way to complete a proposal in a separate form",
-     async () => {
-    const u = user();
-    renderWorkspace({ ...BASE, ...cached([READ]) });
+    const ctx = renderWorkspace({ ...BASE, ...cached([READ], RUNS) });
     await u.click(screen.getByTestId("fw-detect-s0"));
-    expect(
-      screen.queryByRole("button", { name: /complete in form/i })
-    ).toBeNull();
+    await u.click(screen.getByTestId("fw-detect-followed-toggle"));
+    await u.click(
+      screen.getByTestId("fw-detect-pick-input_datasets:data/raw.csv")
+    );
+    await u.click(screen.getByTestId("fw-detect-apply"));
+
+    // The parser's answer went in, and no request left the browser at any
+    // point -- not to prepare one, not to send one.
+    expect(ctx.addEdge).toHaveBeenCalledWith({
+      from: "d0", to: "s0", type: "consumes",
+    });
+    expect(axios.post).not.toHaveBeenCalled();
+    expect(axios.get).not.toHaveBeenCalled();
+  });
+
+  it("shows the plain no-detection state when the code says nothing",
+     async () => {
+    // A wrapper that assigns a variable and prints it. Nothing was followed
+    // and nothing was found -- and there is no second thing to try.
+    const u = user();
+    renderWorkspace({ ...BASE, ...cached([], []) });
+    await u.click(screen.getByTestId("fw-detect-s0"));
+
+    expect(screen.getByTestId("fw-detect-empty")).toBeInTheDocument();
+    expect(screen.queryAllByTestId(/^fw-detect-pick-/)).toHaveLength(0);
+    expect(screen.queryByTestId("fw-detect-ask")).toBeNull();
+    expect(screen.getByTestId("fw-detect-apply")).toBeDisabled();
+  });
+
+  it("makes no edge from generic implementation that names no artifact",
+     async () => {
+    // `open(self.filename)` is the shape that made this feature untenable:
+    // a read, plainly, of a path the code never states. The parser has
+    // always refused it -- there is no literal path to match -- and now
+    // nothing else offers to guess.
+    const u = user();
+    const ctx = renderWorkspace({
+      ...BASE,
+      // The scan found the driver and resolved nothing out of it.
+      ...cached([], RUNS),
+    });
+    await u.click(screen.getByTestId("fw-detect-s0"));
+
+    expect(screen.getByTestId("fw-detect-empty")).toBeInTheDocument();
+    expect(screen.queryAllByTestId(/^fw-detect-pick-/)).toHaveLength(0);
+    await u.click(screen.getByTestId("fw-detect-cancel"));
+    expect(ctx.addEdge).not.toHaveBeenCalled();
+    expect(ctx.addMany).not.toHaveBeenCalled();
   });
 });
 

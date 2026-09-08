@@ -1,5 +1,4 @@
 import {
-  aiDetections,
   ambiguousPaths,
   cappedSources,
   describeChain,
@@ -560,77 +559,33 @@ describe("following a shell wrapper to the source that does the work", () => {
   });
 });
 
-// The server has already refused an answer that named a file the scan did not
-// find, claimed a relationship the file's type cannot have, or cited an
-// excerpt it was not sent. These are the checks the DRAFT makes afterwards,
-// where the server cannot see: what this curator's resources already hold.
-describe("an answer from the model, checked against the draft", () => {
-  const asked = (over) => ({
-    relation: "input_dataset",
-    target_path: "data/raw.csv",
-    confidence: "medium",
-    rationale: "the wrapper passes it in",
-    excerptId: "e1",
-    ...over,
+// The optional second opinion is gone, and so is the shape of it. There is
+// no relationship vocabulary here a model could be answered in, no group for
+// an assisted row, and no key that would tell one apart from a parsed line.
+describe("nothing here can shape an answer from a model", () => {
+  it("exports no AI surface at all", () => {
+    const surface = require("../Utils/codeSuggestions");
+    [
+      "aiDetections",
+      "aiDetectionKey",
+      "aiEvidenceAt",
+      "AI_RELATIONS",
+      "GROUP_AI",
+    ].forEach((name) => expect(surface[name]).toBeUndefined());
   });
 
-  it("attaches to the one artifact that claims the path", () => {
-    const [item] = aiDetections([asked()], "s0", BY_ID, [], []);
+  it("still answers from the code itself", () => {
+    // The half that stays: a literal path in a call the reader understands.
+    const [item] = detectionsFor([READ], "s0", BY_ID, []);
+    expect(item.group).toBe("input_datasets");
     expect(item.existingId).toBe("d0");
-    expect(item.edge).toEqual({ from: "d0", to: "s0", type: "consumes" });
-    expect(item.assisted).toBe(true);
+    expect(item.assisted).toBeUndefined();
   });
 
-  it("drops a suggestion for a path two artifacts both claim", () => {
-    // The same rule the parsed side follows. Which resource the model meant
-    // is not something a confidence score settles, and proposing a third
-    // record holding that path is not an answer to it either.
-    const shared = { ...BY_ID, d1: { id: "d1", files: ["data/raw.csv"] } };
-    expect(aiDetections([asked()], "s0", shared, [], [])).toEqual([]);
-  });
-
-  it("proposes a new resource when nothing claims the path", () => {
-    const [item] = aiDetections(
-      [asked({ target_path: "data/other.csv" })], "s0", BY_ID, [], []);
-    expect(item.existingId).toBe("");
-    expect(item.edge).toBeNull();
-    expect(item.kind).toBe("dataset");
-  });
-
-  it("has no vocabulary for a Tool, whatever the model says", () => {
-    expect(
-      aiDetections([asked({ relation: "uses_tool" })], "s0", BY_ID, [], [])
-    ).toEqual([]);
-    expect(
-      aiDetections([asked({ relation: "output_tool" })], "s0", BY_ID, [], [])
-    ).toEqual([]);
-  });
-
-  it("says nothing the parser already said", () => {
-    const parsed = detectionsFor([READ], "s0", BY_ID, []);
-    expect(aiDetections([asked()], "s0", BY_ID, [], parsed)).toEqual([]);
-  });
-
-  it("does not offer a relationship that already runs that way", () => {
-    const edges = [{ from: "d0", to: "s0", type: "consumes" }];
-    expect(aiDetections([asked()], "s0", BY_ID, edges, [])).toEqual([]);
-  });
-
-  it("ignores a malformed answer instead of guessing at it", () => {
-    expect(aiDetections([null, {}, asked({ target_path: "" })],
-                        "s0", BY_ID, [], [])).toEqual([]);
-    expect(aiDetections(null, "s0", BY_ID, [], [])).toEqual([]);
-  });
-
-  it("never lets an answer claim more confidence than it is allowed", () => {
-    const [item] = aiDetections(
-      [asked({ confidence: "high" })], "s0", BY_ID, [], []);
-    expect(item.confidence).toBe("low");
-  });
-
-  it("offers one row however many times the answer repeats itself", () => {
-    expect(
-      aiDetections([asked(), asked()], "s0", BY_ID, [], [])
-    ).toHaveLength(1);
+  it("groups only the three the parser can fill", () => {
+    expect(groupDetections([]).map((group) => group.group)).toEqual([]);
+    const all = detectionsFor([READ], "s0", BY_ID, []);
+    expect(groupDetections(all).map((group) => group.group))
+      .toEqual(["input_datasets"]);
   });
 });
