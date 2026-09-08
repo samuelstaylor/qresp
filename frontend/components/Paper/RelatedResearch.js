@@ -171,12 +171,13 @@ const INTERNAL_REASONS_HEADING = "Why related";
 // not want on screen any more.
 const VISUALLY_HIDDEN_SX = {
   position: "absolute",
-  width: 1,
-  height: 1,
+  width: "1px",
+  height: "1px",
   padding: 0,
-  margin: -1,
+  margin: "-1px",
   overflow: "hidden",
   clip: "rect(0, 0, 0, 0)",
+  clipPath: "inset(50%)",
   whiteSpace: "nowrap",
   border: 0,
 };
