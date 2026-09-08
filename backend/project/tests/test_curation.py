@@ -1732,280 +1732,60 @@ if __name__ == "__main__":
     unittest.main()
 
 
-class TestCodeLinksInTheResponse(CurationTestBase):
-    """The file I/O a folder's own scripts state, end to end.
+class TestAnalysisCarriesNoSourceDetection(CurationTestBase):
+    """The folder analysis an import needs, and nothing the detector added.
 
-    The parsing itself is covered in test_codelinks. What is checked here is
-    that the analysis carries it, that a folder saying nothing says nothing,
-    and that none of it costs a provider call.
+    Workflows are built by the curator now -- Add or link, the editor, manual
+    entry -- so the analysis no longer reads every script to report what it
+    reads and writes. It still classifies the folder exactly as it did.
     """
 
     SOURCES = dict(TEXTS, **{
         "scripts/plot_vdos.py":
             '"""Plot the vibrational density of states."""\n'
             "import numpy as np\n"
-            "import matplotlib.pyplot as plt\n"
-            "vdos = np.loadtxt('data/VDOS/vdos.dat')\n"
-            "plt.savefig('figures/figure1.png')\n",
-        "scripts/compute_dipoles.py":
-            "import numpy as np\n"
-            "raw = np.loadtxt('data/dipoles/dipoles.dat')\n"
-            "np.save('data/vlocal/vlocal.cube', raw)\n",
+            "np.loadtxt('data/VDOS/vdos.dat')\n",
+        "scripts/run.sh":
+            "#!/bin/bash\n"
+            "python scripts/plot_vdos.py\n",
     })
 
-    def test_it_reports_what_the_scripts_say_they_read_and_write(self):
+    def test_the_import_candidates_are_all_still_there(self):
         self.login()
         response, _, _ = self.analyze(texts=self.SOURCES)
         self.assertEqual(200, response.status_code)
-        links = response.json()["code_links"]
+        found = response.json()["candidates"]
+        # The four kinds an import creates, from a folder that has them.
+        self.assertTrue(found["charts"])
+        self.assertTrue(found["datasets"])
+        self.assertTrue(found["scripts"])
+        for kind in ("charts", "datasets", "scripts", "tools"):
+            self.assertIn(kind, found)
 
-        pairs = sorted((link["script"], link["mode"], link["path"])
-                       for link in links)
-        self.assertEqual(pairs, [
-            ("scripts/compute_dipoles.py", "read", "data/dipoles/dipoles.dat"),
-            ("scripts/compute_dipoles.py", "write", "data/vlocal/vlocal.cube"),
-            ("scripts/plot_vdos.py", "read", "data/VDOS/vdos.dat"),
-            ("scripts/plot_vdos.py", "write", "figures/figure1.png"),
-        ])
-        # Each one carries the line a curator can go and read.
-        for link in links:
-            self.assertGreater(link["line"], 0)
-            self.assertTrue(link["call"])
-            self.assertTrue(link["literal"])
-
-    def test_it_says_how_much_of_the_folder_it_read(self):
+    def test_the_detector_fields_are_gone(self):
+        # A browser holding an older cached analysis simply finds them
+        # absent; there is nothing to migrate, because nothing reads them.
         self.login()
         response, _, _ = self.analyze(texts=self.SOURCES)
-        scan = response.json()["code_scan"]
-        self.assertEqual(2, scan["scripts_found"])
-        self.assertEqual(2, scan["scripts_read"])
-        self.assertIn("max_scripts", scan)
-
-    def test_a_folder_whose_scripts_say_nothing_reports_nothing(self):
-        # The reference fixture's scripts import numpy and print. There is no
-        # file I/O in them, so there is nothing to suggest -- and an empty
-        # list is what the UI needs to render no section at all.
-        self.login()
-        response, _, _ = self.analyze()
-        self.assertEqual([], response.json()["code_links"])
-
-    def test_a_script_that_cannot_be_read_does_not_fail_the_analysis(self):
-        self.login()
-        broken = dict(self.SOURCES)
-        broken["scripts/compute_dipoles.py"] = "def broken(:\n"
-        response, _, _ = self.analyze(texts=broken)
-        self.assertEqual(200, response.status_code)
-        scripts = {link["script"] for link in response.json()["code_links"]}
-        self.assertEqual({"scripts/plot_vdos.py"}, scripts)
-        # ...and the folder is still classified exactly as before.
-        self.assertTrue(response.json()["candidates"]["charts"])
-
-    def test_a_file_too_large_to_fetch_is_reported_not_parsed(self):
-        # `_fetch_text_sized` says the read stopped at the cap. What is in
-        # hand is the START of a script, and the start of a script is not the
-        # script -- so it is reported rather than read.
-        self.login()
-        texts = dict(self.SOURCES)
-        with mock.patch("project.curation._list_directory",
-                        side_effect=fake_lister), \
-                mock.patch(
-                    "project.curation._fetch_text_sized",
-                    side_effect=lambda url: (
-                        texts.get(url[len(FOLDER):].strip("/"), ""),
-                        url.endswith("compute_dipoles.py"))):
-            response = self.client.post(
-                "/api/curation/analyze-folder", json={"path": FOLDER},
-                headers={"X-CSRF-Token": self.csrf})
-
-        self.assertEqual(200, response.status_code)
-        scan = response.json()["code_scan"]
-        self.assertEqual(scan["skipped"],
-                         [{"path": "scripts/compute_dipoles.py",
-                           "reason": "size_limit"}])
-        # The other script is unaffected: its suggestions still stand.
-        scripts = {link["script"] for link in response.json()["code_links"]}
-        self.assertEqual({"scripts/plot_vdos.py"}, scripts)
-
-    def test_a_script_that_will_not_parse_is_reported(self):
-        self.login()
-        broken = dict(self.SOURCES)
-        broken["scripts/compute_dipoles.py"] = "def broken(:\n"
-        response, _, _ = self.analyze(texts=broken)
-        self.assertEqual(
-            response.json()["code_scan"]["skipped"],
-            [{"path": "scripts/compute_dipoles.py",
-              "reason": "parse_error"}])
-
-    def test_a_folder_that_read_cleanly_reports_nothing_unread(self):
-        self.login()
-        response, _, _ = self.analyze(texts=self.SOURCES)
-        self.assertEqual([], response.json()["code_scan"]["skipped"])
-
-    def test_no_source_text_reaches_the_response(self):
-        self.login()
-        broken = dict(self.SOURCES)
-        broken["scripts/compute_dipoles.py"] = (
-            "api_key = 'secret-value-do-not-leak'\ndef broken(:\n")
-        response, _, _ = self.analyze(texts=broken)
-        self.assertNotIn("secret-value-do-not-leak", response.text)
-        self.assertNotIn("api_key", response.text)
-
-    SHELL_TREE = dict(FIXTURE, **{
-        "scripts": ([], ["plot_vdos.py", "compute_dipoles.py", "run.sh",
-                         "compute_dipoles.sh"]),
-    })
-
-    def shell_lister(self, url):
-        relative = url[len(FOLDER):].strip("/")
-        if relative not in self.SHELL_TREE:
-            raise AssertionError("unexpected listing request: %s" % url)
-        return self.SHELL_TREE[relative]
-
-    def analyze_shell(self, texts):
-        """The reference folder, plus the two shell scripts these need."""
-        return self.analyze(texts=texts, walk=self.shell_lister)
-
-    def test_a_wrapper_reports_what_it_runs(self):
-        # `pipeline.sh` is what a curator registers; `plot_vdos.py`, one line
-        # down, is what reads the dataset. The analysis reports both facts
-        # and joins neither -- the browser does that, where the artifacts are.
-        self.login()
-        sources = dict(self.SOURCES, **{
-            "scripts/run.sh": "#!/bin/bash\n"
-                              "python scripts/plot_vdos.py\n",
-            "scripts/plot_vdos.py":
-                "import numpy as np\n"
-                "import matplotlib.pyplot as plt\n"
-                "np.loadtxt('data/VDOS/vdos.dat')\n"
-                "plt.savefig('figures/figure1.png')\n",
-        })
-        response, _, _ = self.analyze_shell(sources)
-        self.assertEqual(200, response.status_code)
-
-        calls = response.json()["shell_calls"]
-        self.assertEqual(
-            [(c["from"], c["to"], c["line"]) for c in calls],
-            [("scripts/run.sh", "scripts/plot_vdos.py", 2)])
-        # And the target's own reads and writes are reported as its own.
-        followed = sorted(
-            (l["mode"], l["path"]) for l in response.json()["code_links"]
-            if l["script"] == "scripts/plot_vdos.py")
-        self.assertEqual(followed, [
-            ("read", "data/VDOS/vdos.dat"),
-            ("write", "figures/figure1.png"),
-        ])
-
-    def test_a_wrapper_that_runs_a_wrapper(self):
-        self.login()
-        sources = dict(self.SOURCES, **{
-            "scripts/run.sh": "bash scripts/compute_dipoles.sh\n",
-            "scripts/compute_dipoles.sh": "python scripts/plot_vdos.py\n",
-            "scripts/plot_vdos.py": "import numpy as np\n"
-                                    "np.loadtxt('data/VDOS/vdos.dat')\n",
-        })
-        response, _, _ = self.analyze_shell(sources)
-        self.assertEqual(200, response.status_code)
-        calls = [(c["from"], c["to"]) for c in response.json()["shell_calls"]]
-        self.assertIn(("scripts/run.sh", "scripts/compute_dipoles.sh"), calls)
-        self.assertIn(
-            ("scripts/compute_dipoles.sh", "scripts/plot_vdos.py"), calls)
-
-    def test_nothing_dynamic_becomes_a_call(self):
-        self.login()
-        sources = dict(self.SOURCES, **{
-            "scripts/run.sh":
-                'python "$SCRIPT"\n'
-                "python scripts/$NAME.py\n"
-                'eval "$COMMAND"\n'
-                "source config.sh\n"
-                "find . -name '*.py'\n"
-                "make target\n"
-                "for f in scripts/*.py; do python $f; done\n",
-        })
-        response, _, _ = self.analyze_shell(sources)
-        self.assertEqual([], response.json()["shell_calls"])
-
-    def test_a_wrapper_naming_a_missing_file_makes_no_call(self):
-        self.login()
-        sources = dict(self.SOURCES, **{
-            "scripts/run.sh": "python scripts/not_in_the_folder.py\n",
-        })
-        response, _, _ = self.analyze_shell(sources)
-        self.assertEqual([], response.json()["shell_calls"])
-
-    def test_a_broken_target_does_not_stop_the_others(self):
-        self.login()
-        sources = dict(self.SOURCES, **{
-            "scripts/run.sh": "python scripts/plot_vdos.py\n"
-                              "python scripts/compute_dipoles.py\n",
-            "scripts/plot_vdos.py": "def broken(:\n",
-            "scripts/compute_dipoles.py":
-                "import numpy as np\n"
-                "np.loadtxt('data/VDOS/vdos.dat')\n",
-        })
-        response, _, _ = self.analyze_shell(sources)
         body = response.json()
-        # The call to the broken file is still reported...
-        self.assertEqual(
-            2, len([c for c in body["shell_calls"]
-                    if c["from"] == "scripts/run.sh"]))
-        # ...the broken file is named as unread...
-        self.assertIn({"path": "scripts/plot_vdos.py",
-                       "reason": "parse_error"}, body["code_scan"]["skipped"])
-        # ...and the readable one still answers.
-        self.assertEqual(
-            [("scripts/compute_dipoles.py", "data/VDOS/vdos.dat")],
-            [(l["script"], l["path"]) for l in body["code_links"]
-             if l["script"].startswith("scripts/")])
+        for field in ("code_links", "shell_calls", "code_scan"):
+            self.assertNotIn(field, body)
 
-    def test_following_a_wrapper_calls_no_provider(self):
-        self.login()
-        sources = dict(self.SOURCES, **{
-            "scripts/run.sh": "python scripts/plot_vdos.py\n",
-            "scripts/plot_vdos.py": "import numpy as np\n"
-                                    "np.loadtxt('data/VDOS/vdos.dat')\n",
-        })
-        with mock.patch("project.curation.call_gemini") as gemini:
-            response, _, _ = self.analyze_shell(sources)
-        self.assertEqual(200, response.status_code)
-        self.assertTrue(response.json()["shell_calls"])
-        gemini.assert_not_called()
+    def test_the_parser_module_is_gone(self):
+        with self.assertRaises(ImportError):
+            __import__("project.codelinks")
 
-    def test_no_provider_is_called_and_nothing_is_executed(self):
-        # The scan is `ast.parse` over text already fetched for evidence. A
-        # provider call would need the AI endpoint, its consent and its quota,
-        # none of which this path touches.
+    def test_no_script_source_is_read_for_its_file_io(self):
+        # The scripts are still fetched when they are a candidate's own
+        # evidence. What is gone is the second pass that read every one of
+        # them in order to parse it.
         self.login()
         with mock.patch("project.assist.call_gemini") as gemini:
             response, _, _ = self.analyze(texts=self.SOURCES)
         self.assertEqual(200, response.status_code)
         gemini.assert_not_called()
-        self.assertTrue(response.json()["code_links"])
 
-
-class TestNoProviderInScriptDetection(CurationTestBase):
-    """There is no way to reach a provider from Script detection any more.
-
-    The optional second opinion is gone. What a bounded excerpt bundle could
-    honestly show about a real script turned out to be `open(self.filename)`,
-    some numerical work and a matplotlib import -- generic implementation,
-    with no literal artifact path in it and nothing that says read, write or
-    figure. A workflow edge cannot rest on that, and asking anyway invites a
-    Dataset to be associated with a Figure because both were mentioned in the
-    same file.
-
-    The parser is unchanged and is now the only thing that answers.
-    """
-
-    SOURCES = dict(TEXTS, **{
-        "scripts/plot_vdos.py":
-            "import numpy as np\n"
-            "import matplotlib.pyplot as plt\n"
-            "np.loadtxt('data/VDOS/vdos.dat')\n"
-            "plt.savefig('figures/figure1.png')\n",
-    })
-
-    def test_the_endpoint_is_gone(self):
+    def test_the_detector_endpoints_are_gone(self):
         self.login()
         response = self.client.post(
             "/api/curation/suggest-connections",
@@ -2013,23 +1793,3 @@ class TestNoProviderInScriptDetection(CurationTestBase):
             headers={"X-CSRF-Token": self.csrf},
         )
         self.assertEqual(404, response.status_code)
-
-    def test_the_module_it_used_is_gone_too(self):
-        # `codeexcerpts` existed to build that one request. Nothing else
-        # imported it, and leaving it behind would leave the payload this
-        # was removed for one import away from being sent again.
-        with self.assertRaises(ImportError):
-            __import__("project.codeexcerpts")
-
-    def test_the_analysis_still_answers_from_the_code_itself(self):
-        self.login()
-        response, _, _ = self.analyze(texts=self.SOURCES)
-        self.assertEqual(200, response.status_code)
-        self.assertTrue(response.json()["code_links"])
-
-    def test_and_reaches_no_provider_doing_it(self):
-        self.login()
-        with mock.patch("project.assist.call_gemini") as gemini:
-            response, _, _ = self.analyze(texts=self.SOURCES)
-        self.assertEqual(200, response.status_code)
-        gemini.assert_not_called()

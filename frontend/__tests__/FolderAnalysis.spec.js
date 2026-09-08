@@ -4844,137 +4844,6 @@ describe("there is one way to complete a candidate, not two", () => {
 // "No connections were detected" and "no connections were detected, and four
 // scripts were never opened" are different answers. A curator acting on the
 // first when the second is true has been misled by silence.
-describe("what the code scan could not read", () => {
-  const unread = (skipped) => ({
-    ...analysis,
-    code_scan: {
-      scripts_found: 3,
-      scripts_read: 3 - skipped.length,
-      max_scripts: 25,
-      skipped,
-    },
-  });
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it("says nothing when every script read cleanly", async () => {
-    axios.post.mockResolvedValue({ data: unread([]) });
-    const user = noDelayUser();
-    renderWith();
-    await openAnalysis(user);
-    expect(screen.queryByTestId("code-scan-notice")).toBeNull();
-  });
-
-  it("says nothing when the server is older and reports no scan at all", async () => {
-    axios.post.mockResolvedValue({ data: analysis });
-    const user = noDelayUser();
-    renderWith();
-    await openAnalysis(user);
-    expect(screen.queryByTestId("code-scan-notice")).toBeNull();
-  });
-
-  it("says one neutral line when something was not read", async () => {
-    axios.post.mockResolvedValue({
-      data: unread([
-        { path: "scripts/huge_pipeline.py", reason: "size_limit" },
-        { path: "scripts/legacy.py", reason: "parse_error" },
-      ]),
-    });
-    const user = noDelayUser();
-    renderWith();
-    await openAnalysis(user);
-
-    const notice = screen.getByTestId("code-scan-notice");
-    expect(notice).toHaveTextContent(
-      "Some scripts were not analyzed due to file size or unreadable source."
-    );
-    // Not an error, and not dressed as one.
-    expect(notice.className).toMatch(/colorInfo|standardInfo|outlinedInfo/);
-    expect(notice.textContent).not.toMatch(/error|fail|problem/i);
-  });
-
-  it("names the files and the reasons under Details", async () => {
-    axios.post.mockResolvedValue({
-      data: unread([
-        { path: "scripts/huge_pipeline.py", reason: "size_limit" },
-        { path: "scripts/legacy.py", reason: "parse_error" },
-      ]),
-    });
-    const user = noDelayUser();
-    renderWith();
-    await openAnalysis(user);
-
-    // Closed to begin with: it is a detail, not the message.
-    expect(screen.queryByTestId("code-scan-unread")).toBeNull();
-    const toggle = screen.getByTestId("code-scan-details");
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
-
-    await user.click(toggle);
-    const list = within(screen.getByTestId("code-scan-unread"));
-    expect(list.getByText(/huge_pipeline\.py/)).toHaveTextContent(
-      "too large to read in full"
-    );
-    expect(list.getByText(/legacy\.py/)).toHaveTextContent(
-      "could not be read as source"
-    );
-    expect(screen.getByTestId("code-scan-details")).toHaveAttribute(
-      "aria-expanded",
-      "true"
-    );
-  });
-
-  it("still says it when there was nothing else to show", async () => {
-    // No candidates at all, and a script that was not read. The notice is
-    // the whole point here: without it the empty result reads as certainty.
-    axios.post.mockResolvedValue({
-      data: {
-        ...unread([{ path: "scripts/huge.py", reason: "size_limit" }]),
-        candidates: {
-          charts: [], datasets: [], scripts: [], tools: [],
-          unclassified: [], grouped_unclassified: [], unclassified_total: 0,
-        },
-      },
-    });
-    const user = noDelayUser();
-    renderWith();
-    await user.click(analyzeButton());
-    expect(await screen.findByTestId("code-scan-notice")).toBeInTheDocument();
-  });
-
-  it("keeps the candidates from the scripts that did read", async () => {
-    axios.post.mockResolvedValue({
-      data: unread([{ path: "scripts/huge.py", reason: "size_limit" }]),
-    });
-    const user = noDelayUser();
-    renderWith();
-    await openAnalysis(user);
-
-    expect(screen.getByTestId("code-scan-notice")).toBeInTheDocument();
-    // The rest of the analysis is untouched.
-    expect(
-      screen.getByRole("checkbox", { name: /select figure1\.png/i })
-    ).toBeInTheDocument();
-  });
-
-  it("shows a path and a reason, and no line of anybody's source", async () => {
-    axios.post.mockResolvedValue({
-      data: unread([{ path: "scripts/legacy.py", reason: "parse_error" }]),
-    });
-    const user = noDelayUser();
-    renderWith();
-    await openAnalysis(user);
-    await user.click(screen.getByTestId("code-scan-details"));
-
-    const text = screen.getByTestId("code-scan-notice").textContent;
-    expect(text).toContain("scripts/legacy.py");
-    // The wire's own words are never shown raw.
-    expect(text).not.toContain("parse_error");
-    expect(text).not.toContain("size_limit");
-  });
-});
-
 // ---------------------------------------------------------------------------
 // A FOLDER WITH TWO DOZEN CANDIDATES IN IT.
 //
@@ -5630,5 +5499,64 @@ describe("a chart image row is its own component", () => {
     );
     expect(screen.getByTestId("apply-selected")).toBeEnabled();
     expect(buildFileUrl).not.toHaveBeenCalled();
+  });
+});
+
+// The analysis used to read every script and notebook in the folder a second
+// time, to report the file I/O each one stated. That fed one consumer -- the
+// Script workflow detector -- and it is gone, so the pass is gone and so is
+// the notice that said which files it could not open. An import is unchanged:
+// it never depended on any of it.
+describe("the folder analysis says nothing about a code scan", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    axios.post.mockResolvedValue({ data: analysis });
+  });
+
+  it("shows no scan notice, even for a response that still carries one", async () => {
+    // A server or a cache from before the change. The field is simply not
+    // read; there is nothing to migrate.
+    axios.post.mockResolvedValue({
+      data: {
+        ...analysis,
+        code_scan: { skipped: [{ path: "scripts/huge.py",
+                                 reason: "size_limit" }] },
+        code_links: [{ script: "scripts/plot_vdos.py", path: "data/x.csv",
+                       mode: "read", call: "pandas.read_csv",
+                       literal: "data/x.csv", line: 3, cell: null }],
+        shell_calls: [{ from: "run.sh", to: "scripts/plot_vdos.py", line: 1,
+                        command: "python" }],
+      },
+    });
+    const user = noDelayUser();
+    renderWith();
+    await openAnalysis(user);
+
+    expect(screen.queryByTestId("code-scan-notice")).toBeNull();
+    expect(screen.queryByTestId("code-scan-details")).toBeNull();
+    expect(screen.queryByTestId("code-scan-unread")).toBeNull();
+    expect(document.body.textContent).not.toContain(
+      "Some scripts were not analyzed"
+    );
+  });
+
+  it("still offers every candidate the import is for", async () => {
+    const user = noDelayUser();
+    renderWith();
+    await openAnalysis(user);
+
+    // The four kinds an import creates, from the same fixture as always.
+    expect(
+      screen.getByRole("tab", { name: /charts \(1\)/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: /datasets \(1\)/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: /scripts \(1\)/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: /tools \(1\)/i })
+    ).toBeInTheDocument();
   });
 });
