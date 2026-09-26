@@ -17,6 +17,11 @@ import ExtraFieldInput, {
   extraFieldsSchema,
 } from "../Form/ExtraFieldInput";
 import { RegularStyledButton } from "../button";
+import {
+  FormConnection,
+  confirmLabel,
+  useRowLink,
+} from "./ConnectionSection";
 import { RequiredFieldLegend } from "../Form/Util";
 
 import { useForm } from "react-hook-form";
@@ -48,6 +53,9 @@ const DatasetsInfoForm = ({ hideTrigger = false }) => {
   );
 
   const { def, open } = datasetsHelper;
+  // What a NEW record from this form is for. Row-scoped when the form
+  // was opened from a resource row's LINK; see ConnectionSection.
+  const link = useRowLink("dataset", datasetsHelper.link);
 
   const { setSaveMethod, openSelector, setMultiple, setTitle } = useContext(
     SourceTreeContext
@@ -111,8 +119,14 @@ const DatasetsInfoForm = ({ hideTrigger = false }) => {
       // through unchanged. It is never read as, or converted into, keywords.
       edit("dataset", { ...def, ...values, extraFields: extraFields });
     } else {
-      values["id"] = `d${datasets.length}`;
-      add("dataset", values);
+      if (link.rowScoped) {
+        // The record and its arrow, in one reducer change -- or neither,
+        // with the form left open to say why.
+        if (!link.createAndLink(values)) return;
+      } else {
+        values["id"] = `d${datasets.length}`;
+        add("dataset", values);
+      }
     }
     closeForm("dataset");
   };
@@ -231,10 +245,13 @@ const DatasetsInfoForm = ({ hideTrigger = false }) => {
                 />
               </Grid>
               <Grid>
+                <FormConnection control={control} newType="dataset" link={link} />
+              </Grid>
+              <Grid>
                 <RegularStyledButton fullWidth type="submit">
                   {def && datasets.find((el) => el.id == def.id) != undefined
                     ? "Update"
-                    : "Save"}
+                    : confirmLabel(link.intent, "Save")}
                 </RegularStyledButton>
               </Grid>
             </Grid>

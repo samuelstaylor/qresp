@@ -15,6 +15,11 @@ import ExtraFieldInput, {
   extraFieldsSchema,
 } from "../Form/ExtraFieldInput";
 import { RegularStyledButton } from "../button";
+import {
+  FormConnection,
+  confirmLabel,
+  useRowLink,
+} from "./ConnectionSection";
 import { RequiredFieldLegend } from "../Form/Util";
 import StyledTooltip from "../tooltip";
 
@@ -163,6 +168,9 @@ const ToolsInfoForm = ({ hideTrigger = false }) => {
   );
 
   const { def, open } = toolsHelper;
+  // What a NEW record from this form is for. Row-scoped when the form
+  // was opened from a resource row's LINK; see ConnectionSection.
+  const link = useRowLink("tool", toolsHelper.link);
 
   const { setSaveMethod, openSelector, setMultiple } = useContext(
     SourceTreeContext
@@ -264,8 +272,14 @@ const ToolsInfoForm = ({ hideTrigger = false }) => {
     if (def && tools.find((el) => el.id == def.id)) {
       edit("tool", { ...def, ...values, extraFields: extraFields });
     } else {
-      values["id"] = `t${tools.length}`;
-      add("tool", values);
+      if (link.rowScoped) {
+        // The record and its arrow, in one reducer change -- or neither,
+        // with the form left open to say why.
+        if (!link.createAndLink(values)) return;
+      } else {
+        values["id"] = `t${tools.length}`;
+        add("tool", values);
+      }
     }
     closeForm("tool");
   };
@@ -403,10 +417,13 @@ const ToolsInfoForm = ({ hideTrigger = false }) => {
                 />
               </Grid>
               <Grid>
+                <FormConnection control={control} newType="tool" link={link} />
+              </Grid>
+              <Grid>
                 <RegularStyledButton fullWidth type="submit">
                   {def && tools.find((el) => el.id == def.id) != undefined
                     ? "Update"
-                    : "Save"}
+                    : confirmLabel(link.intent, "Save")}
                 </RegularStyledButton>
               </Grid>
             </Grid>

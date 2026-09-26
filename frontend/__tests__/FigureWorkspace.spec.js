@@ -61,6 +61,11 @@ jest.mock("../components/CuratorElements/FolderAnalysis", () => {
         data-type={props.artifactType || ""}
         data-hidden={String(!!props.hideTrigger)}
         data-auto={String(!!props.autoOpen)}
+        data-connection={
+          props.connection
+            ? `${props.connection.mode}:${props.connection.sourceArtifactId || ""}`
+            : "none"
+        }
         data-instance={instance}
       />
     );
@@ -141,10 +146,10 @@ const SCRIPT = { id: "s0", readme: "plot_dos.py" };
 
 // ---- walking the one control -------------------------------------------
 //
-// "Add or link resource" asks one question at a time. These helpers walk it
+// "New resource" and a row's "Link" ask one question at a time. These helpers walk it
 // so a test can say what it is about instead of re-describing the menu.
 const openFlowFor = async (u, id) => {
-  await u.click(screen.getByTestId(id ? `fw-addlink-${id}` : "fw-addlink"));
+  await u.click(screen.getByTestId(id ? `fw-linkmenu-${id}` : "fw-new-resource"));
   return screen.findByTestId("fw-flow-menu");
 };
 const openManualKinds = async (u, id) => {
@@ -207,11 +212,13 @@ describe("the workspace", () => {
     expect(screen.queryByTestId("stub-external-form")).not.toBeInTheDocument();
   });
 
-  it("offers one way in", () => {
+  it("offers one way in to an independent resource", () => {
     renderWorkspace();
-    expect(screen.getByTestId("fw-addlink")).toHaveTextContent(
-      /add or link resource/i
+    expect(screen.getByTestId("fw-new-resource")).toHaveTextContent(
+      /^new resource$/i
     );
+    // No action anywhere on the page still offers to "add or link".
+    expect(document.body.textContent).not.toMatch(/add or link/i);
   });
 });
 
@@ -222,7 +229,7 @@ describe("the three actions on a row", () => {
     renderWorkspace(CHAIN);
     ["c0", "s0", "d0", "t0"].forEach((id) => {
       const group = within(screen.getByTestId(`fw-actions-${id}`));
-      expect(group.getByTestId(`fw-addlink-${id}`)).toBeInTheDocument();
+      expect(group.getByTestId(`fw-linkmenu-${id}`)).toBeInTheDocument();
       expect(group.getByTestId(`fw-edit-${id}`)).toBeInTheDocument();
       expect(group.getByTestId(`fw-remove-${id}`)).toBeInTheDocument();
     });
@@ -407,7 +414,8 @@ describe("add or link, one question at a time", () => {
     await addManually(u, "", "chart");
 
     expect(ctx.helpers.setDefault).toHaveBeenCalledWith("chart", null);
-    expect(ctx.helpers.openForm).toHaveBeenCalledWith("chart");
+    // Opened with an EXPLICIT independent intent, never an absent one.
+    expect(ctx.helpers.openForm).toHaveBeenCalledWith("chart", { mode: "independent" });
     expect(ctx.addEdge).not.toHaveBeenCalled();
   });
 
@@ -416,21 +424,31 @@ describe("add or link, one question at a time", () => {
     const ctx = renderWorkspace({ fileServerPath: "/proj" });
     await addManually(u, "", "head");
 
-    expect(ctx.helpers.setExternalNodeFormOpen).toHaveBeenCalledWith(true);
+    expect(ctx.helpers.setExternalNodeFormOpen).toHaveBeenCalledWith(
+      true,
+      { mode: "independent" }
+    );
     expect(ctx.helpers.openForm).not.toHaveBeenCalledWith("head");
   });
 
-  it("attaches what it creates to the row it was opened from", async () => {
+  it("hands the form the row it was opened from, and guesses nothing after",
+     async () => {
+    // It used to wait for the saved record to appear and then INFER an
+    // arrow for it. The row's intent now travels with the form instead, and
+    // the form makes the record and its chosen arrow in one change -- see
+    // RowScopedLink.spec.js. Nothing is added here when a record appears.
     const u = user();
     const ctx = renderWorkspace({ charts: [FIGURE] });
     await addManually(u, "c0", "script");
-    ctx.rerenderWith({ charts: [FIGURE], scripts: [SCRIPT] });
 
-    expect(ctx.addEdge).toHaveBeenCalledWith({
-      from: "s0",
-      to: "c0",
-      type: "generates",
+    expect(ctx.helpers.openForm).toHaveBeenCalledWith("script", {
+      mode: "row-scoped-link",
+      sourceArtifactId: "c0",
+      sourceKind: "c",
+      sourceLabel: "Density of states",
     });
+    ctx.rerenderWith({ charts: [FIGURE], scripts: [SCRIPT] });
+    expect(ctx.addEdge).not.toHaveBeenCalled();
   });
 
   it("connects nothing when the form was cancelled", async () => {
@@ -465,6 +483,7 @@ describe("importing from RCC", () => {
 
     const importer = screen.getByTestId("stub-folder-analysis");
     expect(importer).toHaveAttribute("data-type", "tool");
+    expect(importer).toHaveAttribute("data-connection", "independent:");
     expect(importer).toHaveAttribute("data-hidden", "true");
     expect(importer).toHaveAttribute("data-auto", "true");
   });
@@ -1061,7 +1080,7 @@ describe("what a row says", () => {
   it("keeps internal ids out of the connection manager as well", async () => {
     const u = user();
     renderWorkspace(CHAIN);
-    await u.click(screen.getByTestId("fw-addlink-s0"));
+    await u.click(screen.getByTestId("fw-linkmenu-s0"));
     await u.click(screen.getByTestId("fw-link-s0"));
     const dialog = await screen.findByTestId("fw-link-dialog");
     ["(c0)", "(d0)", "(t0)", "(s0)"].forEach((id) =>
@@ -1076,7 +1095,7 @@ describe("what a row says", () => {
   it("lights the row from the keyboard too", async () => {
     const u = user();
     renderWorkspace(CHAIN);
-    screen.getByTestId("fw-addlink-s0").focus();
+    screen.getByTestId("fw-linkmenu-s0").focus();
     await waitFor(() =>
       expect(screen.getByTestId("fw-node-s0")).toHaveAttribute(
         "data-spotlit",
@@ -1291,7 +1310,7 @@ describe("a resource that is joined to nothing", () => {
       datasets: [{ id: "d0", readme: "orphan data" }],
     });
     const group = within(screen.getByTestId("fw-actions-d0"));
-    expect(group.getByTestId("fw-addlink-d0")).toBeInTheDocument();
+    expect(group.getByTestId("fw-linkmenu-d0")).toBeInTheDocument();
     expect(group.getByTestId("fw-edit-d0")).toBeInTheDocument();
     expect(group.getByTestId("fw-remove-d0")).toBeInTheDocument();
   });
@@ -1632,7 +1651,7 @@ describe("reachable without a mouse", () => {
   it("puts every row action on a real focusable control", () => {
     renderWorkspace(CHAIN);
     ["c0", "s0", "d0", "t0"].forEach((id) => {
-      ["fw-addlink", "fw-edit", "fw-remove"].forEach((prefix) => {
+      ["fw-linkmenu", "fw-edit", "fw-remove"].forEach((prefix) => {
         const el = screen.getByTestId(`${prefix}-${id}`);
         expect(el.tagName).toBe("BUTTON");
         expect(el).not.toBeDisabled();
@@ -1641,12 +1660,12 @@ describe("reachable without a mouse", () => {
     });
   });
 
-  it("reaches Add or link, Edit and Remove from the keyboard", async () => {
+  it("reaches Link, Edit and Remove from the keyboard", async () => {
     const u = user();
     const ctx = renderWorkspace(CHAIN);
 
-    screen.getByTestId("fw-addlink-s0").focus();
-    expect(screen.getByTestId("fw-addlink-s0")).toHaveFocus();
+    screen.getByTestId("fw-linkmenu-s0").focus();
+    expect(screen.getByTestId("fw-linkmenu-s0")).toHaveFocus();
     await u.keyboard("{Enter}");
     await screen.findByTestId("fw-flow-menu");
     expect(screen.getByTestId("fw-link-s0")).toBeInTheDocument();
@@ -1856,7 +1875,7 @@ describe("suggested connections", () => {
 
   it("leaves the manual paths exactly as they were", () => {
     renderWorkspace(PROVEN);
-    expect(screen.getByTestId("fw-addlink-c0")).toBeInTheDocument();
+    expect(screen.getByTestId("fw-linkmenu-c0")).toBeInTheDocument();
     expect(screen.getByTestId("fw-edit-c0")).toBeInTheDocument();
     expect(screen.getByTestId("fw-remove-c0")).toBeInTheDocument();
   });
@@ -2080,7 +2099,7 @@ describe("a row is compact until it is asked", () => {
     expect(row.getByTestId("fw-state-s0")).toHaveTextContent(
       "2 in · 1 out"
     );
-    expect(row.getByTestId("fw-addlink-s0")).toBeInTheDocument();
+    expect(row.getByTestId("fw-linkmenu-s0")).toBeInTheDocument();
     expect(row.getByTestId("fw-edit-s0")).toBeInTheDocument();
     expect(row.getByTestId("fw-remove-s0")).toBeInTheDocument();
   });
@@ -2176,7 +2195,7 @@ describe("a row is compact until it is asked", () => {
 //
 // A Script row used to carry a fourth: an action that read the script's own
 // source and proposed the datasets and figures it touched. It is gone. A
-// workflow is what the curator says it is -- Add or link, the editor, and
+// workflow is what the curator says it is -- Link, the editor, and
 // the forms -- and a Script is an ordinary artifact again.
 describe("a Script row is an ordinary row", () => {
   afterEach(() => jest.resetAllMocks());
@@ -2211,15 +2230,15 @@ describe("a Script row is an ordinary row", () => {
     },
   };
 
-  it("has Add or link, Edit and Remove, and nothing else", () => {
+  it("has Link, Edit and Remove, and nothing else", () => {
     renderWorkspace(EVERY_KIND);
     ["s0", "s1"].forEach((id) => {
       const group = within(screen.getByTestId(`fw-actions-${id}`));
-      expect(group.getByTestId(`fw-addlink-${id}`)).toBeInTheDocument();
+      expect(group.getByTestId(`fw-linkmenu-${id}`)).toBeInTheDocument();
       expect(group.getByTestId(`fw-edit-${id}`)).toBeInTheDocument();
       expect(group.getByTestId(`fw-remove-${id}`)).toBeInTheDocument();
       expect(group.getAllByRole("button").map((b) => b.innerText || b.textContent))
-        .toEqual(["Add or link", "Edit", "Remove"]);
+        .toEqual(["Link", "Edit", "Remove"]);
     });
   });
 
@@ -2227,7 +2246,7 @@ describe("a Script row is an ordinary row", () => {
     renderWorkspace(EVERY_KIND);
     ["c0", "s0", "s1", "d0", "t0", "h0"].forEach((id) => {
       const group = within(screen.getByTestId(`fw-actions-${id}`));
-      expect(group.getByTestId(`fw-addlink-${id}`)).toBeInTheDocument();
+      expect(group.getByTestId(`fw-linkmenu-${id}`)).toBeInTheDocument();
       expect(group.getByTestId(`fw-edit-${id}`)).toBeInTheDocument();
       expect(group.getByTestId(`fw-remove-${id}`)).toBeInTheDocument();
     });

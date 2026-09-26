@@ -17,6 +17,11 @@ import ExtraFieldInput, {
   extraFieldsSchema,
 } from "../Form/ExtraFieldInput";
 import { RegularStyledButton } from "../button";
+import {
+  FormConnection,
+  confirmLabel,
+  useRowLink,
+} from "./ConnectionSection";
 import { RequiredFieldLegend } from "../Form/Util";
 
 import { useForm } from "react-hook-form";
@@ -48,6 +53,9 @@ const ScriptsInfoForm = ({ hideTrigger = false }) => {
   );
 
   const { def, open } = scriptsHelper;
+  // What a NEW record from this form is for. Row-scoped when the form
+  // was opened from a resource row's LINK; see ConnectionSection.
+  const link = useRowLink("script", scriptsHelper.link);
 
   const { setSaveMethod, openSelector, setMultiple, setTitle } = useContext(
     SourceTreeContext
@@ -111,8 +119,14 @@ const ScriptsInfoForm = ({ hideTrigger = false }) => {
       // through unchanged. It is never read as, or converted into, keywords.
       edit("script", { ...def, ...values, extraFields: extraFields });
     } else {
-      values["id"] = `s${scripts.length}`;
-      add("script", values);
+      if (link.rowScoped) {
+        // The record and its arrow, in one reducer change -- or neither,
+        // with the form left open to say why.
+        if (!link.createAndLink(values)) return;
+      } else {
+        values["id"] = `s${scripts.length}`;
+        add("script", values);
+      }
     }
     closeForm("script");
   };
@@ -233,8 +247,11 @@ const ScriptsInfoForm = ({ hideTrigger = false }) => {
                 />
               </Grid>
               <Grid>
+                <FormConnection control={control} newType="script" link={link} />
+              </Grid>
+              <Grid>
                 <RegularStyledButton fullWidth type="submit">
-                  {updating ? "Update" : "Save"}
+                  {updating ? "Update" : confirmLabel(link.intent, "Save")}
                 </RegularStyledButton>
               </Grid>
             </Grid>

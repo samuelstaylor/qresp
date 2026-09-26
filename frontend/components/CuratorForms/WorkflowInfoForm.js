@@ -16,6 +16,11 @@ import { useForm } from "react-hook-form";
 
 import Drawer from "../drawer";
 import { RegularStyledButton } from "../button";
+import {
+  FormConnection,
+  confirmLabel,
+  useRowLink,
+} from "./ConnectionSection";
 import { TextInputField } from "../Form/InputFields";
 
 import Graph from "../Workflow/Graph";
@@ -71,6 +76,9 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
 
   // Which external record the dialog is editing, or null when creating one.
   const editingHead = (externalHelper && externalHelper.def) || null;
+  // What a NEW external record is for; row-scoped when opened from a row's
+  // LINK. See ConnectionSection.
+  const link = useRowLink("head", externalHelper && externalHelper.link);
 
   const theme = useTheme();
   const direction = useMediaQuery(theme.breakpoints.down("sm"))
@@ -183,6 +191,7 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors },
   } = useForm({ defaultValues: headDefaults(null) });
 
@@ -224,6 +233,10 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
     };
     if (editingHead) {
       edit("head", { ...editingHead, ...payload });
+    } else if (link.rowScoped) {
+      // The record and its arrow, in one reducer change -- or neither, with
+      // the dialog left open to say why.
+      if (!link.createAndLink(payload)) return;
     } else {
       add("head", { ...payload, id: `h${heads.length}` });
     }
@@ -365,11 +378,16 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
                   placeholder="https://… (optional)"
                 />
               </Grid>
+              {editingHead ? null : (
+                <Grid>
+                  <FormConnection control={control} newType="head" link={link} />
+                </Grid>
+              )}
             </Grid>
           </DialogContent>
           <DialogActions>
             <RegularStyledButton type="submit" fullWidth>
-              Save
+              {editingHead ? "Save" : confirmLabel(link.intent, "Save")}
             </RegularStyledButton>
             <RegularStyledButton
               onClick={closeExternalNode}

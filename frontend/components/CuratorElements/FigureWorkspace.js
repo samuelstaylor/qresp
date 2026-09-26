@@ -46,6 +46,10 @@ import SpotlightContext from "../../Context/Spotlight/spotlightContext";
 import { displayUrl, noteFor } from "../../Utils/externalData";
 import { artifactLabel } from "../../Utils/artifactLabel";
 import {
+  independentIntent,
+  rowScopedIntent,
+} from "../../Utils/connectionIntent";
+import {
   CHART,
   CONSUMES,
   DATASET,
@@ -540,17 +544,23 @@ const FigureWorkspace = () => {
   // time the menu positions itself -- and MUI, handed a detached node, falls
   // back to the top left of the screen. Looking the element up live also
   // keeps the menu beside its trigger after a scroll.
+  // `intent` is WHAT a create from this menu is for -- written once, when the
+  // menu opens, and handed unchanged to the form or the importer. A row's
+  // LINK makes a row-scoped intent naming that row; NEW RESOURCE makes an
+  // explicit independent one. Nothing later reconstructs it from `id` or
+  // from anything on screen.
   const [flow, setFlow] = useState({
     id: "",
     anchor: "",
     step: "root",
     source: "",
+    intent: null,
   });
   const branchTimer = useRef(null);
 
   const closeFlow = () => {
     if (branchTimer.current) clearTimeout(branchTimer.current);
-    setFlow({ id: "", anchor: "", step: "root", source: "" });
+    setFlow({ id: "", anchor: "", step: "root", source: "", intent: null });
   };
   const [moreAnchor, setMoreAnchor] = useState({ id: "", parentId: "", el: null });
   // Links the curator picked that would close a feedback loop, held until
@@ -577,8 +587,12 @@ const FigureWorkspace = () => {
 
   // The RCC import menu, and which typed importer it opened. `nonce` remounts
   // the importer so choosing the same type twice opens it again rather than
-  // doing nothing the second time.
-  const [rccImport, setRccImport] = useState({ type: "", nonce: 0 });
+  // doing nothing the second time. `intent` is the flow's, carried over.
+  const [rccImport, setRccImport] = useState({
+    type: "",
+    nonce: 0,
+    intent: null,
+  });
   const canImport = Boolean(String(fileServerPath || "").trim());
 
   const theme = useTheme();
@@ -592,10 +606,6 @@ const FigureWorkspace = () => {
   // `suggestionKey`. Nothing here is saved, sent, or remembered past this
   // editing session, because "not now" is not a fact about the paper.
   const [dismissed, setDismissed] = useState({});
-
-  // What the next saved artifact should be attached to. Set before the form
-  // opens; consumed when the artifact actually appears.
-  const pending = useRef(null);
 
   const byId = useMemo(() => {
     const map = {};
@@ -612,52 +622,23 @@ const FigureWorkspace = () => {
   const idSignature = knownIds.join(",");
   const edges = (workflow && workflow.edges) || [];
 
-  // THE POST-SAVE LINK.
-  //
-  // The forms create the artifact themselves, so the edge cannot be made at
-  // click time -- the id does not exist yet. This watches for the artifact a
-  // contextual button was waiting for and connects it once it is really
-  // there. A cancelled form adds nothing, so nothing fires.
-  const listLengths = [charts, scripts, datasets, tools, heads]
-    .map((list) => (list || []).length)
-    .join(",");
-  useEffect(() => {
-    const request = pending.current;
-    if (!request) return;
-    const list = (
-      { charts, scripts, datasets, tools, heads }[LIST_BY_TYPE[request.type]] ||
-      []
-    );
-    if (list.length <= request.before) return;      // nothing saved yet
-    const created = list[list.length - 1];
-    pending.current = null;
-    if (!created || !created.id || !request.target) return;
-
-    const forward = inferEdgeType(created.id, request.target);
-    const backward = inferEdgeType(request.target, created.id);
-    const edge = forward
-      ? { from: created.id, to: request.target, type: forward }
-      : backward
-      ? { from: request.target, to: created.id, type: backward }
-      : null;
-    if (edge && !hasEdge(edges, edge.from, edge.to)) addEdge(edge);
-    // The row they started from, not the one that was just created.
-    revealRow(request.target);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listLengths]);
-
-  /** Open the real form for a NEW artifact, remembering what to attach it to. */
-  const createAttachedTo = (type, targetId) => {
+  /**
+   * Open the real form for a NEW artifact, with what it is for.
+   *
+   * The form and the intent arrive in ONE dispatch (see curatorHelperState),
+   * and the form itself makes the record -- and, for a row-scoped intent,
+   * its arrow -- in one reducer change. There is no second step here that
+   * waits for a record to appear and then guesses how to connect it.
+   */
+  const createWith = (type, intent) => {
     setNotice("");
-    const list = { charts, scripts, datasets, tools, heads }[LIST_BY_TYPE[type]] || [];
-    pending.current = { type, target: targetId || "", before: list.length };
     if (!setDefault) return;
     setDefault(type, null);
     if (type === "head") {
-      if (setExternalNodeFormOpen) setExternalNodeFormOpen(true);
+      if (setExternalNodeFormOpen) setExternalNodeFormOpen(true, intent);
       return;
     }
-    if (openForm) openForm(type);
+    if (openForm) openForm(type, intent);
   };
 
   /** Open the real form for an EXISTING artifact. */
@@ -929,12 +910,16 @@ const FigureWorkspace = () => {
             }
           }}
           onClick={() => {
-            const target = flow.id;
+            const { intent } = flow;
             closeFlow();
             if (source === "rcc") {
-              setRccImport((was) => ({ type, nonce: was.nonce + 1 }));
+              setRccImport((was) => ({
+                type,
+                nonce: was.nonce + 1,
+                intent,
+              }));
             } else {
-              createAttachedTo(type, target);
+              createWith(type, intent);
             }
           }}
         >
@@ -1102,19 +1087,22 @@ const FigureWorkspace = () => {
         }}
         data-testid={`fw-actions-${id}`}
       >
+        {/* LINK: everything under it ends connected to THIS row -- an
+            existing resource, or a new one made by hand or from RCC. */}
         <RowAction
           onClick={() =>
             setFlow({
               id,
-              anchor: `fw-addlink-${id}`,
+              anchor: `fw-linkmenu-${id}`,
               step: "root",
               source: "",
+              intent: rowScopedIntent(id, label(id)),
             })
           }
           aria-haspopup="menu"
-          data-testid={`fw-addlink-${id}`}
+          data-testid={`fw-linkmenu-${id}`}
         >
-          Add or link
+          Link
         </RowAction>
         <RowAction
           onClick={() => editArtifact(id)}
@@ -1515,14 +1503,22 @@ const FigureWorkspace = () => {
           under it as quiet text, so they are visible from the first screen
           without competing with the thing most curators want first. */}
       <Box sx={{ mb: 2 }}>
+        {/* NEW RESOURCE: independent records, joined to nothing. Linking
+            is a row's business, because it needs a row to link to. */}
         <RegularStyledButton
           onClick={() =>
-            setFlow({ id: "", anchor: "fw-addlink", step: "root", source: "" })
+            setFlow({
+              id: "",
+              anchor: "fw-new-resource",
+              step: "root",
+              source: "",
+              intent: independentIntent(),
+            })
           }
           aria-haspopup="menu"
-          data-testid="fw-addlink"
+          data-testid="fw-new-resource"
         >
-          Add or link resource
+          New resource
         </RegularStyledButton>
       </Box>
 
@@ -1663,6 +1659,7 @@ const FigureWorkspace = () => {
         <FolderAnalysis
           key={`${rccImport.type}-${rccImport.nonce}`}
           artifactType={rccImport.type}
+          connection={rccImport.intent}
           hideTrigger
           autoOpen
         />

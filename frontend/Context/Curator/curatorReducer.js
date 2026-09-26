@@ -9,6 +9,7 @@ import {
   SET,
   ADD,
   ADD_MANY,
+  ADD_AND_LINK,
   EDIT,
   DELETE,
   ADD_EDGE,
@@ -20,6 +21,28 @@ import {
 } from "../types";
 
 import { getNodeNumber, reduceEdgeNodeId } from "../../Utils/graph";
+import { closesLoop, edgeProblem } from "../../Utils/workflowGraph";
+import { connectionEdge, isRowScoped } from "../../Utils/connectionIntent";
+
+// Ids are minted against the list as it exists at dispatch time, so a batch
+// can never collide with an existing record the way a caller-computed
+// `${prefix}${list.length}` would once several items are added at once.
+const mintIds = (existing, listType, values) => {
+  const idPrefix = listType.charAt(0);
+  const taken = new Set(existing.map((el) => el.id));
+  let next = existing.length;
+  return (values || []).map((value) => {
+    while (taken.has(`${idPrefix}${next}`)) {
+      next += 1;
+    }
+    const id = `${idPrefix}${next}`;
+    taken.add(id);
+    next += 1;
+    return { ...value, id };
+  });
+};
+
+const ARTIFACT_LISTS = ["charts", "scripts", "datasets", "tools", "heads"];
 
 export default (state, action) => {
   switch (action.type) {
@@ -56,25 +79,48 @@ export default (state, action) => {
         ],
       };
 
-    // Batch append (folder analysis "Add selected items"). Ids are minted
-    // HERE, against the list as it exists at dispatch time, so a batch can
-    // never collide with an existing record the way a caller-computed
-    // `${prefix}${list.length}` would once several items are added at once.
+    // Batch append (folder analysis "Add selected items").
     case ADD_MANY: {
       const existing = state[action.payload.type] || [];
-      const idPrefix = action.payload.type.charAt(0);
-      const taken = new Set(existing.map((el) => el.id));
-      let next = existing.length;
-      const added = (action.payload.values || []).map((value) => {
-        while (taken.has(`${idPrefix}${next}`)) {
-          next += 1;
-        }
-        const id = `${idPrefix}${next}`;
-        taken.add(id);
-        next += 1;
-        return { ...value, id };
-      });
+      const added = mintIds(existing, action.payload.type, action.payload.values);
       return { ...state, [action.payload.type]: [...existing, ...added] };
+    }
+
+    // CREATE AND LINK, as one change.
+    //
+    // A resource started from a row's LINK action and the arrow joining it to
+    // that row are one intention, so they land in one dispatch: the records
+    // get their ids here, and each new id is joined to the source with the
+    // relationship the curator chose. If ANY of those arrows is refused by
+    // `edgeProblem` -- the check every other link goes through -- nothing is
+    // written at all: no record without its arrow, no arrow without its
+    // record.
+    //
+    // A record created a moment ago has exactly one edge, so it cannot close
+    // a loop; a loop here would mean the state is not what the caller saw,
+    // and that is refused too rather than written unconfirmed.
+    case ADD_AND_LINK: {
+      const { type, values, intent, choice } = action.payload;
+      if (!isRowScoped(intent)) return state;
+      const existing = state[type] || [];
+      const added = mintIds(existing, type, values);
+      if (!added.length) return state;
+      const knownIds = ARTIFACT_LISTS.flatMap((list) =>
+        (state[list] || []).map((el) => el.id)
+      ).concat(added.map((el) => el.id));
+      const edges = ((state.workflow || {}).edges || []).slice();
+      for (const record of added) {
+        const edge = connectionEdge(intent, record.id, choice);
+        if (edgeProblem(edge, knownIds, edges) || closesLoop(edges, edge)) {
+          return state;
+        }
+        edges.push(edge);
+      }
+      return {
+        ...state,
+        [type]: [...existing, ...added],
+        workflow: { ...state.workflow, edges },
+      };
     }
 
     case DELETE:

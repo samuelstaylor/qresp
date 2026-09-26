@@ -38,6 +38,15 @@ import { RegularStyledButton } from "../button";
 import CuratorContext from "../../Context/Curator/curatorContext";
 import AlertContext from "../../Context/Alert/alertContext";
 import { buildFileUrl } from "../../Utils/fileServerUrl";
+import ConnectionSection, {
+  confirmLabel,
+  useConnectionChoice,
+} from "../CuratorForms/ConnectionSection";
+import {
+  connectionProblem,
+  intentProblem,
+  isRowScoped,
+} from "../../Utils/connectionIntent";
 import {
   aiTargets,
   APPLIED,
@@ -975,14 +984,37 @@ const FolderAnalysis = ({
   // full-width buttons stacked down the page is what that replaces.
   hideTrigger = false,
   autoOpen = false,
+  // WHAT THIS IMPORT IS FOR, decided by whoever opened it: an explicit
+  // independent create, or a row-scoped link to one existing resource (see
+  // Utils/connectionIntent.js). Absent only for the standalone Analyze
+  // button, which has always created independent records.
+  connection,
 }) => {
   const {
     fileServerPath,
     addMany,
+    addAndLink,
     rccAnalysisCache,
     cacheRccAnalysis,
     collectDraftState,
+    charts,
+    scripts,
+    datasets,
+    tools,
+    heads,
+    workflow,
   } = useContext(CuratorContext) || {};
+  const rowScoped = isRowScoped(connection);
+  // One kind per row-scoped import, so one connection choice covers the
+  // batch: every selected candidate gets the same arrow to the same source.
+  const [connectionChoice, setConnectionChoice] = useConnectionChoice(
+    connection,
+    artifactType
+  );
+  const [connectionError, setConnectionError] = useState("");
+  // A confirmed import cannot be confirmed twice. The dialog closes on
+  // success, but a second click can land before it does.
+  const committed = useRef(false);
   const { setAlert } = useContext(AlertContext) || {};
   const typedGroup = artifactType ? GROUP_BY_TYPE[artifactType] : null;
 
@@ -1114,6 +1146,7 @@ const FolderAnalysis = ({
 
   const close = () => {
     setOpen(false);
+    setConnectionError("");
     setLoading(false);
     setError("");
     setAnalysis(null);
@@ -1470,6 +1503,40 @@ const FolderAnalysis = ({
       return;
     }
     setAddAttempted(false);
+
+    // CREATE AND LINK. The records and their arrows go in together or not
+    // at all -- never a record first with the link left for later. The same
+    // `edgeProblem` every other link uses decides whether the arrow is
+    // allowed, and is asked BEFORE anything is dispatched so the curator is
+    // told why; the reducer asks again and refuses the whole change if the
+    // state moved underneath.
+    if (connection !== undefined && (rowScoped || intentProblem(connection))) {
+      if (committed.current) return;
+      const knownIds = [charts, scripts, datasets, tools, heads].flatMap(
+        (list) => (list || []).map((item) => item.id)
+      );
+      const problem = !typedGroup && rowScoped
+        ? "A linked import has to be one kind at a time. Nothing was added."
+        : connectionProblem(
+            connection,
+            artifactType,
+            connectionChoice,
+            knownIds,
+            (workflow && workflow.edges) || []
+          );
+      if (problem) {
+        setConnectionError(problem);
+        return;
+      }
+      const records = selectedCandidatesFor(typedGroup.key).map((candidate) =>
+        toRecord(typedGroup.type, drafts[candidate.id])
+      );
+      committed.current = true;
+      addAndLink(typedGroup.type, records, connection, connectionChoice);
+      close();
+      return;
+    }
+
     let total = 0;
     (typedGroup ? [typedGroup] : GROUPS).forEach(({ key, type }) => {
       if (!type) return;
@@ -2359,6 +2426,34 @@ const FolderAnalysis = ({
             justifyContent: "flex-end",
           }}
         >
+          {rowScoped && typedGroup ? (
+            <Box sx={{ width: "100%", minWidth: 0 }}>
+              <ConnectionSection
+                intent={connection}
+                newType={artifactType}
+                name={
+                  selectedCandidates.length === 1
+                    ? labelOf(selectedCandidates[0]).primary
+                    : ""
+                }
+                choice={connectionChoice}
+                onChange={(next) => {
+                  setConnectionError("");
+                  setConnectionChoice(next);
+                }}
+                problem={connectionError}
+              />
+            </Box>
+          ) : connectionError ? (
+            <Alert
+              severity="error"
+              variant="outlined"
+              data-testid="connection-problem"
+              sx={{ width: "100%" }}
+            >
+              {connectionError}
+            </Alert>
+          ) : null}
           {/* ONE SENTENCE, and only after an Add was refused. What is
               missing from WHICH item is written on the item, next to the
               inputs that fix it -- repeating all of it down here as well
@@ -2400,9 +2495,12 @@ const FolderAnalysis = ({
             onClick={apply}
             data-testid="apply-selected"
           >
-            {typedGroup
-              ? `Add selected ${typedGroup.noun || typedGroup.label}`
-              : "Add selected items"}
+            {confirmLabel(
+              connection,
+              typedGroup
+                ? `Add selected ${typedGroup.noun || typedGroup.label}`
+                : "Add selected items"
+            )}
           </Button>
         </DialogActions>
       </Dialog>
@@ -2509,6 +2607,7 @@ FolderAnalysis.propTypes = {
   // Hide the built-in button and drive the dialog from outside.
   hideTrigger: PropTypes.bool,
   autoOpen: PropTypes.bool,
+  connection: PropTypes.object,
 };
 
 export default FolderAnalysis;

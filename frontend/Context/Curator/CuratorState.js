@@ -18,6 +18,7 @@ import {
   SET,
   ADD,
   ADD_MANY,
+  ADD_AND_LINK,
   EDIT,
   DELETE,
   ADD_EDGE,
@@ -408,6 +409,15 @@ const CuratorState = (props) => {
   const addMany = (type, values) =>
     dispatch({ type: ADD_MANY, payload: { type: type + "s", values } });
 
+  // Create records AND the arrow joining each to the row they were started
+  // from, in one dispatch. The reducer refuses the whole change if any arrow
+  // is invalid, so a caller never gets a record without its link.
+  const addAndLink = (type, values, intent, choice) =>
+    dispatch({
+      type: ADD_AND_LINK,
+      payload: { type: type + "s", values, intent, choice },
+    });
+
   const edit = (type, value) =>
     dispatch({ type: EDIT, payload: { type: type + "s", value } });
 
@@ -441,6 +451,7 @@ const CuratorState = (props) => {
         license: state.license,
         metadata: state,
         setAll,
+        addAndLink,
         resetAll,
         getSavedDraft,
         resumeDraft,

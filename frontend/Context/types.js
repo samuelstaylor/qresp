@@ -45,6 +45,7 @@ export const SET = "SET";
 export const SET_CONFIRM_LABEL = "SET_CONFIRM_LABEL";
 export const ADD = "ADD";
 export const ADD_MANY = "ADD_MANY";
+export const ADD_AND_LINK = "ADD_AND_LINK";
 export const EDIT = "EDIT";
 export const DELETE = "DELETE";
 
