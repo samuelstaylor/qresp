@@ -13,10 +13,12 @@ setup(
     description='Qresp "Curation and Exploration of Reproducible Scientific Papers" is a Python application that facilitates the organization, annotation and exploration of data presented in scientific papers. ',
     python_requires='>=3.10',
     packages=find_packages(),
-    # Synced with requirements.txt on 2026-07-02 (DEPENDENCY_AUDIT.md): only
+    # Synced with requirements.txt on 2026-07-02 (see
+    # docs/archive/modernization/dependency-audit-2026-07-02.md): only
     # packages the code actually imports, plus the WSGI/ASGI servers. Test
     # tooling lives in the `test` extra. All version caps lifted (Flask 3 /
-    # Connexion 3) -- see FULL_STACK_MODERNIZATION_REPORT.md.
+    # Connexion 3) -- see
+    # docs/archive/modernization/full-stack-modernization-report.md.
     install_requires=[
         'flask>=3',
         'werkzeug>=3',

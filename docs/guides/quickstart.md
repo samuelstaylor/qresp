@@ -12,7 +12,7 @@ baseline**, not the newest framework versions.
 > MongoEngine would require source rewrites and risks breaking a working app with
 > no one to fix it. Instead we **pin** the known-good versions so a future user
 > can reproduce a working Qresp from a clean checkout. The migration paths are
-> documented (not performed) in [`modernization_report.md`](modernization_report.md).
+> documented (not performed) in the [archived modernization report](../archive/modernization/modernization-report.md).
 
 ---
 
@@ -24,10 +24,10 @@ baseline**, not the newest framework versions.
 | **Backend deps** | **Pinned** (`backend/requirements.txt`) + **locked** (`backend/requirements.lock.txt`). Install / `pip check` / import / boot / tests all **verified green**. |
 | **Backend tests** | **29 tests pass** via `nose2` using **mongomock** — no real MongoDB needed. |
 | **MongoDB (tests)** | **Not required** (in-memory mongomock). |
-| **MongoDB (real runs)** | Required for the live app. Compose defaults to `mongo:4.4` (prod + dev); `mongo:6.0` verified on a fresh volume — see FULL_STACK_MODERNIZATION_REPORT.md. |
+| **MongoDB (real runs)** | Required for the live app. Compose defaults to `mongo:4.4` (prod + dev); `mongo:6.0` verified on a fresh volume — see [full-stack-modernization-report.md](../archive/modernization/full-stack-modernization-report.md). |
 | **Node / npm / Yarn** | **Not verified** — no Node toolchain was available. Current frontend is Next.js 9 (needs Node ~14); target Node 20 LTS only after the frontend upgrade. |
 | **Frontend** | **Unverified**; manifests left unchanged (upgrades are architectural). |
-| **Docker** | **Works** — `python:3.14-slim` images, verified build + DB-backed runtime 2026-07-02 (see FULL_STACK_MODERNIZATION_REPORT.md). |
+| **Docker** | **Works** — `python:3.14-slim` images, verified build + DB-backed runtime 2026-07-02 (see [full-stack-modernization-report.md](../archive/modernization/full-stack-modernization-report.md)). |
 | **Curation assistant prototype** | **Verified green** (130 tests) on Python 3.11; standalone. |
 
 ### Exact commands that were verified (CPython 3.11.5, clean venv)
@@ -90,7 +90,7 @@ Connection settings live in `backend/project/config.ini` / `config.py`.
 ## C. Run the curation assistant prototype
 
 Standalone, deterministic, fully tested. See
-[`prototypes/curation_assistant/README.md`](prototypes/curation_assistant/README.md).
+[`prototypes/curation_assistant/README.md`](../../prototypes/curation_assistant/README.md).
 
 ```bash
 cd prototypes/curation_assistant
@@ -118,6 +118,6 @@ python -m qresp_curate.cli analyze \
 
 ---
 
-See [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md) for known issues and
-[`modernization_report.md`](modernization_report.md) for the full dependency
+See [Troubleshooting](troubleshooting.md) for known issues and the
+[archived modernization report](../archive/modernization/modernization-report.md) for the full dependency
 audit, verification results, and the future migration roadmap.

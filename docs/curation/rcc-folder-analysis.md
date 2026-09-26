@@ -9,7 +9,7 @@
 > `notebookFile`, figure numbers or package versions, and no AI output is ever
 > saved or published without the curator accepting it item by item.
 >
-> Both features are benchmarked offline by `AI_ASSIST_EVALUATION.md`.
+> Both features are benchmarked offline by [ai-assist-evaluation.md](../product/ai-assist-evaluation.md).
 
 
 A curator who has selected and saved a File Server folder can analyze it and

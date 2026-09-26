@@ -1,18 +1,13 @@
 venv/
 .idea/
-#web/papers/*
-#!web/papers/files_paper/data.json
-web/flask_session/
 flask_session/
-web/dist/
-web/project/__pycache__/
-web/build/
-web/qresp.egg-info/
+backend/dist/
+backend/build/
+*.egg-info/
 .cache/
-web/project/config_test.ini 
-web/project/tests/__pycache__/
+backend/project/config_test.ini
 
-Ignore Temp Files
+# Temp files
 PREVIEW_*
 PUBLISH_*
 
@@ -35,8 +30,8 @@ __pycache__
 *.pem
 
 # Local implementation-planning notes (kept out of source control)
-RELATED_EXTERNAL_150_IMPLEMENTATION_AND_EVALUATION_PROMPT.md
-UX_CURATION_EXPLORER_IMPLEMENTATION_CHECKLIST.md
+docs/archive/implementation-prompts/
+docs/roadmap/ux-curation-explorer-implementation.md
 
 # Generated live external-evaluation runs. `raw-results.jsonl` for the full
 # public corpus is ~57 MB, well past the 200 kB pre-commit ceiling, and the

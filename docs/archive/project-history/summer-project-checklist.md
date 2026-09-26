@@ -1,8 +1,8 @@
 # Qresp 2.0 — Summer Project Checklist
 
 A concise status snapshot for handoff. Detail lives in
-[`modernization_report.md`](modernization_report.md),
-[`QUICKSTART.md`](QUICKSTART.md), and [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md).
+[the modernization report](../modernization/modernization-report.md),
+[Quickstart](../../guides/quickstart.md), and [Troubleshooting](../../guides/troubleshooting.md).
 
 Legend: ✅ done & verified · 🟡 done, not verified here · ⏸ deferred (by design)
 
@@ -18,10 +18,10 @@ Legend: ✅ done & verified · 🟡 done, not verified here · ⏸ deferred (by 
 - [x] **Reproducible lock** (`backend/requirements.lock.txt`).
 - [x] **pre-commit** config repaired (git:// → https://, modern hooks).
 - [x] **GitHub Actions** CI: prototype tests + backend smoke (Travis retired).
-- [x] Handoff docs: [QUICKSTART](QUICKSTART.md), [TROUBLESHOOTING](TROUBLESHOOTING.md),
-      [modernization report](modernization_report.md),
-      [VALIDATION](prototypes/curation_assistant/VALIDATION.md), this checklist,
-      [published-record revision design](REVISION_DESIGN.md).
+- [x] Handoff docs: [Quickstart](../../guides/quickstart.md), [Troubleshooting](../../guides/troubleshooting.md),
+      [modernization report](../modernization/modernization-report.md),
+      VALIDATION (`prototypes/curation_assistant/`, not in the repository), this checklist,
+      [published-record revision design](../design/published-record-revision.md).
 
 ## Verified work (run in a clean environment)
 - [x] ✅ Prototype test suite — **130 passed** (CPython 3.11).
@@ -54,7 +54,7 @@ Legend: ✅ done & verified · 🟡 done, not verified here · ⏸ deferred (by 
 - [ ] ⏸ Docker base / MongoDB image modernization.
 - [ ] ⏸ Remove unused backend deps (Flask-API, flask-profiler, etc.).
 - [ ] ⏸ Curation assistant: tool detection, OCR, image-content similarity, LLM assistance.
-- [ ] ⏸ Published-record **edit/delete** (design only — see [REVISION_DESIGN.md](REVISION_DESIGN.md)).
+- [ ] ⏸ Published-record **edit/delete** (design only — see [published-record revision design](../design/published-record-revision.md)).
 
 ## Known risks
 - **Unmaintained upstreams**: `flask-mongoengine` (blocks Flask 3), `Flask-API`,

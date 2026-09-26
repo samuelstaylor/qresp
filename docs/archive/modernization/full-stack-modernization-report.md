@@ -7,7 +7,7 @@ Branches: `chore/continue-modernization` (waves 1–2, backend) and
 Wave-2 commits (each phase verified before commit):
 `59e874e` Phase A (prune) → `e626682` Phase B (flask-mongoengine out) →
 `9a136ce` Phase D (Connexion 3) → `93d4de6` Phase C (Flask 3) →
-`c35e380` Phase F (Docker/CI/lock). Pre-change audit: [DEPENDENCY_AUDIT.md](DEPENDENCY_AUDIT.md).
+`c35e380` Phase F (Docker/CI/lock). Pre-change audit: [dependency audit](dependency-audit-2026-07-02.md).
 Wave-3 commits: `043fab9` (frontend app migration) → `208db8c` (node:24 images).
 
 Wave 1 (same day, earlier, merged into baseline `698be1c`) had already delivered

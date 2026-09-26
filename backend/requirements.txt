@@ -1,6 +1,7 @@
 # Qresp backend dependencies.
 #
-# 2026-07-02 audit (see DEPENDENCY_AUDIT.md): removed every declared-but-never-
+# 2026-07-02 audit (see
+# docs/archive/modernization/dependency-audit-2026-07-02.md): removed every declared-but-never-
 # imported package (Flask-API, Flask-HTTPAuth, flask-profiler, Flask-WTF,
 # paramiko, schedule, py3dns, pyasn1, validate-email, pyOpenSSL,
 # swagger-spec-validator, coveralls) and redundant explicit transitives

@@ -3,7 +3,7 @@
 **Status: DESIGN ONLY — not implemented.** This documents a safe future approach
 for letting a submitter revise or retract a published Qresp record. It does not
 change current behavior, schema, or auth. Implementation is deferred (see
-[`CHECKLIST.md`](CHECKLIST.md)).
+[summer project checklist](../project-history/summer-project-checklist.md)).
 
 ## Goal & non-goals
 - **Goal:** a submitter can **edit** or **retract** their own published record,

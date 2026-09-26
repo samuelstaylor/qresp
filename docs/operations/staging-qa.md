@@ -27,7 +27,7 @@ environment variables on the staging backend container.
 
 ## Microsoft Entra sign-in — pending app registration
 
-- [ ] Env on staging backend (see MICROSOFT_ENTRA_LOGIN_SETUP.md):
+- [ ] Env on staging backend (see [microsoft-entra-login.md](microsoft-entra-login.md)):
       `QRESP_MICROSOFT_CLIENT_ID`, `QRESP_MICROSOFT_CLIENT_SECRET`,
       `QRESP_MICROSOFT_REDIRECT_URI`
       (= `https://localhost:8443/api/auth/microsoft/callback`, exactly as
@@ -210,7 +210,7 @@ a single server-wide `limit_req` throttled every request, so one page load's
 Fixture folder (read-only, the design reference):
 `https://notebook.rcc.uchicago.edu/files/10.1021.acs.jpcc.5c01077/` —
 `data/{SE-RSH,VDOS,dipoles,short_traj/*.xyz,vlocal}`, `figures/*.png`,
-`scripts/*.py`. See `RCC_FOLDER_ANALYSIS.md`.
+`scripts/*.py`. See [rcc-folder-analysis.md](../curation/rcc-folder-analysis.md).
 
 Staging environment for this section:
 
@@ -614,7 +614,7 @@ Drive/Gmail scopes anywhere.
 
 ## Related Research (Related Literature Explorer prototype)
 
-Full design, thresholds and rationale: `RELATED_RESEARCH.md`.
+Full design, thresholds and rationale: [related-research.md](../product/related-research.md).
 **Off by default.** Everything below assumes you turned it on deliberately.
 
 ### Environment (staging backend only)
@@ -669,7 +669,7 @@ docker compose exec backend python -c "import os; print('enabled:', \
 >
 > An earlier version of this note said the external list would always be
 > empty. That was drawn from two hand-picked DOIs and is **retracted**; see
-> `RELATED_RESEARCH.md` § "Correction".
+> [related-research.md](../product/related-research.md) § "Correction".
 >
 > **Precision is still unknown** — there are no human labels yet, and
 > plausible-looking is not the same as relevant. The open question is the
@@ -878,11 +878,11 @@ python -m project.tools.related_eval summarize --output-dir ../related-eval-out
       recorded
 - [ ] Only THEN decide whether any gate threshold moves. A pass rate of ~71 %
       on unlabelled data is a question, not a verdict — see
-      `RELATED_RESEARCH.md` § Known limitations
+      [related-research.md](../product/related-research.md) § Known limitations
 
 ## After QA
 
-- [ ] Note any UI deltas vs production in FULL_STACK_MODERNIZATION_REPORT.md §8
+- [ ] Note any UI deltas vs production in [full-stack-modernization-report.md](../archive/modernization/full-stack-modernization-report.md) §8
 - [ ] Do NOT leave `QRESP_ENABLE_DEV_LOGIN` set on anything production-facing
 - [ ] Do NOT leave `QRESP_RELATED_RESEARCH_ENABLED` set on anything
       production-facing until the domain relevance table above is filled in

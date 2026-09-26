@@ -20,7 +20,7 @@
 #   REMOVED (direct mongoengine 0.29.3); unused deps pruned (81 -> 65 pins).
 #   NOTE (Linux/Docker): generated on Windows, so the linux-only uvloop extra of
 #   uvicorn[standard] is absent -- uvicorn falls back to asyncio; harmless.
-# See FULL_STACK_MODERNIZATION_REPORT.md.
+# See docs/archive/modernization/full-stack-modernization-report.md.
 a2wsgi==1.10.10
 anyio==4.14.1
 asgiref==3.11.1

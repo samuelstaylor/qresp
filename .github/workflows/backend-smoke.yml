@@ -2,7 +2,7 @@ name: backend-smoke
 
 # Deterministic backend verification. Uses the pinned lock file and the
 # in-process mongomock backend, so NO external MongoDB service is required.
-# Mirrors the local handoff checks documented in QUICKSTART.md.
+# Mirrors the local handoff checks documented in docs/guides/quickstart.md.
 # Matrix: 3.11 = local dev baseline (lock provenance), 3.14 = Docker runtime.
 
 on:

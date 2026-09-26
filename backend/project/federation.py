@@ -264,7 +264,7 @@ def is_public_address(hostname):
     A NAME is not judged here: `is_global` only means something for a literal.
     Names are constrained by the allowlist instead, and the residual risk (a
     registry name that resolves into a private range) is recorded in
-    RELATED_RESEARCH.md rather than papered over.
+    docs/product/related-research.md rather than papered over.
     """
     hostname = (hostname or "").lower().strip("[]")
     try:

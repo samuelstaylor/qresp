@@ -17,7 +17,7 @@ def _truthy(value):
 class Publish:
     """
     Controller for Publishing Papers to the MongoDB database
-    Look at how publish works in dev_docs
+    See docs/curation/publishing.md for how publishing works
     """
 
     def __init__(self):

@@ -160,7 +160,8 @@ CITATION_FIELDS = (
 # it DISCARD the whole field list and answer with its default set -- so the
 # request came back with more data than was asked for (authors, openAccessPdf)
 # and still no reference DOIs. Citation evidence therefore has no source here;
-# see RELATED_RESEARCH.md for the one extra call that would provide it.
+# see docs/product/related-research.md for the one extra call that would
+# provide it.
 RESOLUTION_FIELDS = "paperId,title,externalIds"
 
 # Candidates asked of the provider. EXTERNAL ONLY -- the internal list is

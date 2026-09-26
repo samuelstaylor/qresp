@@ -19,7 +19,7 @@ resolved a newer version.
 **Fix (baseline)** — pinned `mongoengine<0.27` in `requirements.txt`/`setup.py`.
 Future maintainers may instead migrate the test `setUp` to
 `mongo_client_class=mongomock.MongoClient` and unpin MongoEngine
-(see `modernization_report.md` → Future migration roadmap).
+(see [modernization-report.md](../archive/modernization/modernization-report.md) → Future migration roadmap).
 
 ## 2. MongoEngine 0.26 vs PyMongo 4 → import fails
 
@@ -190,7 +190,7 @@ backend.
 
 ### Now resolved — DB-backed runtime (branch `fix/docker-db-runtime`)
 The remaining blockers above were then fixed; **the full stack now runs with
-MongoDB** (details in `modernization_report.md` §14):
+MongoDB** (details in [modernization-report.md](../archive/modernization/modernization-report.md) §14):
 - Added a `mongodb` service (`mongo:4.4`) + named volume `qresp_mongo_data` to the
   default compose; backend connects via `QRESP_MONGODB_HOST=mongodb` (env override
   added to `project/config.py`).

@@ -30,7 +30,7 @@ auto-saved or auto-published.
 
 ### 2. UI/UX regression repair (no redesign)
 - Why: ~90 frontend files migrated (JSS→emotion, RHF 6→7, Link/lightbox/vis rewrites) with only 5 unit tests — visual/behavioral drift is likely and unquantified.
-- MVP: click-through matrix on staging (pages below), fix what's broken, keep existing layout/behavior; document anything not restorable in `FULL_STACK_MODERNIZATION_REPORT.md` §8.
+- MVP: click-through matrix on staging (pages below), fix what's broken, keep existing layout/behavior; document anything not restorable in [full-stack-modernization-report.md](../archive/modernization/full-stack-modernization-report.md) §8.
 - Defer: theming polish, accessibility overhaul, e2e suite (add 1 Playwright smoke only if cheap).
 
 ### 3. Google authentication (identity ONLY)
@@ -41,7 +41,7 @@ auto-saved or auto-published.
 - Guardrails: client id/secret via `config.ini`/`QRESP_*` env only — **never committed**; `OAUTHLIB_INSECURE_TRANSPORT` dev-only.
 
 ### 4. Ownership + edit/delete permission system — ✅ MVP done (2026-07-08)
-- Why: submitters cannot fix or retract published records today (top user request; `REVISION_DESIGN.md` analyzed this pre-auth — Google identity now supersedes its email-token scheme, keep its threat model + soft-delete stance).
+- Why: submitters cannot fix or retract published records today (top user request; [published-record-revision.md](../archive/design/published-record-revision.md) analyzed this pre-auth — Google identity now supersedes its email-token scheme, keep its threat model + soft-delete stance).
 - Ownership anchor: verified session email stamped as `Paper.owner_email` at publish (distinct from curator-declared `info.insertedBy.emailId`). Admin = `QRESP_ADMIN_EMAILS` allowlist.
 - Done — edit: `GET /api/paper/{id}/raw` + `PUT /api/paper/{id}` (owner/admin, existing validation path); paperdetails permission notice + "Edit in Curator" (curator edit mode).
 - Done — soft-deactivate: `Paper.is_active` (absent ⇒ active, legacy-safe) + `PUT /api/paper/{id}/active` (owner/admin, atomic write, **no hard delete**); deactivated records hidden from search/explorer/filter dropdowns and 404 on the public detail for non-owners; owner/admin retain access + Deactivate/Reactivate controls with confirmation; account list flags deactivated.
@@ -89,7 +89,7 @@ auto-saved or auto-published.
   opt-in for the expired RCC certificate. Tools come only from pinned
   manifests; Python imports are a hint; no Experiment is ever inferred.
   Optional consented Gemini descriptions reuse the existing provider config
-  and quota. Docs: `RCC_FOLDER_ANALYSIS.md`. Out of scope: Zenodo folders,
+  and quota. Docs: [rcc-folder-analysis.md](../curation/rcc-folder-analysis.md). Out of scope: Zenodo folders,
   file sizes/mtimes, notebook content parsing.
 
 ### 5. Agentic literature explorer — [~] Related Literature Explorer prototype implemented; 실제 도메인 평가 및 사람 라벨링 대기
@@ -138,7 +138,7 @@ auto-saved or auto-published.
   which may be too permissive. Only the top five are ever shown, so the
   visible effect is bounded. **No threshold is changed before the human QA
   pass** — that decision belongs to whoever fills in the ratings.
-- Docs: `RELATED_RESEARCH.md`, including the 10–20 record
+- Docs: [related-research.md](../product/related-research.md), including the 10–20 record
   관련 있음 / 부분 관련 / 관련 없음 QA table.
 - **Two switches:** `QRESP_RELATED_RESEARCH_ENABLED` (master, default off) and
   `QRESP_RELATED_EXTERNAL_ENABLED` (outbound call, default off, subordinate —
@@ -233,14 +233,14 @@ auto-saved or auto-published.
       run: any legacy `provider: "cilogon"` rows simply sit unused. On
       staging, `QRESP_CILOGON_*` env vars and any CILogon-only `env_file`
       reference can be deleted by hand once this is deployed.
-- [ ] Microsoft Entra sign-in (code complete 2026-07-13, `MICROSOFT_ENTRA_LOGIN_SETUP.md`):
+- [ ] Microsoft Entra sign-in (code complete 2026-07-13, [microsoft-entra-login.md](../operations/microsoft-entra-login.md)):
       create the multitenant app registration ("Accounts in any
       organizational directory", Web redirect
       /api/auth/microsoft/callback), set `QRESP_MICROSOFT_*` env vars, and
       run the staging E2E QA — NOT yet verified against a real Entra tenant;
       some campuses may require tenant-admin consent.
 - [ ] `verify=False` TLS skips in `util.py` registry/schema fetches (pre-existing).
-- [ ] Staging QA pass per `STAGING_QA_CHECKLIST.md`.
+- [ ] Staging QA pass per [staging-qa.md](../operations/staging-qa.md).
 
 ## Smallest end-to-end demo of the new direction
 Login with Google → publish (or open an owned record) → an **Edit** button appears only for the owner → edit a field, save, see it live → open the record's **Related** panel showing 2–3 external papers + 1 internal record with one-line explanations. (Runs on local docker compose; no Drive/Gmail scopes anywhere.)

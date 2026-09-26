@@ -1,4 +1,3 @@
-[![Build Status](https://travis-ci.org/qresp-code-development/qresp.svg?branch=master)](https://travis-ci.org/qresp-code-development/qresp)
 # Qresp
 Official [Qresp](http://qresp.org) software repository. 
 
@@ -10,7 +9,9 @@ Reference:
 M. Govoni, M. Munakami, A. Tanikanti, J. H. Skone, H. B. Runesha, F. Giberti, J. de Pablo, and G. Galli, *Qresp, a tool for curating, discovering and exploring reproducible scientific papers*, Sci. Data 6, 190002 (2019). [https://doi.org/10.1038/sdata.2019.2](https://doi.org/10.1038/sdata.2019.2).
 
 ## Documentation
-**Qresp** documentation is available at [qresp.org](http://qresp.org).
+Project documentation is organized in [docs/README.md](docs/README.md).
+Start with the [Quickstart](docs/guides/quickstart.md) or the
+[RCC folder analysis guide](docs/curation/rcc-folder-analysis.md).
 
 ## Development 
 The **Qresp** development is hosted on [GitHub](https://github.com/west-code-development/qresp), and licensed under the open-source GPLv3 license. See [CONTRIBUTING.md](CONTRIBUTING.md), [CHANGELOG.md](CHANGELOG.md), and [AUTHORS.md](AUTHORS.md) for more information.
@@ -25,7 +26,7 @@ The **Qresp** development is hosted on [GitHub](https://github.com/west-code-dev
 | Node.js (frontend) | **14** | Required by the current Next.js 9 build (see modernization notes). |
 | MongoDB | **6.0** | The repo's compose file still references the EOL 3.6 image. |
 
-See [`modernization_report.md`](modernization_report.md) for the dependency
+See the [modernization archive](docs/archive/modernization/modernization-report.md) for the dependency
 audit, applied upgrades, compatibility risks, and recommended future upgrades.
 
 ### Backend (Flask API)
