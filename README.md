@@ -18,51 +18,40 @@ The **Qresp** development is hosted on [GitHub](https://github.com/west-code-dev
 
 ## Local development setup
 
-### Recommended runtime versions
-| Component | Recommended | Notes |
+| Component | Version | Where it is pinned |
 | --- | --- | --- |
-| Python (backend) | **3.10** | Legacy Flask stack validated on 3.8–3.10. |
-| Python (`prototypes/curation_assistant`) | **3.11** | Standalone, fully tested. |
-| Node.js (frontend) | **14** | Required by the current Next.js 9 build (see modernization notes). |
-| MongoDB | **6.0** | The repo's compose file still references the EOL 3.6 image. |
+| Python (backend) | **3.11** or **3.14** | CI matrix; the Docker image uses 3.14 |
+| Node.js (frontend) | **24** | `frontend/Dockerfile` |
+| MongoDB | **4.4** | `docker-compose.yml` |
 
-See the [modernization archive](docs/archive/modernization/modernization-report.md) for the dependency
-audit, applied upgrades, compatibility risks, and recommended future upgrades.
+The backend is Flask 3 behind Connexion 3; the frontend is Next.js 16 with
+React 19 and MUI 9. Step-by-step setup is in the
+[Quickstart](docs/guides/quickstart.md); known problems are in
+[Troubleshooting](docs/guides/troubleshooting.md).
 
-### Backend (Flask API)
+### Backend
 ```bash
 cd backend
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-python setup.py install
-# tests require a running MongoDB instance:
-nose2 --with-coverage -v
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scriptsctivate
+pip install -r requirements.lock.txt
+python -m nose2 -v          # in-memory mongomock; no MongoDB needed
 ```
-> The dependency upper bounds in `requirements.txt` are required by the current
-> source (WTForms < 3, connexion < 3, Flask < 2.3). Do not lift them without the
-> code migration described in the modernization report.
 
-### Frontend (Next.js)
+### Frontend
 ```bash
 cd frontend
-yarn install      # or: npm install
+yarn install
 yarn dev          # http://localhost:3000
-yarn test         # jest
-```
-
-### Curation assistant prototype
-```bash
-cd prototypes/curation_assistant
-python -m pip install -e ".[pdf,schema,test]"
-python -m pytest
+yarn test
+yarn build
 ```
 
 ### Docker (full stack)
 ```bash
-docker-compose -f docker-compose.dev.yml up --build
+sh nginx/generate-local-certs.sh     # self-signed dev certs, git-ignored
+docker compose -f docker-compose.dev.yml up --build
 ```
 
 ### Continuous integration
-CI runs via GitHub Actions ([`.github/workflows/prototype-tests.yml`](.github/workflows/prototype-tests.yml)).
-The legacy `.travis.yml` is **deprecated** (travis-ci.org is shut down) and is
-being phased out — see the modernization report.
+GitHub Actions runs the backend suite on every push
+([`.github/workflows/backend-smoke.yml`](.github/workflows/backend-smoke.yml)).

@@ -1,123 +1,81 @@
-# Qresp Quickstart & Handoff Guide
+# Qresp Quickstart
 
-This guide gets a new user to a **running, verified baseline** as fast as
-possible. It is written for handoff: this was a short (two-month) effort and the
-project may go unmaintained for a while, so the goal is a **stable, reproducible
-baseline**, not the newest framework versions.
+From a clean checkout to a running backend, frontend and test suite.
+Known problems and their fixes are in [Troubleshooting](troubleshooting.md).
 
-> **Why we stabilize instead of upgrading to latest.** The backend code is
-> coupled to a specific generation of its stack (it imports
-> `wtforms.fields.html5`, `connexion.jsonifier`, and the `mongomock://` URI that
-> newer majors removed). Jumping to Flask 3 / connexion 3 / WTForms 3 / newer
-> MongoEngine would require source rewrites and risks breaking a working app with
-> no one to fix it. Instead we **pin** the known-good versions so a future user
-> can reproduce a working Qresp from a clean checkout. The migration paths are
-> documented (not performed) in the [archived modernization report](../archive/modernization/modernization-report.md).
+## Versions
 
----
-
-## A. Current stable baseline
-
-| Item | Status |
+| Item | Version |
 | --- | --- |
-| **Backend Python** | **Verified on CPython 3.11.5** (win_amd64). Use standard CPython **3.10–3.11**. |
-| **Backend deps** | **Pinned** (`backend/requirements.txt`) + **locked** (`backend/requirements.lock.txt`). Install / `pip check` / import / boot / tests all **verified green**. |
-| **Backend tests** | **29 tests pass** via `nose2` using **mongomock** — no real MongoDB needed. |
-| **MongoDB (tests)** | **Not required** (in-memory mongomock). |
-| **MongoDB (real runs)** | Required for the live app. Compose defaults to `mongo:4.4` (prod + dev); `mongo:6.0` verified on a fresh volume — see [full-stack-modernization-report.md](../archive/modernization/full-stack-modernization-report.md). |
-| **Node / npm / Yarn** | **Not verified** — no Node toolchain was available. Current frontend is Next.js 9 (needs Node ~14); target Node 20 LTS only after the frontend upgrade. |
-| **Frontend** | **Unverified**; manifests left unchanged (upgrades are architectural). |
-| **Docker** | **Works** — `python:3.14-slim` images, verified build + DB-backed runtime 2026-07-02 (see [full-stack-modernization-report.md](../archive/modernization/full-stack-modernization-report.md)). |
-| **Curation assistant prototype** | **Verified green** (130 tests) on Python 3.11; standalone. |
+| Backend Python | **3.11** or **3.14** (the two CI runs; Docker uses 3.14). Use a standard CPython build. |
+| Backend stack | Flask 3, Connexion 3 (ASGI), WTForms 3, MongoEngine 0.29, PyMongo 4 — exact set in `backend/requirements.lock.txt` |
+| Node.js | **24** (matches `frontend/Dockerfile`), with Yarn 1 |
+| Frontend stack | Next.js 16, React 19, MUI 9, Jest 30 |
+| MongoDB | **4.4** for the live app (`docker-compose.yml`). The tests do not need it. |
 
-### Exact commands that were verified (CPython 3.11.5, clean venv)
-```bash
-# backend
-pip install -r backend/requirements.txt          # exit 0
-python -m pip check                                # "No broken requirements found."
-python -c "import project; print(project.app.test_client().get('/').status_code)"  # 200
-python -m nose2                                    # Ran 29 tests ... OK
-
-# prototype
-pip install -e "prototypes/curation_assistant[pdf,schema,test]"
-python -m pytest prototypes/curation_assistant     # 130 passed
-```
-
-### Known unverified items
-- Frontend `yarn install` / `yarn build` / `yarn test` (no Node toolchain present).
-- Docker / `docker compose up` (Docker not installed; known blockers documented).
-- Real MongoDB-backed flows (publish, search, paper details).
-- Python versions other than 3.11 (3.10 expected to work; 3.6/3.7 are EOL).
-
----
-
-## B. Run the backend locally
+## Backend
 
 ```bash
 cd backend
-
-# 1. clean environment (use standard CPython 3.10 or 3.11)
 python -m venv .venv
 source .venv/bin/activate            # Windows: .venv\Scripts\activate
 
-# 2. install dependencies
-pip install -r requirements.txt      # human-maintained, pinned
-# or, for an exact reproducible set:
-# pip install -r requirements.lock.txt
-
-# 3. sanity check
+pip install -r requirements.lock.txt # the exact versions CI installs
 python -m pip check
 
-# 4. boot smoke test (no MongoDB needed for GET /)
-python -c "import project; print(project.app.test_client().get('/').status_code)"   # -> 200
+# Boot smoke test (no MongoDB needed for GET /)
+python -c "import project; print(project.app.test_client().get('/').status_code)"   # 200
 
-# 5. run the test suite (uses in-memory mongomock; no MongoDB needed)
-python -m nose2 -v                   # -> Ran 29 tests ... OK
+# Tests: in-memory mongomock, no MongoDB needed
+python -m nose2 -v
 ```
 
-**Running the live app** (needs a real MongoDB):
+`requirements.txt` lists the direct dependencies; `requirements.lock.txt` pins
+the whole tree. Install from the lock file unless you are deliberately
+upgrading.
+
+### Running the live app
+
+The live app needs a real MongoDB. Start one (for example a local `mongo:4.4`
+container), then:
+
 ```bash
-# start MongoDB yourself (e.g. a local mongo:4.4 container), then:
 python -m uvicorn project:connexionapp --host 0.0.0.0 --port 5000 --reload
-# production-style: gunicorn -k uvicorn_worker.UvicornWorker -w 4 -b :5000 project:connexionapp
-# (Connexion 3 is ASGI -- `flask run` / serving bare `project:app` would bypass
-#  the API validation & swagger-ui middleware.)
 ```
-Connection settings live in `backend/project/config.ini` / `config.py`.
 
----
+Serve `project:connexionapp`, not `project:app`: Connexion 3 is ASGI, and the
+bare Flask app would bypass its request validation and Swagger UI. Connection
+settings are in `backend/project/config.ini`; each can be overridden by a
+`QRESP_*` environment variable (see `backend/project/config.py`).
 
-## C. Run the curation assistant prototype
-
-Standalone, deterministic, fully tested. See
-[`prototypes/curation_assistant/README.md`](../../prototypes/curation_assistant/README.md).
+## Frontend
 
 ```bash
-cd prototypes/curation_assistant
-
-# install (Python 3.11 recommended)
-python -m pip install -e ".[pdf,schema,test]"
-
-# tests
-python -m pytest                     # -> 130 passed
-
-# demo run on the bundled fixtures
-python -m qresp_curate.cli analyze \
-    --paper tests/fixtures/sample_paper.pdf \
-    --research tests/fixtures/sample_research \
-    --output demo_output \
-    --llm none
+cd frontend
+yarn install         # uses the committed yarn.lock
+yarn dev             # http://localhost:3000
+yarn test            # Jest
+yarn build           # production build
 ```
 
-**Expected output files** (in `demo_output/`):
-- `aligned_file_structure.json`
-- `paper_figures.json`
-- `candidate_workflow_chains.json`
-- `qresp_metadata_draft.json`
-- `analysis_summary.md` (human-readable rollup)
+The browser calls the API at `NEXT_PUBLIC_API_URL` (the backend's origin, for
+example `http://localhost:5000`). Server-side rendering inside Docker reaches
+the backend through `QRESP_INTERNAL_API_URL` instead; see
+`frontend/Utils/serverSideApi.js`.
 
----
+## Docker (full stack)
 
-See [Troubleshooting](troubleshooting.md) for known issues and the
-[archived modernization report](../archive/modernization/modernization-report.md) for the full dependency
-audit, verification results, and the future migration roadmap.
+```bash
+sh nginx/generate-local-certs.sh     # self-signed dev certs, git-ignored
+docker compose -f docker-compose.dev.yml up --build
+```
+
+This starts MongoDB, the backend, the frontend and nginx. nginx sends `/api`
+to the backend and everything else to the frontend.
+
+## Further reading
+
+- [RCC folder analysis](../curation/rcc-folder-analysis.md)
+- [Microsoft Entra sign-in setup](../operations/microsoft-entra-login.md)
+- [Staging QA](../operations/staging-qa.md)
+- [Documentation index](../README.md)
