@@ -24,6 +24,7 @@ const shell = {
   flexDirection: "column",
   // `#__next` is a flex row, so this keeps the shell full width.
   flexGrow: 1,
+  minWidth: 0,
   minHeight: "100vh",
   "@supports (min-height: 100dvh)": {
     minHeight: "100dvh",
@@ -39,7 +40,7 @@ function Layout({ children }) {
       {/* Everything between the header and the footer, taking whatever
           height is left over. Also the page's one `main` landmark, which
           nothing else was providing. */}
-      <Box component="main" sx={{ display: "flex", flex: 1 }}>
+      <Box component="main" sx={{ display: "flex", flex: 1, minWidth: 0 }}>
         {children}
       </Box>
       <Footer />

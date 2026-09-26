@@ -250,7 +250,13 @@ const explorer = ({ choose = false, unavailable = false }) => {
             ChipProps={{ color: "primary", variant: "outlined" }}
             onChange={handleChange}
           />
-          <Box sx={{ display: "flex", flexDirection: "row", justifyContent: "center", m: 4 }}>
+          {/* Wraps, with a smaller margin on phones: side by side, the two
+              buttons and their margins were wider than a phone's card, and
+              the page scrolled sideways to fit them. */}
+          <Box
+            data-testid="explorer-search-actions"
+            sx={{ display: "flex", flexDirection: "row", flexWrap: "wrap", justifyContent: "center", m: { xs: 2, sm: 4 } }}
+          >
             <Box sx={{ m: 1 }}>
               <StyledButton onClick={searchSelected}>
                 Search Selected

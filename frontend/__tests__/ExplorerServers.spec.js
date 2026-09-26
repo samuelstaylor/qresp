@@ -188,3 +188,25 @@ describe("Explorer federation list", () => {
     }
   });
 });
+
+// jsdom has no layout, so this pins the CSS that lets the actions fit a
+// phone: side by side, the two buttons and their margins were wider than the
+// card, and the page scrolled sideways to show them.
+describe("Explorer search actions", () => {
+  afterEach(() => jest.resetAllMocks());
+
+  it("may wrap onto separate lines, and keeps both buttons", async () => {
+    apiEndpoint.get.mockRejectedValue(new Error("no endpoint"));
+    renderExplorer();
+
+    const actions = screen.getByTestId("explorer-search-actions");
+    expect(actions).toHaveStyle("flex-wrap: wrap");
+    expect(actions).toContainElement(
+      screen.getByRole("button", { name: /search selected/i })
+    );
+    expect(actions).toContainElement(
+      screen.getByRole("button", { name: /search all/i })
+    );
+    await waitFor(() => expect(apiEndpoint.get).toHaveBeenCalled());
+  });
+});

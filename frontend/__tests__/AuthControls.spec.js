@@ -123,7 +123,9 @@ describe("Header sign-in availability", () => {
 
     // The hamburger is a sibling, not its container: opening the drawer is
     // never required to reach sign-in.
-    const menu = screen.getByRole("button", { name: "" });
+    const menu = screen.getByRole("button", {
+      name: /open navigation menu/i,
+    });
     expect(menu).not.toContainElement(signIn[0]);
   });
 
@@ -133,7 +135,9 @@ describe("Header sign-in availability", () => {
     renderHeader();
     await screen.findByRole("link", { name: /^sign in$/i });
 
-    await user.click(screen.getByRole("button", { name: "" }));
+    await user.click(
+      screen.getByRole("button", { name: /open navigation menu/i })
+    );
 
     // The drawer carries navigation only. The one sign-in control stays in
     // the header bar (the open modal hides it from the a11y tree, hence
@@ -163,5 +167,41 @@ describe("Header sign-in availability", () => {
     expect(
       screen.getByRole("button", { name: /sign out/i })
     ).toBeInTheDocument();
+  });
+});
+
+// jsdom has no layout, so this pins the CSS that lets a phone-width header
+// fit: the row may wrap, and the controls move together, right-aligned. A
+// row that could not wrap once widened every signed-in page on a phone.
+describe("Header on a narrow screen", () => {
+  afterEach(() => jest.resetAllMocks());
+
+  it("lets the signed-in controls take their own line instead of widening the page", async () => {
+    axios.get.mockResolvedValue({
+      data: {
+        authenticated: true,
+        user: { name: "A Curator With A Long Name", email: "c@example.edu" },
+      },
+    });
+    render(
+      <AuthState>
+        <Header />
+      </AuthState>
+    );
+
+    const signOut = await screen.findByRole("button", { name: /sign out/i });
+    const controls = screen.getByTestId("header-controls");
+    // Name, Sign out and the menu button stay one group, never split up...
+    expect(controls).toContainElement(signOut);
+    expect(controls).toContainElement(
+      screen.getByRole("link", { name: /a curator with a long name/i })
+    );
+    expect(
+      controls
+    ).toContainElement(screen.getByRole("button", { name: /open navigation menu/i }));
+    expect(controls).toHaveStyle("flex-wrap: nowrap");
+    expect(controls).toHaveStyle("margin-left: auto");
+    // ...and that group may move below the logo.
+    expect(controls.parentElement).toHaveStyle("flex-wrap: wrap");
   });
 });

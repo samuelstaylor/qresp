@@ -211,3 +211,16 @@ describe("ReferenceInfoForm", () => {
     expect(editor).not.toHaveBeenCalled();
   });
 });
+
+describe("Kind options on a narrow screen", () => {
+  it("are as wide as their options but never wider than the form", () => {
+    renderForm(filledReference);
+    const kind = screen.getByRole("radiogroup");
+    // `max-content` alone kept Preprint / Journal / Dissertation on one
+    // unbreakable line and widened the whole Curator page on a phone.
+    expect(kind).toHaveStyle("width: fit-content");
+    expect(kind).toHaveStyle("max-width: 100%");
+    expect(kind).toHaveStyle("flex-wrap: wrap");
+    expect(screen.getAllByRole("radio")).toHaveLength(3);
+  });
+});

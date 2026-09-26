@@ -66,8 +66,12 @@ const Header = () => {
         {/* xl gives the inline row room to breathe; the auth control sits
             outside it and shows at every width. */}
         <Container maxWidth="xl">
-          <Box sx={{ display: "flex", flexDirection: "row", flexGrow: 1, alignItems: "center", m: 1 }}>
-            <Box sx={{ display: "flex", alignItems: "center", flexGrow: 1 }}>
+          {/* The row WRAPS: on a phone the logo plus a signed-in name,
+              Sign out and the menu button are wider than the bar, and a row
+              that cannot wrap widened the whole page instead. The controls
+              then take a line of their own, still right-aligned. */}
+          <Box sx={{ display: "flex", flexDirection: "row", flexWrap: "wrap", flexGrow: 1, minWidth: 0, width: "100%", alignItems: "center", m: 1 }}>
+            <Box sx={{ display: "flex", alignItems: "center", flexGrow: 1, minWidth: 0 }}>
               <Button component={Link} href="/">
                 <Picture
                   imgSrc="/images/qrespLogo"
@@ -76,7 +80,10 @@ const Header = () => {
                 />
               </Button>
             </Box>
-            <Box sx={{ display: "flex", alignItems: "center", flexWrap: "nowrap" }}>
+            <Box
+              data-testid="header-controls"
+              sx={{ display: "flex", alignItems: "center", flexWrap: "nowrap", maxWidth: "100%", ml: "auto" }}
+            >
               {/* MUI v6+ removed <Hidden>; use responsive display instead.
                   Navigation collapses into the drawer below lg. */}
               <Box
@@ -93,7 +100,7 @@ const Header = () => {
                   hamburger. It is one short control, so it fits. */}
               <AuthControls />
               <Box sx={{ display: { xs: "flex", lg: "none" } }}>
-                <StyledButton onClick={handleOpen}>
+                <StyledButton aria-label="Open navigation menu" onClick={handleOpen}>
                   <Menu />
                 </StyledButton>
               </Box>

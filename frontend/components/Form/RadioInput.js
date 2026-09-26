@@ -49,7 +49,10 @@ const RadioInput = (props) => {
       <RadioGroup
         id={id}
         name={field.name}
-        style={{ width: "max-content" }}
+        // As wide as its options, so the tooltip sits beside them -- but never
+        // wider than the column: `max-content` alone kept a row of options
+        // on one unbreakable line and widened the whole page on a phone.
+        style={{ width: "fit-content", maxWidth: "100%", flexWrap: "wrap" }}
         row={row}
         onFocus={() => setFocused(true)}
         onMouseEnter={() => setHovering(true)}
