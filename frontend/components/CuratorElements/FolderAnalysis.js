@@ -40,13 +40,9 @@ import AlertContext from "../../Context/Alert/alertContext";
 import { buildFileUrl } from "../../Utils/fileServerUrl";
 import ConnectionSection, {
   confirmLabel,
-  useConnectionChoice,
+  useRowLink,
 } from "../CuratorForms/ConnectionSection";
-import {
-  connectionProblem,
-  intentProblem,
-  isRowScoped,
-} from "../../Utils/connectionIntent";
+import { intentProblem } from "../../Utils/connectionIntent";
 import {
   aiTargets,
   APPLIED,
@@ -993,28 +989,14 @@ const FolderAnalysis = ({
   const {
     fileServerPath,
     addMany,
-    addAndLink,
     rccAnalysisCache,
     cacheRccAnalysis,
     collectDraftState,
-    charts,
-    scripts,
-    datasets,
-    tools,
-    heads,
-    workflow,
   } = useContext(CuratorContext) || {};
-  const rowScoped = isRowScoped(connection);
-  // One kind per row-scoped import, so one connection choice covers the
-  // batch: every selected candidate gets the same arrow to the same source.
-  const [connectionChoice, setConnectionChoice] = useConnectionChoice(
-    connection,
-    artifactType
-  );
-  const [connectionError, setConnectionError] = useState("");
-  // A confirmed import cannot be confirmed twice. The dialog closes on
-  // success, but a second click can land before it does.
-  const committed = useRef(false);
+  // The same create-and-link the manual forms use. One kind per row-scoped
+  // import, so one connection choice covers the batch: every selected
+  // candidate gets the same arrow to the same source.
+  const link = useRowLink(artifactType, connection);
   const { setAlert } = useContext(AlertContext) || {};
   const typedGroup = artifactType ? GROUP_BY_TYPE[artifactType] : null;
 
@@ -1146,7 +1128,6 @@ const FolderAnalysis = ({
 
   const close = () => {
     setOpen(false);
-    setConnectionError("");
     setLoading(false);
     setError("");
     setAnalysis(null);
@@ -1510,30 +1491,18 @@ const FolderAnalysis = ({
     // allowed, and is asked BEFORE anything is dispatched so the curator is
     // told why; the reducer asks again and refuses the whole change if the
     // state moved underneath.
-    if (connection !== undefined && (rowScoped || intentProblem(connection))) {
-      if (committed.current) return;
-      const knownIds = [charts, scripts, datasets, tools, heads].flatMap(
-        (list) => (list || []).map((item) => item.id)
-      );
-      const problem = !typedGroup && rowScoped
-        ? "A linked import has to be one kind at a time. Nothing was added."
-        : connectionProblem(
-            connection,
-            artifactType,
-            connectionChoice,
-            knownIds,
-            (workflow && workflow.edges) || []
-          );
-      if (problem) {
-        setConnectionError(problem);
+    if (connection !== undefined &&
+        (link.rowScoped || intentProblem(connection))) {
+      if (!typedGroup) {
+        link.refuse(
+          "A linked import has to be one kind at a time. Nothing was added."
+        );
         return;
       }
       const records = selectedCandidatesFor(typedGroup.key).map((candidate) =>
         toRecord(typedGroup.type, drafts[candidate.id])
       );
-      committed.current = true;
-      addAndLink(typedGroup.type, records, connection, connectionChoice);
-      close();
+      if (link.createAndLink(records)) close();
       return;
     }
 
@@ -2426,7 +2395,7 @@ const FolderAnalysis = ({
             justifyContent: "flex-end",
           }}
         >
-          {rowScoped && typedGroup ? (
+          {link.rowScoped && typedGroup ? (
             <Box sx={{ width: "100%", minWidth: 0 }}>
               <ConnectionSection
                 intent={connection}
@@ -2436,22 +2405,19 @@ const FolderAnalysis = ({
                     ? labelOf(selectedCandidates[0]).primary
                     : ""
                 }
-                choice={connectionChoice}
-                onChange={(next) => {
-                  setConnectionError("");
-                  setConnectionChoice(next);
-                }}
-                problem={connectionError}
+                choice={link.choice}
+                onChange={link.setChoice}
+                problem={link.problem}
               />
             </Box>
-          ) : connectionError ? (
+          ) : link.problem ? (
             <Alert
               severity="error"
               variant="outlined"
               data-testid="connection-problem"
               sx={{ width: "100%" }}
             >
-              {connectionError}
+              {link.problem}
             </Alert>
           ) : null}
           {/* ONE SENTENCE, and only after an Add was refused. What is

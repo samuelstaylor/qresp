@@ -70,7 +70,6 @@ import {
   edgeProblem,
   edgeSentence,
   hasEdge,
-  inferEdgeType,
   prefixOf,
 } from "../../Utils/workflowGraph";
 
@@ -93,10 +92,10 @@ import {
 // Chart, and every form opened here is the existing form with its existing
 // validation. Only the way in is different.
 //
-// WHAT A CONTEXTUAL BUTTON DOES. It remembers what the new artifact should be
-// attached to, then opens the real form. When the form saves and the artifact
-// appears, the edge is created from what the two things ARE -- see
-// `inferEdgeType`. Cancel saves nothing, so nothing is attached to nothing.
+// WHAT A ROW'S LINK DOES. It records a connection intent naming that row and
+// hands it to the real form or the RCC importer, which create the record and
+// the arrow the curator chose in one change -- see Utils/connectionIntent.js.
+// Cancel creates neither.
 
 // What a group of a kind is called, for the "Related …" heading.
 const KIND_PLURAL = {
@@ -121,14 +120,6 @@ const TYPE_BY_PREFIX = {
   [DATASET]: "dataset",
   [TOOL]: "tool",
   [EXTERNAL]: "head",
-};
-
-const LIST_BY_TYPE = {
-  chart: "charts",
-  script: "scripts",
-  dataset: "datasets",
-  tool: "tools",
-  head: "heads",
 };
 
 /**
@@ -499,17 +490,6 @@ const LinkDialog = ({
    * to it. No hierarchy is invented, so none can be wrong.
    */
 
-/**
- * WHAT WOULD BE SENT, before anything is.
- *
- * Built from the server's own summary of the bundle it would send -- the
- * same object, so this screen cannot describe something other than what
- * goes. The excerpts are shown in full: "some code will be sent" is a
- * sentence to be read rather than a claim to be trusted.
- *
- * Consent is asked FRESH every time. There is deliberately no "always
- * allow", and closing this sends nothing.
- */
 const FigureWorkspace = () => {
   const {
     charts, scripts, datasets, tools, heads,
@@ -705,23 +685,6 @@ const FigureWorkspace = () => {
     edges.map(fromStoredEdge).filter((edge) => edge.from === id);
 
   // ---- THE OUTLINE -------------------------------------------------------
-
-  // What hangs under a node, and in what order. A figure is a result, so
-  // everything below it is what went into it.
-  const NEW_TYPES = [
-    { type: "chart", label: "Figure", probe: `${CHART}?` },
-    { type: "script", label: "Script", probe: `${SCRIPT}?` },
-    { type: "dataset", label: "Dataset", probe: `${DATASET}?` },
-    { type: "tool", label: "Tool", probe: `${TOOL}?` },
-    { type: "head", label: "External data", probe: `${EXTERNAL}?` },
-  ];
-
-  /** The kinds it would be legal to create attached to `id`. */
-  const addableTo = (id) =>
-    NEW_TYPES.filter(
-      ({ probe }) =>
-        Boolean(inferEdgeType(id, probe)) || Boolean(inferEdgeType(probe, id))
-    );
 
   const label = (id) => rowLabel(byId[id], id);
   const named = (id) => `${KIND_LABEL[prefixOf(id)] || "Item"}: ${label(id)}`;

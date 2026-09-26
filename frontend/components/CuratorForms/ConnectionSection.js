@@ -37,7 +37,7 @@ import {
  * Keyed on the intent object itself: a new LINK opens a new intent, and gets
  * a fresh default; typing, validation errors and re-renders keep the choice.
  */
-export const useConnectionChoice = (intent, newType) => {
+const useConnectionChoice = (intent, newType) => {
   const [held, setHeld] = useState(() => ({
     intent,
     choice: isRowScoped(intent) ? defaultConnection(intent, newType) : null,
@@ -54,14 +54,15 @@ export const useConnectionChoice = (intent, newType) => {
 };
 
 /**
- * EVERYTHING A MANUAL FORM NEEDS TO CREATE-AND-LINK, in one place.
+ * EVERYTHING A CREATE PATH NEEDS TO CREATE-AND-LINK, in one place.
  *
- * The four artifact forms and the External data dialog each call this with
- * the intent their helper slot holds. For a row-scoped intent `createAndLink`
+ * The four artifact forms, the External data dialog and the RCC importer
+ * all call this with the intent they were opened with. `createAndLink`
  * checks the connection with the canonical `edgeProblem` and, only if it is
- * allowed, makes the record and its arrow in ONE reducer change; it returns
- * false and leaves the form open when it is not. For any other intent
- * `rowScoped` is false and the form saves exactly as it always has.
+ * allowed, makes the records and their arrows in ONE reducer change; it
+ * returns false, and leaves the caller open to say why, when it is not. For
+ * an independent intent `rowScoped` is false and the caller saves exactly as
+ * it always has.
  */
 export const useRowLink = (type, intent) => {
   const { addAndLink, charts, scripts, datasets, tools, heads, workflow } =
@@ -73,7 +74,13 @@ export const useRowLink = (type, intent) => {
   const done = useRef(null);
   const rowScoped = isRowScoped(intent);
 
-  const createAndLink = (values) => {
+  const refuse = (message) => {
+    setProblem(message);
+    return false;
+  };
+
+  // `records` is one form's values, or an importer's batch of one kind.
+  const createAndLink = (records) => {
     if (done.current === intent) return false;
     const knownIds = [charts, scripts, datasets, tools, heads].flatMap(
       (list) => (list || []).map((item) => item.id)
@@ -85,13 +92,13 @@ export const useRowLink = (type, intent) => {
       knownIds,
       (workflow && workflow.edges) || []
     );
-    if (found) {
-      setProblem(found);
-      return false;
-    }
+    if (found) return refuse(found);
     done.current = intent;
-    const { id: ignored, ...record } = values; // eslint-disable-line no-unused-vars
-    addAndLink(type, [record], intent, choice);
+    // Ids are the reducer's to mint; a caller-computed one is dropped.
+    const batch = (Array.isArray(records) ? records : [records]).map(
+      ({ id: ignored, ...record }) => record // eslint-disable-line no-unused-vars
+    );
+    addAndLink(type, batch, intent, choice);
     return true;
   };
 
@@ -105,6 +112,7 @@ export const useRowLink = (type, intent) => {
       setChoice(next);
     },
     createAndLink,
+    refuse,
   };
 };
 
