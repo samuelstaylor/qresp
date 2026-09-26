@@ -11,7 +11,13 @@ import userEvent from "@testing-library/user-event";
 jest.mock("axios");
 import axios from "axios";
 
+// The workflow drawing is vis-network, which jsdom cannot host. The External
+// data dialog under test lives in the same component, not in the drawing.
+jest.mock("../components/Workflow/Graph", () => () => null);
+jest.mock("../components/Workflow/Legend", () => () => null);
+
 import FigureWorkspace from "../components/CuratorElements/FigureWorkspace";
+import WorkflowInfoForm from "../components/CuratorForms/WorkflowInfoForm";
 import CuratorContext from "../Context/Curator/curatorContext";
 import CuratorState from "../Context/Curator/CuratorState";
 import CuratorHelperState from "../Context/CuratorHelpers/curatorHelperState";
@@ -82,6 +88,9 @@ const Probe = () => {
       <span data-testid="live-datasets">
         {datasets.map((d) => `${d.id}:${d.readme}`).join("|") || "none"}
       </span>
+      <span data-testid="live-heads">
+        {heads.map((h) => `${h.id}:${h.readme}`).join("|") || "none"}
+      </span>
       <span data-testid="live-edges">
         {((workflow || {}).edges || [])
           .map((e) => `${e.from}>${e.to}:${e.type}${e.feedback ? ":fb" : ""}`)
@@ -116,6 +125,8 @@ const renderLive = (extra) => {
             <SpotlightState>
               <Seed extra={extra} />
               <FigureWorkspace />
+              {/* Where the External data dialog lives on the real page. */}
+              <WorkflowInfoForm dialogOnly />
               <Probe />
             </SpotlightState>
           </CuratorHelperState>
@@ -387,5 +398,31 @@ describe("LINK -> Enter manually", () => {
 
     expect(dialog.getByTestId("connection-dir-source-to-new")).toBeChecked();
     expect(dialog.getByTestId("connection-type")).toHaveValue("generates");
+  });
+});
+
+describe("LINK -> Enter manually -> External data", () => {
+  it("creates the external record and its link in one save", async () => {
+    const u = user();
+    renderLive();
+    await u.click(await screen.findByTestId("fw-linkmenu-s0"));
+    await u.hover(await screen.findByTestId("fw-source-manual"));
+    await u.click(await screen.findByTestId("fw-add-s0-head"));
+    const node = await screen.findByRole("dialog");
+    fireEvent.change(node.querySelector('[name="readme"]'), {
+      target: { value: "Materials Project entry" },
+    });
+    const dialog = within(node);
+    expect(
+      dialog.getByTestId("connection-dir-source-to-new")
+    ).toBeChecked();
+    await u.click(dialog.getByRole("button", { name: /create and link/i }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("live-heads")).toHaveTextContent(
+        "h0:Materials Project entry"
+      )
+    );
+    expect(edgesNow()).toBe("s0>h0:links_to");
   });
 });
