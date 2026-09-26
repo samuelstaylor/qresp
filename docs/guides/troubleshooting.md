@@ -52,12 +52,14 @@ in-memory mongomock).
 
 **Symptom** — a full `yarn test` run reports a few tests timing out, and a
 different few on the next run.
-**Cause** — the default 5-second timeout is tight for the heavier component
-tests when every CPU core runs a Jest worker at once. A timeout is not an
-assertion failure.
-**Fix** — rerun the failing file alone, or the suite with
-`yarn test --runInBand`. A test that passes there is not broken; one that fails
-there is.
+**Cause** — more Jest workers than the machine can feed. `jest.config.js` caps
+the suite at four workers for this reason (its comment has the measurements);
+raising that with `JEST_WORKERS=…` or `--maxWorkers` on a machine without the
+headroom starves the heavier component tests of their 5-second budget. A
+timeout is not an assertion failure.
+**Fix** — run with the default worker count, or rerun the failing file alone
+or the suite with `yarn test --runInBand`. A test that passes there is not
+broken; one that fails there is.
 
 ## Docker
 
