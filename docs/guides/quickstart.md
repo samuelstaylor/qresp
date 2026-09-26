@@ -8,7 +8,7 @@ Known problems and their fixes are in [Troubleshooting](troubleshooting.md).
 | Item | Version |
 | --- | --- |
 | Backend Python | **3.11** or **3.14** (the two CI runs; Docker uses 3.14). Use a standard CPython build. |
-| Backend stack | Flask 3, Connexion 3 (ASGI), WTForms 3, MongoEngine 0.29, PyMongo 4 — exact set in `backend/requirements.lock.txt` |
+| Backend stack | Flask 3, Connexion 3 (ASGI), MongoEngine 0.29, PyMongo 4 — exact set in `backend/requirements.lock.txt` |
 | Node.js | **24** (matches `frontend/Dockerfile`), with Yarn 1 |
 | Frontend stack | Next.js 16, React 19, MUI 9, Jest 30 |
 | MongoDB | **4.4** for the live app (`docker-compose.yml`). The tests do not need it. |
@@ -23,8 +23,8 @@ source .venv/bin/activate            # Windows: .venv\Scripts\activate
 pip install -r requirements.lock.txt # the exact versions CI installs
 python -m pip check
 
-# Boot smoke test (no MongoDB needed for GET /)
-python -c "import project; print(project.app.test_client().get('/').status_code)"   # 200
+# Boot smoke test (no MongoDB needed for the API health endpoint)
+python -c "import project; print(project.connexionapp.test_client().get('/api/healthz').status_code)"   # 200
 
 # Tests: in-memory mongomock, no MongoDB needed
 python -m nose2 -v

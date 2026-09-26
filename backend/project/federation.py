@@ -293,11 +293,9 @@ def _shipped_servers():
     already uses (`frontend/data/qresp_servers.js`).
 
     This exists because the registry URL in config.ini
-    (`GLOBAL/QRESP_SERVER_URL`) currently answers 404, so `Servers()` yields
-    nothing and the Explorer has been running off its own checked-in copy for
-    some time. Without a shipped list here, a backend allowlist built only
-    from the registry would be permanently empty and this server could
-    federate with nobody.
+    (`GLOBAL/QRESP_SERVER_URL`) currently answers 404. Without a shipped list
+    here, a backend allowlist built only from the registry would be
+    permanently empty and this server could federate with nobody.
 
     `project/tests/test_federation.py` asserts this file and the frontend's
     stay in step, so the two lists cannot drift apart unnoticed.
@@ -344,15 +342,10 @@ MAX_SERVER_NAME_CHARS = 40
 def _registry_servers():
     """The federated registry, fetched WITH certificate verification.
 
-    `util.Servers` fetches this same URL with `verify=False`, which is how the
-    legacy publish flow has always read it. That is not acceptable for a list
-    whose job is to decide what this server may contact: an attacker able to
-    intercept an unverified fetch could add themselves to the allowlist. So
-    the registry is read here directly -- same URL, same shape, same
-    fail-soft behaviour -- with TLS actually checked, and redirects refused.
-
-    `util.Servers` is deliberately left alone: changing it would alter the
-    curator and publish flows, which are out of scope here.
+    This list decides what this server may contact, so an unverified fetch
+    could let an attacker add itself to the allowlist. The registry is read
+    directly with TLS verification and redirects refused, while retaining the
+    same URL, shape, and fail-soft behavior.
     """
     try:
         url = (Config.get_setting('GLOBAL', 'QRESP_SERVER_URL') or "").strip()

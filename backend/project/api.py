@@ -21,6 +21,15 @@ from project.controllers.publish import Publish
 # edit swagger.yml file for method changes
 
 
+def healthz():
+    """Report that the API process is serving requests.
+
+    This deliberately avoids a database read so CI and container orchestration
+    can verify the ASGI/API stack without reviving the retired Flask pages.
+    """
+    return {"status": "ok"}, 200
+
+
 def search(searchWord=None, paperTitle=None, doi=None, tags=None, collectionList=None, authorsList=None, publicationList=None):
     """
     This function responds to a request for /api/search

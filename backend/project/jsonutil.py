@@ -10,7 +10,7 @@ shapes do not change for existing clients), is provided here for BOTH of the
 serialization layers that exist after the Connexion 3 migration:
 - Connexion's jsonifier, which serializes /api/* responses, and
 - Flask's JSON provider, which serializes jsonify() responses in
-  project/routes.py.
+  the retired server-rendered Flask routes.
 """
 from bson import json_util
 from connexion.jsonifier import JSONEncoder as ConnexionJSONEncoder

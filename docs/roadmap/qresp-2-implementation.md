@@ -35,7 +35,7 @@ auto-saved or auto-published.
 
 ### 3. Google authentication (identity ONLY)
 - Why: ownership (goal 4) needs a verified identity; passwords are out of scope by design.
-- Build on: legacy Google OAuth already half-exists (`routes.py:616` GoogleAuth, config keys `GOOGLE_CLIENT_ID`/`REDIRECT_URI`/`GOOGLE_API.*`, `requests_oauthlib` installed, Flask-Session sessions).
+- Build on: the API's Google OAuth callback, `requests_oauthlib`, and Flask-Session sessions.
 - MVP: OAuth 2.0 code flow (scopes: `openid email profile` — **no Drive/Gmail**) → server-side session cookie; endpoints `GET /api/auth/login`, `GET /api/auth/callback`, `POST /api/auth/logout`, `GET /api/auth/me`; frontend: login/logout in header + an AuthContext consuming `/api/auth/me`.
 - Defer: roles UI, account page, token refresh, linking multiple emails.
 - Guardrails: client id/secret via `config.ini`/`QRESP_*` env only — **never committed**; `OAUTHLIB_INSECURE_TRANSPORT` dev-only.
@@ -189,22 +189,22 @@ auto-saved or auto-published.
 
 ## Likely files/modules to change
 - Backend boot/session: `backend/project/__init__.py`, `config.py` (+`config.ini` keys, not committed).
-- Routes/API: `backend/project/swagger.yml` + `api.py` (new auth/edit/related endpoints), `routes.py` (legacy GoogleAuth cleanup), `paperdao.py` (update/deactivate DAO), `models.py` (only if an owner field beyond `insertedBy` is needed), `controllers/publish.py` (stamp owner on publish).
+- Routes/API: `backend/project/swagger.yml` + `api.py` (new auth/edit/related endpoints), `auth.py` (identity callbacks), `paperdao.py` (update/deactivate DAO), `models.py` (only if an owner field beyond `insertedBy` is needed), `controllers/publish.py` (stamp owner on publish).
 - Tests: `backend/project/tests/test_api_endpoints.py` (+auth/permission tests with a fake session).
 - Frontend: `pages/_app.js` (AuthProvider), `components/header.js` (login button — a commented-out LogIn button already exists), new `Context/Auth/*`, `pages/paperdetails/[id].js` (owner buttons + Related section), `Context/axios.js` (send credentials), `pages/curator.js` (edit-mode prefill).
 
 ## Frontend pages/components most at risk of modernization regressions
-- `/qrespcurator` (curator): 13 RHF-v7-rewired forms, field arrays, file-tree dialog (react-checkbox-tree 2), TopActions upload/download dialogs.
+- `/curator`: RHF-v7-rewired forms, field arrays, file-tree dialog (react-checkbox-tree 2), TopActions upload/download dialogs.
 - `/paperdetails/[id]`: chart **lightbox** (library replaced), vis-network 10 **workflow graph**, tables/pagination, styled-jsx link colors.
 - `/search` + explorer: MUI Autocomplete (lab→core), table sort/filter/fade animation (nodeRef rewrite), Pagination.
-- Shell: header responsive menu (Hidden→sx), drawer accordions (slotProps.transition), Snackbar/Alert, sitemap-driven nav links, mobile breakpoints.
+- Shell: header responsive menu (Hidden→sx), drawer accordions (slotProps.transition), Snackbar/Alert, navigation links, mobile breakpoints.
 - Forms: Radio groups (register rewiring), Select (Controller render), tooltips-on-focus behavior.
 
 ## Highest-risk items
 1. Curator form data integrity under RHF 7 (register rewiring + defaultValue capture) — a silent field-drop corrupts published metadata. Mitigate: staging round-trip test (fill → download JSON → diff against pre-modernization output).
 2. Session cookies across nginx/CORS/ASGI (SameSite, secure, `withCredentials`) for auth — test through the real nginx proxy early.
 3. Permission bypass: `PUT/DELETE` must be enforced server-side in the API layer (never trust UI hiding); Connexion security handler or explicit check in handlers.
-4. Legacy `routes.py` server-rendered flows sharing the same session — don't break `/admin` passcode gate while adding user sessions.
+4. Session behavior across the API and nginx proxy — keep authenticated API mutations server-side protected.
 5. External API/LLM quotas + latency in the explorer — cache and fail soft (page must render without it).
 
 ## Branch / commit structure

@@ -1,4 +1,4 @@
-from os import getcwd, listdir
+from os import getcwd, listdir, makedirs
 from sys import stderr
 import json
 import traceback
@@ -23,6 +23,9 @@ class Publish:
     def __init__(self):
         self.dir_prefix = getcwd() + '/papers/publish/'
         self.id_prefix = 'PUBLISH_'
+        # Pending verification records are runtime state, not source files.
+        # Make the directory on demand because Git does not retain it empty.
+        makedirs(self.dir_prefix, exist_ok=True)
 
     def generateId(self):
         '''

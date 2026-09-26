@@ -363,10 +363,8 @@ recorded here rather than changed: adjusting it moves local results too.
   cross-request cache of it (caching another server's corpus would be a copy);
   the `api_related` nginx zone is what bounds the cost.
 - Federation reads the registry itself, **with certificate verification** and
-  redirects refused. `util.Servers` still fetches the same URL with
-  `verify=False` for the legacy curator and publish flows; that is out of
-  scope here and deliberately untouched, but it is no longer what decides
-  which servers this feature may contact.
+  redirects refused. It is the only code path that decides which servers this
+  feature may contact.
 - DNS **rebinding** is still not defeated: the check and the connection are
   separate steps, so a name that changes its answer in between would slip
   through. Closing that needs the connection pinned to the address that was

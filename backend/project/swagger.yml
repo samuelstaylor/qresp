@@ -12,6 +12,24 @@ basePath: "/api"
 
 # Paths supported by the server application
 paths:
+  /healthz:
+    get:
+      operationId: "project.api.healthz"
+      tags:
+        - "Service"
+      summary: "Reports that the API process is serving requests"
+      responses:
+        200:
+          description: API process is available
+          schema:
+            type: object
+            required:
+              - status
+            properties:
+              status:
+                type: string
+                enum:
+                  - ok
   /search:
     get:
       operationId: "project.api.search"

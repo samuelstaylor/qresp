@@ -1,5 +1,6 @@
 import json
 import os
+import tempfile
 import unittest
 import warnings
 from unittest import mock
@@ -10,6 +11,8 @@ import mongomock
 # Importing project builds the Connexion 3 app; tests re-point mongoengine at
 # an in-memory mongomock connection below (same pattern as test_paperDAO).
 from project import connexionapp
+from project.controllers.preview import Preview
+from project.controllers.publish import Publish
 from project.paperdao import Paper
 
 
@@ -92,48 +95,43 @@ class TestApiEndpoints(unittest.TestCase):
         self.assertEqual(500, response.status_code)
         self.assertIn('Exception in Directory Structure API', response.text)
 
-    def test_flask_routes_pass_through_middleware(self):
-        # Non-API routes (project/routes.py, plain Flask) must be served
-        # through Connexion's ASGI->WSGI bridge.
-        response = self.client.get('/')
+    def test_healthz_reports_the_api_process(self):
+        response = self.client.get('/api/healthz')
         self.assertEqual(200, response.status_code)
+        self.assertEqual({'status': 'ok'}, response.json())
+
+    def test_preview_and_publish_create_runtime_state_directories(self):
+        # These directories intentionally contain no tracked files. A fresh
+        # clone must still be able to create previews and pending publishes.
+        with tempfile.TemporaryDirectory() as root, \
+                mock.patch('project.controllers.preview.getcwd',
+                           return_value=root), \
+                mock.patch('project.controllers.publish.getcwd',
+                           return_value=root):
+            preview = Preview()
+            publish = Publish()
+            self.assertTrue(os.path.isdir(preview.dir_prefix))
+            self.assertTrue(os.path.isdir(publish.dir_prefix))
+            self.assertTrue(preview.generateId().startswith('PREVIEW_'))
+            self.assertTrue(publish.generateId().startswith('PUBLISH_'))
 
     def test_swagger_ui_is_served(self):
         response = self.client.get('/api/ui/')
         self.assertEqual(200, response.status_code)
 
 
-class TestFlaskPages(unittest.TestCase):
-    """Server-rendered Flask pages that exercise the WTForms forms, the
-    flask-sitemap extension, and Jinja templates -- the surfaces most exposed
-    to Flask/Werkzeug/WTForms major upgrades (e.g. /qrespcurator binds the
-    custom RequiredIf validator, which WTForms 3 broke until its field_flags
-    became a dict)."""
+class TestRetiredFlaskShell(unittest.TestCase):
+    """The public UI is the frontend now; old backend pages must not return."""
 
     @classmethod
     def setUpClass(cls):
         cls.client = connexionapp.test_client()
 
-    def setUp(self):
-        mongoengine.disconnect_all()
-        mongoengine.connect('mongoenginetest',
-                            mongo_client_class=mongomock.MongoClient)
-
-    def tearDown(self):
-        mongoengine.disconnect_all()
-
-    def test_curator_page_renders(self):
-        # The page fetches the federated-servers registry at render time;
-        # keep the test hermetic (no external network).
-        with mock.patch('project.util.Servers.getServersList', return_value=[]), \
-             mock.patch('project.util.Servers.getHttpServersList', return_value=[]):
-            self.assertEqual(200, self.client.get('/qrespcurator').status_code)
-
-    def test_admin_page_renders(self):
-        self.assertEqual(200, self.client.get('/admin').status_code)
-
-    def test_sitemap_renders(self):
-        self.assertEqual(200, self.client.get('/sitemap.xml').status_code)
+    def test_legacy_pages_and_callback_are_not_served(self):
+        for path in ('/', '/qrespcurator', '/qrespexplorer', '/admin',
+                     '/oauth2callback', '/sitemap.xml'):
+            with self.subTest(path=path):
+                self.assertEqual(404, self.client.get(path).status_code)
 
 
 if __name__ == '__main__':

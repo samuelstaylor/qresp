@@ -28,7 +28,6 @@ services:
       - QRESP_MONGODB_PORT=27017
       - QRESP_MONGODB_DB_NAME=explorer
     volumes:
-      - /usr/src/app/backend/project/static
       - ./backend:/home/flask/app/web/
     networks:
       - backend

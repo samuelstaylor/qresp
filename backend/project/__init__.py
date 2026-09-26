@@ -3,7 +3,6 @@ import mongoengine
 import os
 from connexion.jsonifier import Jsonifier
 from flask_session import Session
-from flask_sitemap import Sitemap
 from project.config import Config
 from project.jsonutil import MongoJSONEncoder, MongoJSONProvider
 from project import logredact
@@ -26,9 +25,9 @@ connexionapp = connexion.FlaskApp(__name__, jsonifier=Jsonifier(cls=MongoJSONEnc
 # this file so imports work regardless of the process working directory.
 swagger_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'swagger.yml')
 connexionapp.add_api(swagger_file)
-# The underlying Flask app: the server-rendered routes in project/routes.py
-# attach here. Production must serve `project:connexionapp` (ASGI) -- serving
-# this Flask object directly would bypass Connexion's validation middleware.
+# The underlying Flask app provides sessions and request context for Connexion
+# handlers. Production must serve `project:connexionapp` (ASGI) -- serving this
+# Flask object directly would bypass Connexion's validation middleware.
 app = connexionapp.app
 app.json = MongoJSONProvider(app)
 
@@ -46,7 +45,6 @@ if (Config.get_setting('AUTH', 'OAUTHLIB_INSECURE_TRANSPORT') or '') \
         .strip().lower() in ('1', 'true', 'yes', 'on'):
     os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 Session(app)
-ext = Sitemap(app)
 CORS(app)
 
 
@@ -66,5 +64,3 @@ if Config.get_setting(app.config['env'],'MONGODB_HOST'):
         _mongo.update(username=_username,
                       password=Config.get_setting(app.config['env'],'MONGODB_PASSWORD'))
     mongoengine.connect(**_mongo)
-
-from project import routes
