@@ -169,10 +169,10 @@ const ScriptsInfoForm = ({ hideTrigger = false }) => {
       >
         <DialogTitle>
           <Grid container direction="row" spacing={1} alignItems="center">
-            <Grid size={11}>
+            <Grid size="grow" sx={{ minWidth: 0 }}>
               {!updating ? "Add a new script" : "Update the script"}
             </Grid>
-            <Grid size={1}>
+            <Grid size="auto">
               <RegularStyledButton
                 onClick={() => {
                   closeForm("script");

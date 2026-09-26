@@ -324,10 +324,10 @@ const ToolsInfoForm = ({ hideTrigger = false }) => {
       >
         <DialogTitle>
           <Grid container direction="row" spacing={1} alignItems="center">
-            <Grid size={11}>
+            <Grid size="grow" sx={{ minWidth: 0 }}>
               Add a new tool
             </Grid>
-            <Grid size={1}>
+            <Grid size="auto">
               <RegularStyledButton
                 onClick={() => {
                   setDefault("tool", null);
