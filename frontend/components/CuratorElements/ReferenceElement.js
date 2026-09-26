@@ -1,4 +1,4 @@
-import { useState, useContext, useEffect } from "react";
+import { useContext, useEffect } from "react";
 
 import ReferenceInfoForm from "../CuratorForms/ReferenceInfoForm";
 import ReferenceC from "../Paper/ReferenceC";

@@ -1,5 +1,4 @@
 import { Fragment, useState, useRef } from "react";
-import PropTypes from "prop-types";
 
 import { Popover, IconButton, Snackbar, Alert } from "@mui/material";
 

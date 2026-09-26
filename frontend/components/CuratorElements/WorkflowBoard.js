@@ -1,4 +1,4 @@
-import { Fragment, useContext, useMemo, useState } from "react";
+import { useContext, useMemo, useState } from "react";
 
 import { Alert, Box, Chip, Grid, Typography } from "@mui/material";
 
@@ -19,7 +19,6 @@ import {
   fromStoredEdge,
   hasEdge,
   inferEdgeType,
-  laneOf,
   prefixOf,
 } from "../../Utils/workflowGraph";
 

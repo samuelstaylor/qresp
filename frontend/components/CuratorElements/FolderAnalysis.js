@@ -49,7 +49,6 @@ import {
   NOT_APPLIED,
   PARTIALLY_APPLIED,
   fieldsFor,
-  isRequired,
   labelFor,
   missingRequired,
   suggestionApplied,

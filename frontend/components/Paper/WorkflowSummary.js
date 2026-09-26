@@ -3,7 +3,7 @@ import PropTypes from "prop-types";
 
 import { Box, Typography } from "@mui/material";
 
-import { displayUrl, externalLabel, noteFor } from "../../Utils/externalData";
+import { displayUrl, externalLabel } from "../../Utils/externalData";
 import {
   CHART,
   CONSUMES,

@@ -1,5 +1,4 @@
 import { useEffect, useContext } from "react";
-import PropTypes from "prop-types";
 
 import { Grid, Tooltip, Typography, IconButton } from "@mui/material";
 import { AddCircleOutlined, RemoveCircleOutlined } from "@mui/icons-material";

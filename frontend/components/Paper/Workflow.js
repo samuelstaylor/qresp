@@ -7,7 +7,7 @@ import useMediaQuery from "@mui/material/useMediaQuery";
 import Drawer from "../drawer";
 import Graph from "../Workflow/Graph";
 import Legend from "../Workflow/Legend";
-import { formatData, formatWorkflow } from "../Workflow/util";
+import { formatData } from "../Workflow/util";
 import WorkflowSummary from "./WorkflowSummary";
 
 import { Box, Button, Collapse, Grid, useTheme } from "@mui/material";
