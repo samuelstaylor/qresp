@@ -92,10 +92,37 @@ If you're already on the server (VS Code Remote SSH), the ports are forwarded au
 
 ---
 
-## Tests
+## CI checks (run automatically on every push)
+
+| Check | What it runs | Why two backend checks? |
+|---|---|---|
+| `backend / Python 3.11` | Flask API, auth, CRUD, publish, curation — 29 critical test modules | 3.11 = local dev baseline (lock file provenance) |
+| `backend / Python 3.14` | Same suite on the Docker production Python | 3.14 = what the container actually runs |
+| `frontend / Jest / RTL` | ~60 React component and utility tests | Node 24, matches the frontend Dockerfile |
+
+Running backend tests on both Python versions catches subtle breakage that only shows up in the production container. Both versions run in parallel so wall-clock time is no longer than running one.
+
+**What the backend suite covers:** public API routes, auth (Google OAuth + Microsoft Entra), paper CRUD, search/filter, publish workflow, verify, schema validation, curation (folder analysis, artifact fields, keyword AI, RCC images), draft management, ownership/permissions, editor roles, soft-delete, account management.
+
+**What is intentionally skipped on push** (too slow or not critical-path):
+- Evaluation benchmarks: `test_ai_review`, `test_assist_eval`, `test_related_eval`
+- Related-research subsystem: `test_related_research`, `test_related_cache`, `test_related_hardening`
+- Algorithm detail tests: `test_relatedness_quality/neutrality/provenance`
+- Infrastructure: `test_nginx_config`, `test_backfill_institution`, `test_federation`
+
+---
+
+## Tests (local)
 
 ```bash
-# Backend tests (run from repo root — no Docker needed)
+# Backend — run only the same critical-path set CI runs
+cd backend && python -m nose2 -v \
+  project.tests.test_api_endpoints project.tests.test_auth \
+  project.tests.test_permissions project.tests.test_paperDAO \
+  project.tests.test_publish_validation project.tests.test_verify \
+  project.tests.test_dependencies project.tests.test_workflow_graph
+
+# Backend — run the full suite (slow, ~5–6 min)
 cd backend && python -m nose2 -v
 
 # Frontend tests
