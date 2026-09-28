@@ -4,10 +4,10 @@
 
 ```bash
 # Pull latest changes
-git pull origin chore/frontend-modernization
+git pull origin develop
 
-# Push current branch to GitHub
-git push origin chore/frontend-modernization
+# Push to GitHub (the Stop hook does this automatically after Claude commits)
+git push origin develop
 
 # Check what's staged / unstaged
 git status
@@ -15,14 +15,13 @@ git status
 # Compact recent history
 git log --oneline -15
 
-# Create and switch to a new feature branch
+# Create a short-lived feature branch (for large isolated features only)
 git checkout -b feat/my-feature
 
-# Switch back to your main working branch
-git checkout chore/frontend-modernization
-
-# PR target branch (integration)
-git checkout develop && git pull
+# Merge feature branch back and delete it when done
+git checkout develop && git merge feat/my-feature
+git push origin develop
+git branch -d feat/my-feature && git push origin --delete feat/my-feature
 ```
 
 ---
