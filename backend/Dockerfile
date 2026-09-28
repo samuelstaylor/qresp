@@ -12,7 +12,7 @@ WORKDIR /home/flask/app/web
 
 # Install the exact, verified dependency set.
 COPY requirements.lock.txt /home/flask/app/web/
-RUN pip install --no-cache-dir -r requirements.lock.txt
+RUN pip install --no-cache-dir --progress-bar off -r requirements.lock.txt
 
 # Copy the source code into the container
 COPY . /home/flask/app/web
