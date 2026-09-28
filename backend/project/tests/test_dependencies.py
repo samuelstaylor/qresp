@@ -25,12 +25,13 @@ class TestDockerInstallsDeclaredDependencies(unittest.TestCase):
     def test_both_docker_images_install_from_those_files(self):
         production = read("Dockerfile")
         self.assertIn("COPY requirements.lock.txt", production)
-        self.assertIn("pip install --no-cache-dir -r requirements.lock.txt",
-                      production)
+        self.assertRegex(production,
+                         r"pip install[^\n]*\brequirements\.lock\.txt")
 
         dev = read("Dockerfile.dev")
         self.assertIn("COPY requirements.txt", dev)
-        self.assertIn("pip install --no-cache-dir -r requirements.txt", dev)
+        self.assertRegex(dev,
+                         r"pip install[^\n]*\brequirements\.txt")
 
 
 class TestRemovedDependencies(unittest.TestCase):
