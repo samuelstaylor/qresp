@@ -39,3 +39,7 @@ docs/roadmap/ux-curation-explorer-implementation.md
 # it matches only `related-eval-external-*`, so earlier hand-rated
 # `related-eval-*` folders stay visible to git exactly as they are.
 related-eval-external-*/
+
+# Claude Code local config — developer-specific, not for source control
+CLAUDE.md
+.claude/settings.local.json
