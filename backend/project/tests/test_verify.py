@@ -65,6 +65,28 @@ class TestVerifyEndpoint(unittest.TestCase):
         self.assertFalse(response.json()["id"])
         self.assertIn("invalid", response.json()["error"].lower())
 
+    def test_malformed_queue_file_returns_an_error(self):
+        """A corrupted publish queue file must not crash the endpoint."""
+        bad_id = "PUBLISH_bad_json"
+        bad_path = os.path.join(os.getcwd(), "papers", "publish", bad_id + ".json")
+        os.makedirs(os.path.dirname(bad_path), exist_ok=True)
+        try:
+            with open(bad_path, "w") as f:
+                f.write("not valid json {{{")
+            response = self.client.get(f"/api/verify/{bad_id}")
+            self.assertIn(response.status_code, (400, 500))
+        finally:
+            if os.path.exists(bad_path):
+                os.remove(bad_path)
+
+    def test_path_traversal_token_is_rejected(self):
+        """A verify token containing path separators must not escape the
+        publish queue directory."""
+        response = self.client.get("/api/verify/..%2F..%2Fetc%2Fpasswd")
+        # Connexion validates path parameters; traversal tokens must never
+        # succeed with 200.
+        self.assertNotEqual(200, response.status_code)
+
 
 if __name__ == "__main__":
     unittest.main()

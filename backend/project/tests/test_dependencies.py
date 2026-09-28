@@ -2,7 +2,6 @@ import io
 import os
 import re
 import unittest
-from unittest import mock
 
 # Dependency CONTRACT tests.
 #
@@ -32,6 +31,36 @@ class TestDockerInstallsDeclaredDependencies(unittest.TestCase):
         self.assertIn("COPY requirements.txt", dev)
         self.assertRegex(dev,
                          r"pip install[^\n]*\brequirements\.txt")
+
+
+class TestLockFileFreshness(unittest.TestCase):
+    """Every package in requirements.txt must appear in requirements.lock.txt.
+
+    Catches the common mistake of adding a dep to requirements.txt and
+    forgetting to regenerate the lock.
+    """
+
+    def _names(self, text):
+        names = set()
+        for line in text.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            # Strip extras, version specifiers, environment markers:
+            #   "connexion[flask]>=3.3; python_version>'3'" -> "connexion"
+            name = re.split(r"[>=<!;\[\s]", line)[0].lower().replace("-", "_")
+            if name:
+                names.add(name)
+        return names
+
+    def test_lock_includes_every_requirements_txt_package(self):
+        req = self._names(read("requirements.txt"))
+        lock = self._names(read("requirements.lock.txt"))
+        missing = req - lock
+        self.assertEqual(
+            set(), missing,
+            f"Declared in requirements.txt but absent from the lock: {missing}",
+        )
 
 
 class TestRemovedDependencies(unittest.TestCase):

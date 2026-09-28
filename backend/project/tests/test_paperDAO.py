@@ -56,14 +56,6 @@ class TestPaperDAO(unittest.TestCase):
         allpublicationlist = dao.getPublicationList()
         self.assertEqual(1, len(list(allpublicationlist)))
 
-    # def test_getAuthorList(self):
-    #     """
-    #     Tests for authors
-    #     """
-    #     dao = PaperDAO()
-    #     allauthorslist = dao.getAuthorList()
-    #     self.assertEqual(0,len(list(allauthorslist)))
-
     def test_getAllPapers(self):
         """
         Tests for all papers
