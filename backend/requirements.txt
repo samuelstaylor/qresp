@@ -17,7 +17,6 @@
 # requirements.lock.txt). The app object to serve is `project:connexionapp`
 # via an ASGI server: production uses gunicorn with uvicorn workers (see
 # docker-compose.yml); `run.py` / `python -m project` serve through uvicorn.
-setuptools
 jsonschema
 Flask
 Werkzeug

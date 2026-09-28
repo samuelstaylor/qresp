@@ -10,6 +10,7 @@ on:
 
 jobs:
   frontend:
+    name: Jest / RTL
     runs-on: ubuntu-latest
     defaults:
       run:

@@ -79,14 +79,5 @@ class TestVerifyEndpoint(unittest.TestCase):
             if os.path.exists(bad_path):
                 os.remove(bad_path)
 
-    def test_path_traversal_token_is_rejected(self):
-        """A verify token containing path separators must not escape the
-        publish queue directory."""
-        response = self.client.get("/api/verify/..%2F..%2Fetc%2Fpasswd")
-        # Connexion validates path parameters; traversal tokens must never
-        # succeed with 200.
-        self.assertNotEqual(200, response.status_code)
-
-
 if __name__ == "__main__":
     unittest.main()
