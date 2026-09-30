@@ -3,7 +3,7 @@
 # bind-mounted by docker-compose.dev.yml and served by uvicorn --reload.
 # (Was python:3.6-alpine, EOL, plus an apk build toolchain that Debian-slim's
 # manylinux wheels make unnecessary.)
-FROM python:3.14-slim
+FROM python:3.11-slim
 
 # Dump logs without buffering
 ENV PYTHONUNBUFFERED=1
