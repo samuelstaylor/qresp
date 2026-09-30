@@ -113,7 +113,7 @@ export const mergeRecordsByServer = (papersByServer, names, serverOrder) => {
       // the detail-page link carries, and a record's id only resolves on its
       // own server.
       const merged = { ...paper, _Search__server: server, _Search__sources: [source] };
-      const row = { paper: merged, year: merged._Search__year };
+      const row = { paper: merged, year: merged._Search__year, author: merged._Search__authors };
       rows.push(row);
       if (identity) byIdentity.set(identity, row);
     });

@@ -25,7 +25,7 @@ const EnhancedTableHeader = (props) => {
   return (
     <TableHead>
       <TableRow>
-        {headers.map((header) => (
+        {headers.filter((h) => !h.hidden).map((header) => (
           <StyledTableCell
             key={header.label}
             align={header.options.align ? header.options.align : "left"}

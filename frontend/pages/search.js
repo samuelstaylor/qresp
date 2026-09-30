@@ -130,6 +130,16 @@ const search = ({
       },
     },
     {
+      label: "Author",
+      name: "author",
+      view: null,
+      hidden: true,
+      options: {
+        sort: true,
+        value: (data) => (typeof data === "string" ? data.toLowerCase() : ""),
+      },
+    },
+    {
       label: "Year",
       name: "year",
       view: null,
@@ -140,6 +150,12 @@ const search = ({
         value: (data) => data,
       },
     },
+  ];
+
+  const sortBarOptions = [
+    { label: "Title", field: "paper" },
+    { label: "Author", field: "author" },
+    { label: "Year", field: "year" },
   ];
 
   const taglist = new Set();
@@ -332,7 +348,13 @@ const search = ({
                 />
               </Box>
               <Divider />
-              <RecordTable rows={rows} columns={columns} />
+              <RecordTable
+                rows={rows}
+                columns={columns}
+                defaultOrderBy="year"
+                defaultOrder="desc"
+                sortBarOptions={sortBarOptions}
+              />
             </Fragment>
           )}
         </Box>

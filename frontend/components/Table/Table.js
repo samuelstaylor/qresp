@@ -8,6 +8,10 @@ import {
   TableContainer,
   TableRow,
   Grid,
+  Box,
+  Typography,
+  ToggleButton,
+  ToggleButtonGroup,
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
 
@@ -43,8 +47,16 @@ FadeTableRow.propTypes = {
   children: PropTypes.node,
 };
 
+const DEFAULT_SORT_ORDER = { year: "desc", paper: "asc", author: "asc" };
+
 const RecordTable = (props) => {
-  const { rows, columns } = props;
+  const {
+    rows,
+    columns,
+    defaultOrderBy = "",
+    defaultOrder = "desc",
+    sortBarOptions,
+  } = props;
 
   // Scroll to Top of Table
   const tableRef = useRef(null);
@@ -67,13 +79,22 @@ const RecordTable = (props) => {
   };
 
   // Sorting Controls
-  const [order, setOrder] = useState("desc");
-  const [orderBy, setOrderBy] = useState("");
+  const [order, setOrder] = useState(defaultOrder);
+  const [orderBy, setOrderBy] = useState(defaultOrderBy);
 
   const handleRequestSort = (event, property) => {
     const isAsc = orderBy === property && order === "asc";
     setOrder(isAsc ? "desc" : "asc");
     setOrderBy(property);
+  };
+
+  const handleSortBarClick = (field) => {
+    if (field === orderBy) {
+      setOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setOrderBy(field);
+      setOrder(DEFAULT_SORT_ORDER[field] || "asc");
+    }
   };
 
   // Search/Filter Controls
@@ -100,8 +121,42 @@ const RecordTable = (props) => {
     page * rowsPerPage + rowsPerPage
   );
 
+  const visibleColumns = columns.filter((col) => !col.hidden);
+
   return (
     <TableSearchState>
+      {sortBarOptions && sortBarOptions.length > 0 && (
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 1.5,
+            py: 1,
+          }}
+        >
+          <Typography variant="body2" color="text.secondary">
+            Sort by:
+          </Typography>
+          <ToggleButtonGroup
+            size="small"
+            value={orderBy}
+            exclusive
+            onChange={(_, v) => v && handleSortBarClick(v)}
+          >
+            {sortBarOptions.map((opt) => (
+              <ToggleButton key={opt.field} value={opt.field}>
+                {opt.label}
+                {orderBy === opt.field
+                  ? order === "asc"
+                    ? " ▲"
+                    : " ▼"
+                  : ""}
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+        </Box>
+      )}
       <Grid container direction="row" alignItems="center" ref={tableRef}>
         <Grid size={{ xs: 12, sm: 6 }}>
           <RowsPerPageSelector
@@ -131,7 +186,7 @@ const RecordTable = (props) => {
               {paginatedData.map((row, index) => {
                 return (
                   <FadeTableRow timeout={100} key={index} classNames="fade">
-                    {columns.map((col, i) => {
+                    {visibleColumns.map((col, i) => {
                       const element = col.view
                         ? createElement(col.view, { rowdata: row[col.name] })
                         : row[col.name];
@@ -167,6 +222,11 @@ const RecordTable = (props) => {
 RecordTable.propTypes = {
   columns: PropTypes.array.isRequired,
   rows: PropTypes.array.isRequired,
+  defaultOrderBy: PropTypes.string,
+  defaultOrder: PropTypes.string,
+  sortBarOptions: PropTypes.arrayOf(
+    PropTypes.shape({ label: PropTypes.string, field: PropTypes.string })
+  ),
 };
 
 export default RecordTable;
