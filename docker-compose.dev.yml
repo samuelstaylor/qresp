@@ -31,9 +31,10 @@ services:
       - ./backend:/home/flask/app/web/
     networks:
       - backend
-    # Connexion 3 is ASGI: uvicorn --reload replaces the old `flask run` dev
-    # server (which would bypass Connexion's middleware).
-    command: python -m uvicorn project:connexionapp --host 0.0.0.0 --port 5000 --reload
+    # Connexion 3 is ASGI. watchfiles (used by uvicorn --reload) panics on
+    # Python 3.14 in this environment; code is bind-mounted so changes are
+    # live without auto-reload.
+    command: python -m uvicorn project:connexionapp --host 0.0.0.0 --port 5000
 
   gui:
     restart: always
@@ -46,7 +47,10 @@ services:
       dockerfile: Dockerfile.dev
     volumes:
       - ./frontend:/usr/src/app
-    networks: 
+      # Preserve the node_modules installed during image build — the bind-mount
+      # above would otherwise overwrite /usr/src/app and wipe them out.
+      - /usr/src/app/node_modules
+    networks:
       - frontend
     command: yarn dev
   
