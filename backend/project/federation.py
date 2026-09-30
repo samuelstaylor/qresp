@@ -87,6 +87,11 @@ DNS_FAILURE_CACHE_SECONDS = 30
 
 _dns_cache = relatedcache.TTLCache(max_entries=64)
 
+# Raw entries from the federated registry, cached so that the two callers
+# (_server_names and allowed_origins) share a single outbound fetch instead of
+# each making an independent 8-second-timeout request on every page load.
+_registry_cache = {"entries": None, "at": None}
+
 # The outcome of ONE outbound call, shared by every remote read in Qresp.
 #
 #   FOUND        the peer answered and the answer is usable
@@ -346,7 +351,15 @@ def _registry_servers():
     could let an attacker add itself to the allowlist. The registry is read
     directly with TLS verification and redirects refused, while retaining the
     same URL, shape, and fail-soft behavior.
+
+    Results are cached for ALLOWLIST_TTL_SECONDS so that callers that run
+    within the same request (allowed_origins and _server_names) share a single
+    outbound fetch rather than each making an independent 8-second-timeout call.
     """
+    now = _monotonic()
+    if (_registry_cache["at"] is not None
+            and now - _registry_cache["at"] < ALLOWLIST_TTL_SECONDS):
+        return _registry_cache["entries"]
     try:
         url = (Config.get_setting('GLOBAL', 'QRESP_SERVER_URL') or "").strip()
     except Exception:
@@ -362,6 +375,8 @@ def _registry_servers():
     # internal host.
     if not origin or not origin.startswith("https://"):
         print("Federated server registry is not an https URL; ignored")
+        _registry_cache["entries"] = []
+        _registry_cache["at"] = now
         return []
     try:
         response = requests.get(url, headers=FEDERATION_HEADERS,
@@ -370,12 +385,19 @@ def _registry_servers():
         if response.status_code != 200:
             print("Federated server registry unavailable: HTTP %s"
                   % response.status_code)
+            _registry_cache["entries"] = []
+            _registry_cache["at"] = now
             return []
         entries = response.json()
     except Exception as e:
         print("Federated server registry unavailable: %s" % type(e).__name__)
+        _registry_cache["entries"] = []
+        _registry_cache["at"] = now
         return []
-    return entries if isinstance(entries, list) else []
+    result = entries if isinstance(entries, list) else []
+    _registry_cache["entries"] = result
+    _registry_cache["at"] = now
+    return result
 
 
 def parse_origin_of(url):

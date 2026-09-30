@@ -59,10 +59,11 @@ class RequestsStub:
 
 class FederationTestCase(unittest.TestCase):
     def setUp(self):
-        # The allowlist and the DNS verdicts are cached per process; every
-        # test starts cold so one test's registry can never authorise
+        # The allowlist, registry, and DNS verdicts are cached per process;
+        # every test starts cold so one test's registry can never authorise
         # another's request.
         federation._allowlist = {"origins": frozenset(), "at": None}
+        federation._registry_cache = {"entries": None, "at": None}
         federation._dns_cache.clear()
         # No test resolves a real name. Every hostname is answered with one
         # public address unless a test says otherwise.
@@ -79,6 +80,7 @@ class FederationTestCase(unittest.TestCase):
 
     def tearDown(self):
         federation._allowlist = {"origins": frozenset(), "at": None}
+        federation._registry_cache = {"entries": None, "at": None}
         federation._dns_cache.clear()
 
     def allowing(self, servers=REGISTRY):
