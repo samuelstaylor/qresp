@@ -36,17 +36,19 @@ const TextSearchField = ({ title, placeholder, value, onChange, name }) => {
           onChange={(e) => onChange(name, e.target.value)}
           size="small"
           fullWidth
-          InputProps={{
-            endAdornment: (
-              <InputAdornment
-                position="end"
-                sx={{ visibility: value ? "visible" : "hidden" }}
-              >
-                <IconButton size="small" onClick={() => onChange(name, "")}>
-                  <Close sx={{ color: "text.secondary", fontSize: 18 }} />
-                </IconButton>
-              </InputAdornment>
-            ),
+          slotProps={{
+            input: {
+              endAdornment: (
+                <InputAdornment
+                  position="end"
+                  sx={{ visibility: value ? "visible" : "hidden" }}
+                >
+                  <IconButton size="small" onClick={() => onChange(name, "")}>
+                    <Close sx={{ color: "text.secondary", fontSize: 18 }} />
+                  </IconButton>
+                </InputAdornment>
+              ),
+            },
           }}
         />
       </Grid>
@@ -220,16 +222,18 @@ const AdvancedSearch = ({
 
   return (
     <Fragment>
-      <Button
-        onClick={handleClick}
-        fullWidth={false}
-        style={{ textTransform: "none" }}
-      >
-        Advanced Search
-        <div className="rotateIcon">
-          <ExpandMore />
-        </div>
-      </Button>
+      <Box sx={{ display: "flex", justifyContent: "center" }}>
+        <Button
+          onClick={handleClick}
+          fullWidth={false}
+          style={{ textTransform: "none" }}
+        >
+          Advanced Search
+          <div className="rotateIcon">
+            <ExpandMore />
+          </div>
+        </Button>
+      </Box>
       <style jsx>
         {`
           .rotateIcon {

@@ -79,25 +79,26 @@ const TableSearch = ({ rows, setFiltered, columns }) => {
           value={query}
           name="query"
           type="text"
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <Search color="primary" />
-              </InputAdornment>
-            ),
-            endAdornment: (
-              <InputAdornment
-                position="end"
-                sx={{ visibility: query.length > 0 ? "visible" : "hidden" }}
-              >
-                <IconButton size="small" onClick={clearSearch}>
-                  <Close sx={{ color: "text.secondary", fontSize: 18 }} />
-                </IconButton>
-              </InputAdornment>
-            ),
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search color="primary" />
+                </InputAdornment>
+              ),
+              endAdornment: (
+                <InputAdornment
+                  position="end"
+                  sx={{ visibility: query.length > 0 ? "visible" : "hidden" }}
+                >
+                  <IconButton size="small" onClick={clearSearch}>
+                    <Close sx={{ color: "text.secondary", fontSize: 18 }} />
+                  </IconButton>
+                </InputAdornment>
+              ),
+            },
           }}
           placeholder="Search by keywords — title, author, tags…"
-          // onKeyUp={onChange}
           onChange={onChange}
           size="small"
           variant="outlined"
