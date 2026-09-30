@@ -11,8 +11,6 @@ services:
     # a clean checkout. A fresh no-auth dev DB needs no env_file/init script.
     volumes:
       - qresp_mongo_dev_data:/data/db
-    ports:
-      - "27017:27017"
     networks:
       - backend
 
