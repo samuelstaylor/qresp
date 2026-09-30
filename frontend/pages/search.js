@@ -23,23 +23,11 @@ import ServerContext from "../Context/Servers/serverContext";
 import { resolveServerSideApiBase } from "../Utils/serverSideApi";
 import { mergeRecordsByServer } from "../Utils/recordSources";
 
-// The four endpoints a Qresp node is asked for are NOT equal, and treating
-// them as one list is what let a missing authors list be reported as missing
-// records.
-//
-//   search        -> data.papers[server] -> the results table
-//   collections   |
-//   authors       |-> AdvancedSearch dropdown options, nothing else
-//   publications  |
-//
-// Losing the first means this node contributed no records. Losing any of the
-// others means the records are all there and one filter is short of options.
-const CORE_ENDPOINT = "search";
-const AUXILIARY_ENDPOINTS = ["collections", "authors", "publications"];
+
+const EMPTY_DATA = { papers: {}, authors: [], collections: [], publications: [] };
+const EMPTY_ERROR = { is: false, msg: "", failed: [], filters: {}, total: false };
 
 const search = ({
-  initialdata,
-  error,
   selectedservers,
   servernames = {},
 }) => {
@@ -73,28 +61,71 @@ const search = ({
                        : `${count} sources are unavailable`;
   };
 
-  const [data, setData] = useState(initialdata);
+  // All data fetched client-side after the page renders — external server
+  // requests happen in the browser, not in SSR, so the page loads instantly.
+  const [baseData, setBaseData] = useState(EMPTY_DATA);
+  const [data, setData] = useState(EMPTY_DATA);
+  const [error, setError] = useState(EMPTY_ERROR);
+  const [loading, setLoading] = useState(true);
 
-  // The outcome of the LAST Advanced Search, which is a different thing from
-  // the SSR `error` above and must never overwrite it: `error` describes how
-  // this page loaded, `runtime` describes a search the curator ran afterwards.
-  // null means no Advanced Search has run since the page loaded.
+  useEffect(() => {
+    if (!selectedservers?.length) {
+      setError({ ...EMPTY_ERROR, is: true, total: true, msg: "No servers selected" });
+      setLoading(false);
+      return;
+    }
+    Promise.allSettled(
+      selectedservers.map(async (server) => {
+        const [searchRes, collectionsRes, authorsRes, pubsRes] = await Promise.allSettled([
+          axios.get(`${server}/api/search`),
+          axios.get(`${server}/api/collections`),
+          axios.get(`${server}/api/authors`),
+          axios.get(`${server}/api/publications`),
+        ]);
+        return { server, searchRes, collectionsRes, authorsRes, pubsRes };
+      })
+    ).then((results) => {
+      const newData = { papers: {}, authors: [], collections: [], publications: [] };
+      const newError = { ...EMPTY_ERROR };
+      results.forEach((r) => {
+        if (r.status !== "fulfilled") return;
+        const { server, searchRes, collectionsRes, authorsRes, pubsRes } = r.value;
+        if (searchRes.status === "fulfilled") {
+          newData.papers[server] = searchRes.value.data;
+        } else {
+          newError.is = true;
+          if (!newError.failed.includes(server)) newError.failed.push(server);
+        }
+        [["collections", collectionsRes], ["authors", authorsRes], ["publications", pubsRes]].forEach(
+          ([key, res]) => {
+            if (res.status === "fulfilled") {
+              newData[key].push(...(res.value.data || []));
+            } else {
+              newError.is = true;
+              newError.filters[server] = (newError.filters[server] || []).concat(key);
+            }
+          }
+        );
+      });
+      newError.total = Object.keys(newData.papers).length === 0;
+      setBaseData(newData);
+      setData(newData);
+      setError(newError);
+      setLoading(false);
+    });
+  }, []);
+
   const [runtime, setRuntime] = useState(null);
 
-  const clearSearch = (e) => {
-    setData(initialdata);
+  const clearSearch = () => {
+    setData(baseData);
     setRuntime(null);
   };
 
-  // A new search invalidates whatever the previous one reported.
   const onSearchStart = () => setRuntime(null);
 
   const onSearchResult = ({ papers, failedServers, totalFailure, retry }) => {
-    // Only the nodes that answered are committed, and only when at least one
-    // did. Calling setData({}) on a total failure would replace results that
-    // are still perfectly valid with an empty table -- the page would say
-    // "0 Records Available" about records it simply failed to refresh.
-    if (!totalFailure) setData({ papers });
+    if (!totalFailure) setData((prev) => ({ ...prev, papers }));
     if (!failedServers.length) {
       setRuntime(null);
       return;
@@ -102,15 +133,12 @@ const search = ({
     setRuntime({
       failed: failedServers,
       total: totalFailure,
-      // Whether anything was on screen to keep. Decided HERE because the page
-      // is what holds the results.
       keptPrevious: totalFailure && Object.keys(data.papers || {}).length > 0,
       retry,
     });
   };
 
-  const { papers, authors, collections, publications } =
-    { ...initialdata, ...data } || {};
+  const { papers, authors, collections, publications } = data || {};
 
   const columns = [
     {
@@ -169,10 +197,10 @@ const search = ({
   ];
 
   const taglist = new Set();
-  if (initialdata.papers) {
-    Object.keys(initialdata.papers).forEach((server) => {
-      initialdata.papers[server].forEach((paper) => {
-        paper["_Search__tags"].forEach((element) => {
+  if (baseData.papers) {
+    Object.keys(baseData.papers).forEach((server) => {
+      (baseData.papers[server] || []).forEach((paper) => {
+        (paper["_Search__tags"] || []).forEach((element) => {
           taglist.add(element.toLowerCase());
         });
       });
@@ -227,22 +255,10 @@ const search = ({
   }, [router]);
 
   const failed = (error && error.failed) || [];
-  // Servers whose RECORDS arrived and whose filter metadata is short. A
-  // different sentence entirely from `failed`, and the reason the two are
-  // separate props: they used to share one, so a node that had served its
-  // records perfectly was announced as one whose records were missing.
   const filterFailures = Object.entries((error && error.filters) || {});
-  // EVERY node's records failed. There is nothing to show and nothing to
-  // filter, and saying "0 Records Available" here would be a different,
-  // wrong claim.
-  const unavailable = Boolean(error && error.total);
-  // The same claim, reached at runtime: an Advanced Search where no node
-  // answered AND there was nothing on screen to keep. The count is withheld
-  // for the same reason -- nothing came back because the nodes are down, not
-  // because they hold no matches. (With previous results kept, the count is
-  // still true of what is on screen and stays.)
+  const unavailable = !loading && Boolean(error && error.total);
   const countIsUnknown =
-    Boolean(runtime && runtime.total && !runtime.keptPrevious);
+    loading || Boolean(runtime && runtime.total && !runtime.keptPrevious);
 
   return (
     <Fragment>
@@ -340,7 +356,7 @@ const search = ({
           ) : (
             <Fragment>
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", p: 2 }}>
-                {navigating ? (
+                {(navigating || loading) ? (
                   <Box
                     sx={{ display: "flex", alignItems: "center", gap: 1.5 }}
                     data-testid="search-loading"
@@ -383,125 +399,27 @@ const search = ({
 };
 
 export async function getServerSideProps(ctx) {
-  // Query contains the args from the url
   const { query } = ctx;
-  // `failed` and `total` are what the page renders from: WHICH nodes were
-  // unreachable, and whether any node answered at all. `is`/`msg` are kept
-  // because other callers and tests read them, but "some nodes are down" and
-  // "nothing loaded" are different situations and the page must not show the
-  // same thing for both.
-  // Two DIFFERENT failures, kept apart because they mean different things to
-  // a reader:
-  //   `failed`  - servers whose RECORDS are missing (the core endpoint died)
-  //   `filters` - {server: [endpoint]} whose records are fine and whose
-  //               search-filter metadata is incomplete
-  // `is`/`msg` stay for older readers; the page renders from the two above.
-  const error = { is: false, msg: "", failed: [], filters: {}, total: false };
-  const data = {
-    papers: {},
-    authors: [],
-    collections: [],
-    publications: [],
-  };
 
-  if (!query.servers || query.servers.length == 0) {
-    error.is = true;
-    error.total = true;
-    error["msg"] = "No servers selected to be searched";
-    return {
-      props: { initialdata: data, error: error, servers: null,
-               servernames: {} },
-    };
-  }
+  const servers = query.servers ? query.servers.split(",").filter(Boolean) : [];
 
-  const servers = query.servers.split(",");
-
-  // The node LABELS, from the one list that is authoritative about them. A
-  // failure here costs the friendly name and nothing else: `sourceLabel`
-  // falls back to the node's host, so a record is still tagged with where it
-  // came from and the results never depend on this request succeeding.
+  // Only fetch server labels — one fast internal request. All record and
+  // filter data is fetched client-side so the page renders immediately.
   let servernames = {};
   try {
     const base = resolveServerSideApiBase(ctx, "");
-    const { data } = await axios.get(`${base || ""}/api/federation/servers`);
-    (data && Array.isArray(data.servers) ? data.servers : []).forEach(
-      (entry) => {
-        const origin = String((entry || {}).qresp_server_url || "").replace(
-          /\/+$/,
-          ""
-        );
-        const name = String((entry || {}).qresp_server_name || "").trim();
-        if (origin && name) servernames[origin] = name;
-      }
-    );
+    const { data } = await axios.get(`${base}/api/federation/servers`);
+    (Array.isArray((data || {}).servers) ? data.servers : []).forEach((entry) => {
+      const origin = String((entry || {}).qresp_server_url || "").replace(/\/+$/, "");
+      const name = String((entry || {}).qresp_server_name || "").trim();
+      if (origin && name) servernames[origin] = name;
+    });
   } catch (e) {
-    /* labels fall back to the host; results are unaffected */
-  }
-
-  for (let i = 0; i < servers.length; i++) {
-    const server = servers[i];
-    const fetchBase = resolveServerSideApiBase(ctx, server);
-    const get = async (endpoint) => {
-      if (!fetchBase) throw new Error("No server-side API base available");
-      const response = await axios.get(`${fetchBase}/api/${endpoint}`);
-      return response.data;
-    };
-
-    // THE CORE ENDPOINT, on its own and first. Its answer is staged in a
-    // local until it has actually arrived: committing per-endpoint is how a
-    // later failure used to leave records on the page under a banner saying
-    // they were missing.
-    let records;
-    try {
-      records = await get(CORE_ENDPOINT);
-    } catch (e) {
-      console.error(e);
-      error.is = true;
-      if (!error.failed.includes(server)) error.failed.push(server);
-      // No records means no reason to ask this server for filter metadata
-      // describing them.
-      continue;
-    }
-    data.papers[server] = records;
-
-    // AUXILIARY ENDPOINTS. Each is asked independently: one of them being
-    // down says nothing about the other two, and the old `break` threw away
-    // filters that had nothing wrong with them. A failure here does NOT make
-    // this server a failed record source -- its records are on the page.
-    for (let j = 0; j < AUXILIARY_ENDPOINTS.length; j++) {
-      const endpoint = AUXILIARY_ENDPOINTS[j];
-      try {
-        const values = await get(endpoint);
-        data[endpoint].push(...values);
-      } catch (e) {
-        console.error(e);
-        error.is = true;
-        error.filters[server] = (error.filters[server] || []).concat(endpoint);
-      }
-    }
-  }
-
-  // Total failure is measured on the CORE endpoint, never on a count of
-  // "servers with something wrong". `failed.length >= servers.length` made a
-  // single server with one broken filter endpoint look like an outage while
-  // its records sat in `data`.
-  error.total = Object.keys(data.papers).length === 0;
-  if (error.failed.length) {
-    error.msg =
-      "Could not fetch data from these servers: " + error.failed.join(", ");
-  } else if (error.is) {
-    error.msg =
-      "Some search filters were unavailable from: " +
-      Object.keys(error.filters).join(", ");
+    /* labels fall back to the host; records are unaffected */
   }
 
   return {
-    props: {
-      initialdata: data,
-      error: error,
-      selectedservers: servers,
-      servernames,
-    },
+    props: { selectedservers: servers, servernames },
   };
 }
 
