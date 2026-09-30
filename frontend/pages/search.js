@@ -274,12 +274,15 @@ const search = ({
   return (
     <Fragment>
       <SEO
-        title="Qresp | Search"
+        title="Qresp | Search Reproducible Research"
         description={searchDescription}
         author={searchAuthor}
       />
       <Container>
         <Box sx={{ display: "flex", flexDirection: "column", m: 2 }}>
+          <Typography variant="h4" component="h1" gutterBottom>
+            Search Reproducible Research Records
+          </Typography>
           {/* NO banner when only some sources failed.
               
               Federation is plumbing. A visitor searching for a paper did not
