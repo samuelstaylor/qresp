@@ -20,8 +20,8 @@ import Summary from "../components/Paper/Summary";
 import axios from "axios";
 import AlertContext from "../Context/Alert/alertContext";
 import ServerContext from "../Context/Servers/serverContext";
-import { resolveServerSideApiBase } from "../Utils/serverSideApi";
 import { mergeRecordsByServer } from "../Utils/recordSources";
+import SHIPPED_SERVERS from "../data/qresp_servers.js";
 
 
 const EMPTY_DATA = { papers: {}, authors: [], collections: [], publications: [] };
@@ -392,25 +392,22 @@ const search = ({
   );
 };
 
-export async function getServerSideProps(ctx) {
+export function getServerSideProps(ctx) {
   const { query } = ctx;
 
   const servers = query.servers ? query.servers.split(",").filter(Boolean) : [];
 
-  // Only fetch server labels — one fast internal request. All record and
-  // filter data is fetched client-side so the page renders immediately.
-  let servernames = {};
-  try {
-    const base = resolveServerSideApiBase(ctx, "");
-    const { data } = await axios.get(`${base}/api/federation/servers`);
-    (Array.isArray((data || {}).servers) ? data.servers : []).forEach((entry) => {
-      const origin = String((entry || {}).qresp_server_url || "").replace(/\/+$/, "");
-      const name = String((entry || {}).qresp_server_name || "").trim();
-      if (origin && name) servernames[origin] = name;
-    });
-  } catch (e) {
-    /* labels fall back to the host; records are unaffected */
-  }
+  // Build server name labels from the shipped list — synchronous, no network
+  // call. Fetching the live federation API here blocked for up to 16 seconds
+  // on every page open (two 8-second timeout calls before any HTML was sent).
+  // The shipped list already carries the same names; any server not in it
+  // falls back to showing its hostname, which is the existing behaviour.
+  const servernames = {};
+  SHIPPED_SERVERS.forEach((entry) => {
+    const origin = String(entry.qresp_server_url || "").replace(/\/+$/, "");
+    const name = String(entry.qresp_server_name || "").trim();
+    if (origin && name) servernames[origin] = name;
+  });
 
   return {
     props: { selectedservers: servers, servernames },
