@@ -1,4 +1,5 @@
 import { useState, Fragment } from "react";
+import { useRouter } from "next/router";
 import {
   AppBar,
   Toolbar,
@@ -29,6 +30,12 @@ const StyledDrawer = styled(Drawer)({
 
 const Header = () => {
   const [drawer, setDrawer] = useState(false);
+  const { pathname } = useRouter();
+
+  const isActive = (url) => {
+    if (url === "/explorer") return pathname === "/explorer" || pathname === "/search";
+    return pathname === url || pathname.startsWith(url + "/");
+  };
 
   const handleOpen = () => {
     setDrawer(true);
@@ -49,14 +56,14 @@ const Header = () => {
   // it never disappears into the drawer.
   const links = (
     <Fragment>
-      <InternalStyledButton text="Explorer" url="/explorer" />
-      <InternalStyledButton text="Curator" url="/curator" />
+      <InternalStyledButton text="Explorer" url="/explorer" active={isActive("/explorer")} />
+      <InternalStyledButton text="Curator" url="/curator" active={isActive("/curator")} />
       {/* Both are pages now, not jumps out of the app.
           Documentation was an external link to qresp.org and Contact was a
           bare `mailto:` — a navigation item that handed the page to a mail
           client, and did nothing at all on a machine with none configured. */}
-      <InternalStyledButton text="Documentation" url="/documentation" />
-      <InternalStyledButton text="Contact" url="/contact" />
+      <InternalStyledButton text="Documentation" url="/documentation" active={isActive("/documentation")} />
+      <InternalStyledButton text="Contact" url="/contact" active={isActive("/contact")} />
     </Fragment>
   );
 

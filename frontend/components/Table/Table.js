@@ -57,6 +57,7 @@ const RecordTable = (props) => {
     defaultOrder = "desc",
     sortBarOptions,
     advancedSearch,
+    hideCount = false,
   } = props;
 
   // Scroll to Top of Table
@@ -144,6 +145,17 @@ const RecordTable = (props) => {
           <Box sx={{ width: "100%", maxWidth: 640 }}>
             {advancedSearch}
           </Box>
+        </Box>
+      )}
+
+      {/* Dynamic record count */}
+      {!hideCount && (
+        <Box sx={{ display: "flex", justifyContent: "center", py: 0.5 }}>
+          <Typography variant="body2" color="text.secondary" data-testid="record-count">
+            {filtered.length < rows.length
+              ? `Showing ${filtered.length} of ${rows.length} Records Available`
+              : `${rows.length} Records Available`}
+          </Typography>
         </Box>
       )}
 
@@ -248,6 +260,7 @@ RecordTable.propTypes = {
     PropTypes.shape({ label: PropTypes.string, field: PropTypes.string })
   ),
   advancedSearch: PropTypes.node,
+  hideCount: PropTypes.bool,
 };
 
 export default RecordTable;

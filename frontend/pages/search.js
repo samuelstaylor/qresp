@@ -338,11 +338,9 @@ const search = ({
                     <CircularProgress size={22} />
                     <Typography variant="h6">Searching…</Typography>
                   </Box>
-                ) : countIsUnknown ? null : (
-                  <Typography variant="h4" data-testid="record-count">
-                    <Box sx={{ fontWeight: "bold" }}>
-                      {`${rows.length}  Records Available`}
-                    </Box>
+                ) : (
+                  <Typography variant="h4" sx={{ fontWeight: "bold" }}>
+                    Qresp Record Explorer
                   </Typography>
                 )}
               </Box>
@@ -352,6 +350,7 @@ const search = ({
                 defaultOrderBy="year"
                 defaultOrder="desc"
                 sortBarOptions={sortBarOptions}
+                hideCount={navigating || countIsUnknown}
                 advancedSearch={
                   <AdvancedSearch
                     collections={collections}
