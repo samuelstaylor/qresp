@@ -7,7 +7,6 @@ import {
   Box,
   CircularProgress,
   Container,
-  Divider,
   Typography,
 } from "@mui/material";
 
@@ -347,24 +346,23 @@ const search = ({
                   </Typography>
                 )}
               </Box>
-              <Box>
-                <AdvancedSearch
-                  collections={collections}
-                  authors={authors}
-                  publications={publications}
-                  tags={Array.from(taglist)}
-                  clearSearch={clearSearch}
-                  onSearchStart={onSearchStart}
-                  onSearchResult={onSearchResult}
-                />
-              </Box>
-              <Divider />
               <RecordTable
                 rows={rows}
                 columns={columns}
                 defaultOrderBy="year"
                 defaultOrder="desc"
                 sortBarOptions={sortBarOptions}
+                advancedSearch={
+                  <AdvancedSearch
+                    collections={collections}
+                    authors={authors}
+                    publications={publications}
+                    tags={Array.from(taglist)}
+                    clearSearch={clearSearch}
+                    onSearchStart={onSearchStart}
+                    onSearchResult={onSearchResult}
+                  />
+                }
               />
             </Fragment>
           )}

@@ -57,6 +57,7 @@ const RecordTable = (props) => {
     defaultOrderBy = "",
     defaultOrder = "desc",
     sortBarOptions,
+    advancedSearch,
   } = props;
 
   // Scroll to Top of Table
@@ -178,6 +179,11 @@ const RecordTable = (props) => {
             rows={rows}
           />
         </Grid>
+        {advancedSearch && (
+          <Grid size={12}>
+            {advancedSearch}
+          </Grid>
+        )}
       </Grid>
       <TableContainer>
         <Table>
@@ -233,6 +239,7 @@ RecordTable.propTypes = {
   sortBarOptions: PropTypes.arrayOf(
     PropTypes.shape({ label: PropTypes.string, field: PropTypes.string })
   ),
+  advancedSearch: PropTypes.node,
 };
 
 export default RecordTable;
