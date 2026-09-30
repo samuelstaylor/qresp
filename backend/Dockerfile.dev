@@ -12,7 +12,7 @@ WORKDIR /home/flask/app/web
 
 # Install the package dependencies
 COPY requirements.txt /home/flask/app/web/
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --progress-bar off -r requirements.txt
 
 # Copy the source code into the container (dev compose bind-mounts over it)
 COPY . /home/flask/app/web
