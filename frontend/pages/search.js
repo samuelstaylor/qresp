@@ -140,6 +140,16 @@ const search = ({
       },
     },
     {
+      label: "Journal",
+      name: "journal",
+      view: null,
+      hidden: true,
+      options: {
+        sort: true,
+        value: (data) => (typeof data === "string" ? data.toLowerCase() : ""),
+      },
+    },
+    {
       label: "Year",
       name: "year",
       view: null,
@@ -156,6 +166,7 @@ const search = ({
     { label: "Title", field: "paper" },
     { label: "Author", field: "author" },
     { label: "Year", field: "year" },
+    { label: "Journal", field: "journal" },
   ];
 
   const taglist = new Set();

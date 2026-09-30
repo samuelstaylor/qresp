@@ -9,6 +9,7 @@ import {
   TableRow,
   Grid,
   Box,
+  Button,
   Typography,
   ToggleButton,
   ToggleButtonGroup,
@@ -47,7 +48,7 @@ FadeTableRow.propTypes = {
   children: PropTypes.node,
 };
 
-const DEFAULT_SORT_ORDER = { year: "desc", paper: "asc", author: "asc" };
+const DEFAULT_SORT_ORDER = { year: "desc", paper: "asc", author: "asc", journal: "asc" };
 
 const RecordTable = (props) => {
   const {
@@ -88,13 +89,14 @@ const RecordTable = (props) => {
     setOrderBy(property);
   };
 
-  const handleSortBarClick = (field) => {
-    if (field === orderBy) {
-      setOrder((prev) => (prev === "asc" ? "desc" : "asc"));
-    } else {
-      setOrderBy(field);
-      setOrder(DEFAULT_SORT_ORDER[field] || "asc");
-    }
+  const handleFieldChange = (_, field) => {
+    if (!field) return;
+    setOrderBy(field);
+    if (field !== orderBy) setOrder(DEFAULT_SORT_ORDER[field] || "asc");
+  };
+
+  const handleDirectionToggle = () => {
+    setOrder((prev) => (prev === "asc" ? "desc" : "asc"));
   };
 
   // Search/Filter Controls
@@ -142,19 +144,23 @@ const RecordTable = (props) => {
             size="small"
             value={orderBy}
             exclusive
-            onChange={(_, v) => v && handleSortBarClick(v)}
+            onChange={handleFieldChange}
           >
             {sortBarOptions.map((opt) => (
               <ToggleButton key={opt.field} value={opt.field}>
                 {opt.label}
-                {orderBy === opt.field
-                  ? order === "asc"
-                    ? " ▲"
-                    : " ▼"
-                  : ""}
               </ToggleButton>
             ))}
           </ToggleButtonGroup>
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={handleDirectionToggle}
+            title={order === "asc" ? "Ascending — click to reverse" : "Descending — click to reverse"}
+            sx={{ minWidth: 36, px: 1, fontWeight: "bold" }}
+          >
+            {order === "asc" ? "▲" : "▼"}
+          </Button>
         </Box>
       )}
       <Grid container direction="row" alignItems="center" ref={tableRef}>
