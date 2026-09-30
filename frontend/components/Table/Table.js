@@ -140,11 +140,14 @@ const RecordTable = (props) => {
       {/* Advanced Search — directly below the search bar */}
       {advancedSearch}
 
-      {/* Dynamic record count */}
-      {!hideCount && (
+      {/* Dynamic record count — always visible while loading so there is no
+          jarring empty gap before the number arrives. */}
+      {(!hideCount || loading) && (
         <Box sx={{ display: "flex", justifyContent: "center", py: 0.5 }}>
           <Typography variant="body2" color="text.secondary" data-testid="record-count">
-            {filtered.length < rows.length
+            {loading
+              ? "… Records Available"
+              : filtered.length < rows.length
               ? `Showing ${filtered.length} of ${rows.length} Records Available`
               : `${rows.length} Records Available`}
           </Typography>

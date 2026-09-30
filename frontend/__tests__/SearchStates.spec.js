@@ -187,17 +187,16 @@ describe("search page states", () => {
     );
   });
 
-  it("shows a loading state instead of a record count during navigation", () => {
+  it("shows a loading placeholder instead of a stale count during navigation", () => {
     renderSearch({
       initialdata: dataWith({ [ALPHA]: [PAPER("a", "First")] }),
     });
-    expect(screen.getByTestId("record-count")).toBeInTheDocument();
 
     act(() => routerEvents.emit("routeChangeStart", "/search?servers=x"));
 
-    // The old count is NOT left on screen, and "0 Records Available" is never
-    // shown as a stand-in for "still loading".
-    expect(screen.queryByTestId("record-count")).toBeNull();
+    // The count area stays visible but shows "…" — "0 Records Available" is
+    // never shown as a stand-in for "still loading".
+    expect(screen.getByTestId("record-count")).toHaveTextContent("… Records Available");
     expect(screen.getByTestId("search-loading")).toBeInTheDocument();
     expect(screen.queryByText(/0 +Records Available/i)).toBeNull();
 

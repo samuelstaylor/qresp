@@ -5,7 +5,9 @@ import { useRouter } from "next/router";
 import {
   Alert,
   Box,
+  Collapse,
   Container,
+  Link,
   Typography,
 } from "@mui/material";
 
@@ -67,6 +69,7 @@ const search = ({
   const [error, setError] = useState(EMPTY_ERROR);
   const [loading, setLoading] = useState(true);
   const [filterAlertOpen, setFilterAlertOpen] = useState(true);
+  const [filterAlertExpanded, setFilterAlertExpanded] = useState(false);
 
   useEffect(() => {
     if (!selectedservers?.length) {
@@ -302,13 +305,32 @@ const search = ({
           {!unavailable && filterAlertOpen && filterFailures.length > 0 ? (
             <Box sx={{ mb: 2 }} data-testid="search-filter-failure">
               <Alert severity="info" onClose={() => setFilterAlertOpen(false)}>
-                {`Records were loaded, but some search filters have fewer options than usual (${Array.from(
-                  new Set(
-                    filterFailures.flatMap(([, endpoints]) => endpoints || [])
-                  )
-                ).join(", ")}) — ${sourcesUnavailable(
+                {`Some search filters are incomplete — ${sourcesUnavailable(
                   filterFailures.map(([server]) => server)
                 )}.`}
+                {" "}
+                <Link
+                  component="button"
+                  variant="body2"
+                  underline="always"
+                  onClick={() => setFilterAlertExpanded((p) => !p)}
+                  sx={{ verticalAlign: "baseline" }}
+                >
+                  {filterAlertExpanded ? "Hide details" : "Details"}
+                </Link>
+                <Collapse in={filterAlertExpanded}>
+                  <Box sx={{ mt: 1 }}>
+                    {filterFailures.map(([server, endpoints]) => {
+                      const name =
+                        (servernames || {})[server.replace(/\/+$/, "")] || server;
+                      return (
+                        <Typography key={server} variant="body2">
+                          {`${name} (${server}): ${(endpoints || []).join(", ")} unavailable`}
+                        </Typography>
+                      );
+                    })}
+                  </Box>
+                </Collapse>
               </Alert>
             </Box>
           ) : null}
