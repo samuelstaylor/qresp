@@ -79,7 +79,17 @@ const Header = () => {
               then take a line of their own, still right-aligned. */}
           <Box sx={{ display: "flex", flexDirection: "row", flexWrap: "wrap", flexGrow: 1, minWidth: 0, width: "100%", alignItems: "center", m: 1 }}>
             <Box sx={{ display: "flex", alignItems: "center", flexGrow: 1, minWidth: 0 }}>
-              <Button component={Link} href="/">
+              <Button
+                component={Link}
+                href="/"
+                sx={{
+                  transition: "filter 0.25s ease",
+                  "&:hover": {
+                    filter: "drop-shadow(0 0 10px rgba(255,255,255,0.8))",
+                    backgroundColor: "transparent",
+                  },
+                }}
+              >
                 <Picture
                   imgSrc="/images/qrespLogo"
                   imgAlt="Qresp Logo"

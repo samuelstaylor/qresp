@@ -47,7 +47,7 @@ describe("AuthControls", () => {
     expect(screen.queryByText(/cilogon/i)).toBeNull();
   });
 
-  it("shows the user, admin label and a sign-out button when authenticated", async () => {
+  it("shows the user and admin label in a badge button when authenticated", async () => {
     axios.get.mockResolvedValue({
       data: {
         authenticated: true,
@@ -60,17 +60,56 @@ describe("AuthControls", () => {
       },
     });
     renderControls();
-    expect(await screen.findByText(/Owner Example/)).toBeInTheDocument();
-    expect(screen.getByText(/\(admin\)/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Owner Example/ })).toHaveAttribute(
-      "href",
-      "/account"
-    );
-    expect(
-      screen.getByRole("button", { name: /sign out/i })
-    ).toBeInTheDocument();
+
+    // Name and (admin) label appear in the badge button.
+    const badge = await screen.findByRole("button", { name: /Owner Example/i });
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveTextContent(/\(admin\)/);
+
     // The sign-in entry point is gone while signed in.
     expect(screen.queryByRole("link", { name: /^sign in$/i })).toBeNull();
+  });
+
+  it("opens an account menu with sign-out when the badge is clicked", async () => {
+    axios.get.mockResolvedValue({
+      data: {
+        authenticated: true,
+        user: {
+          email: "owner@example.com",
+          name: "Owner Example",
+          is_admin: false,
+          provider: "microsoft",
+        },
+      },
+    });
+    const user = userEvent.setup();
+    renderControls();
+
+    await user.click(await screen.findByRole("button", { name: /Owner Example/i }));
+
+    // Menu opens — sign-out and account link are accessible.
+    expect(await screen.findByRole("menuitem", { name: /sign out/i })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /my account/i })).toBeInTheDocument();
+  });
+
+  it("links to /account from the account menu item", async () => {
+    axios.get.mockResolvedValue({
+      data: {
+        authenticated: true,
+        user: {
+          email: "owner@example.com",
+          name: "Owner Example",
+          is_admin: false,
+          provider: "microsoft",
+        },
+      },
+    });
+    const user = userEvent.setup();
+    renderControls();
+
+    await user.click(await screen.findByRole("button", { name: /Owner Example/i }));
+    const accountLink = await screen.findByRole("menuitem", { name: /my account/i });
+    expect(accountLink.closest("a")).toHaveAttribute("href", "/account");
   });
 
   it("logs out back to the anonymous state and returns home", async () => {
@@ -88,7 +127,11 @@ describe("AuthControls", () => {
     axios.post.mockResolvedValue({ data: { success: true } });
     const user = userEvent.setup();
     renderControls();
-    await user.click(await screen.findByRole("button", { name: /sign out/i }));
+
+    // Open the account menu, then click sign out.
+    await user.click(await screen.findByRole("button", { name: /o@e.com/i }));
+    await user.click(await screen.findByRole("menuitem", { name: /sign out/i }));
+
     expect(axios.post).toHaveBeenCalledWith("/api/auth/logout");
     expect(mockPush).toHaveBeenCalledWith("/");
     expect(
@@ -150,7 +193,7 @@ describe("Header sign-in availability", () => {
     ).toHaveLength(1);
   });
 
-  it("shows the signed-in identity in the header at any width", async () => {
+  it("shows the signed-in identity badge in the header when authenticated", async () => {
     axios.get.mockResolvedValue({
       data: {
         authenticated: true,
@@ -163,9 +206,9 @@ describe("Header sign-in availability", () => {
       },
     });
     renderHeader();
-    expect(await screen.findByText(/Prof Example/)).toBeInTheDocument();
+    // The name badge button is always visible in the header.
     expect(
-      screen.getByRole("button", { name: /sign out/i })
+      await screen.findByRole("button", { name: /Prof Example/i })
     ).toBeInTheDocument();
   });
 });
@@ -176,7 +219,7 @@ describe("Header sign-in availability", () => {
 describe("Header on a narrow screen", () => {
   afterEach(() => jest.resetAllMocks());
 
-  it("lets the signed-in controls take their own line instead of widening the page", async () => {
+  it("lets the signed-in badge take its own line instead of widening the page", async () => {
     axios.get.mockResolvedValue({
       data: {
         authenticated: true,
@@ -189,16 +232,15 @@ describe("Header on a narrow screen", () => {
       </AuthState>
     );
 
-    const signOut = await screen.findByRole("button", { name: /sign out/i });
+    const badge = await screen.findByRole("button", {
+      name: /a curator with a long name/i,
+    });
     const controls = screen.getByTestId("header-controls");
-    // Name, Sign out and the menu button stay one group, never split up...
-    expect(controls).toContainElement(signOut);
+    // The name badge and the menu button stay one group, never split up...
+    expect(controls).toContainElement(badge);
     expect(controls).toContainElement(
-      screen.getByRole("link", { name: /a curator with a long name/i })
+      screen.getByRole("button", { name: /open navigation menu/i })
     );
-    expect(
-      controls
-    ).toContainElement(screen.getByRole("button", { name: /open navigation menu/i }));
     expect(controls).toHaveStyle("flex-wrap: nowrap");
     expect(controls).toHaveStyle("margin-left: auto");
     // ...and that group may move below the logo.

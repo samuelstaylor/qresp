@@ -40,7 +40,7 @@ const formatDate = (value) => {
 };
 
 const AccountPage = () => {
-  const { loading, authenticated, user } = useContext(AuthContext);
+  const { loading, authenticated, user, logout } = useContext(AuthContext);
   const [papers, setPapers] = useState(null);
   const [drafts, setDrafts] = useState(null);
   const [draftError, setDraftError] = useState("");
@@ -250,6 +250,11 @@ const AccountPage = () => {
               ? "Microsoft"
               : user.provider}
           </Typography>
+          <Box sx={{ mt: 2 }}>
+            <Button variant="outlined" color="error" size="small" onClick={logout}>
+              Sign out
+            </Button>
+          </Box>
         </Drawer>
 
         <Drawer heading="My published records" defaultOpen={true}>

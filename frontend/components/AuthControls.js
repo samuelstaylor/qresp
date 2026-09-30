@@ -1,65 +1,93 @@
-import { Fragment, useContext } from "react";
-
-import { Button, Typography } from "@mui/material";
-
+import { Fragment, useContext, useState } from "react";
+import { Button, Menu, MenuItem, ListItemIcon } from "@mui/material";
+import { Logout, AccountCircle } from "@mui/icons-material";
 import Link from "next/link";
 import { useRouter } from "next/router";
 
 import AuthContext from "../Context/Auth/authContext";
 import { loginHref } from "../Utils/safeNext";
 
-// Header auth widget. Anonymous visitors get ONE short entry point — the
-// provider choice lives on /login, so the header stays readable at every
-// width and no provider branding or staging-only login leaks into it.
+// Pill-shaped button style shared by both the signed-in badge and the sign-in
+// button — a slightly different surface from the plain AppBar so it reads as
+// an interactive control without adding a heavy contrasting block.
+const pillSx = {
+  color: "#FFF",
+  whiteSpace: "nowrap",
+  border: "1px solid rgba(255,255,255,0.35)",
+  backgroundColor: "rgba(255,255,255,0.1)",
+  borderRadius: "20px",
+  px: 1.5,
+  textTransform: "none",
+  "&:hover": {
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderColor: "rgba(255,255,255,0.6)",
+  },
+};
+
 const AuthControls = () => {
   const { loading, authenticated, user, logout } = useContext(AuthContext);
-
   const router = useRouter();
+  const [menuAnchor, setMenuAnchor] = useState(null);
+
+  const openMenu = (e) => setMenuAnchor(e.currentTarget);
+  const closeMenu = () => setMenuAnchor(null);
 
   if (loading) return null;
 
   if (authenticated) {
+    const displayName =
+      (user.name || user.email) + (user.is_admin ? " (admin)" : "");
+
     return (
       <Fragment>
-        {/* The signed-in name links to the account page. */}
-        <Typography
-          variant="body2"
-          component={Link}
-          href="/account"
+        <Button
+          onClick={openMenu}
+          aria-haspopup="true"
+          aria-expanded={Boolean(menuAnchor) ? "true" : undefined}
           sx={{
-            color: "#FFF",
-            alignSelf: "center",
-            mx: 1,
-            maxWidth: { xs: 110, sm: 180 },
+            ...pillSx,
+            maxWidth: { xs: 130, sm: 210 },
             overflow: "hidden",
             textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            textDecoration: "none",
-            "&:hover": { textDecoration: "underline" },
+            display: "block",
           }}
         >
-          {user.name || user.email}
-          {user.is_admin ? " (admin)" : ""}
-        </Typography>
-        <Button
-          color="inherit"
-          size="small"
-          sx={{ color: "#FFF", whiteSpace: "nowrap" }}
-          onClick={logout}
-        >
-          Sign out
+          {displayName}
         </Button>
+        <Menu
+          anchorEl={menuAnchor}
+          open={Boolean(menuAnchor)}
+          onClose={closeMenu}
+          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+          transformOrigin={{ vertical: "top", horizontal: "right" }}
+          slotProps={{ paper: { elevation: 3, sx: { mt: 0.5, minWidth: 160 } } }}
+        >
+          <MenuItem component={Link} href="/account" onClick={closeMenu}>
+            <ListItemIcon>
+              <AccountCircle fontSize="small" />
+            </ListItemIcon>
+            My account
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              closeMenu();
+              logout();
+            }}
+          >
+            <ListItemIcon>
+              <Logout fontSize="small" />
+            </ListItemIcon>
+            Sign out
+          </MenuItem>
+        </Menu>
       </Fragment>
     );
   }
 
-  // A short, non-wrapping control that survives the narrowest header, and a
-  // plain link so it works before hydration.
   return (
     <Button
-      color="inherit"
       size="small"
-      sx={{ color: "#FFF", whiteSpace: "nowrap", flexShrink: 0 }}
+      sx={{ ...pillSx, flexShrink: 0 }}
       component="a"
       href={loginHref((router && router.asPath) || "/")}
     >
