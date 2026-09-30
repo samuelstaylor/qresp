@@ -43,3 +43,7 @@ related-eval-external-*/
 # Claude Code local config — developer-specific, not for source control
 CLAUDE.md
 .claude/settings.local.json
+
+# Secrets / local env overrides — never commit credentials
+.env
+.env.*

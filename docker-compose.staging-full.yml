@@ -18,6 +18,8 @@ services:
       - QRESP_PUBLISH_SKIP_EMAIL=1
       - QRESP_FILESERVER_ROOTS=https://notebook.rcc.uchicago.edu/files
       - QRESP_FILESERVER_INSECURE_TLS_HOSTS=notebook.rcc.uchicago.edu
+    env_file:
+      - .env.staging
     volumes:
       - /usr/src/app/backend/project/static
       - ./backend:/home/flask/app/web/
