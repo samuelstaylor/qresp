@@ -38,10 +38,13 @@ services:
 
   gui:
     restart: always
-    depends_on: 
+    depends_on:
       - db
-    environment: 
+    environment:
       - NODE_TLS_REJECT_UNAUTHORIZED=0
+      # Routes same-origin SSR fetches to the backend container directly,
+      # bypassing nginx/TLS (localhost is not reachable from inside Docker).
+      - QRESP_INTERNAL_API_URL=http://backend:5000
     build:
       context: ./frontend
       dockerfile: Dockerfile.dev
@@ -52,6 +55,7 @@ services:
       - /usr/src/app/node_modules
     networks:
       - frontend
+      - backend
     command: yarn dev
   
   nginx:
