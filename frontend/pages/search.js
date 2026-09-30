@@ -190,9 +190,9 @@ const search = ({
   ];
 
   const sortBarOptions = [
+    { label: "Year", field: "year" },
     { label: "Title", field: "paper" },
     { label: "Author", field: "author" },
-    { label: "Year", field: "year" },
     { label: "Journal", field: "journal" },
   ];
 
@@ -355,21 +355,15 @@ const search = ({
             </Box>
           ) : (
             <Fragment>
-              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", p: 2 }}>
-                {(navigating || loading) ? (
-                  <Box
-                    sx={{ display: "flex", alignItems: "center", gap: 1.5 }}
-                    data-testid="search-loading"
-                  >
-                    <CircularProgress size={22} />
-                    <Typography variant="h6">Searching…</Typography>
-                  </Box>
-                ) : (
-                  <Typography variant="h4" sx={{ fontWeight: "bold" }}>
-                    Qresp Record Explorer
-                  </Typography>
-                )}
-              </Box>
+              {(navigating || loading) && (
+                <Box
+                  sx={{ display: "flex", alignItems: "center", gap: 1.5, py: 1 }}
+                  data-testid="search-loading"
+                >
+                  <CircularProgress size={22} />
+                  <Typography variant="h6">Searching…</Typography>
+                </Box>
+              )}
               <RecordTable
                 rows={rows}
                 columns={columns}

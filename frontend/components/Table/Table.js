@@ -128,25 +128,15 @@ const RecordTable = (props) => {
 
   return (
     <TableSearchState>
-      {/* Search bar — centered at top */}
-      <Box sx={{ display: "flex", justifyContent: "center", pt: 1 }}>
-        <Box sx={{ width: "100%", maxWidth: 640 }}>
-          <TableSearch
-            columns={columns}
-            setFiltered={setFiltered}
-            rows={rows}
-          />
-        </Box>
-      </Box>
+      {/* Search bar */}
+      <TableSearch
+        columns={columns}
+        setFiltered={setFiltered}
+        rows={rows}
+      />
 
       {/* Advanced Search — directly below the search bar */}
-      {advancedSearch && (
-        <Box sx={{ display: "flex", justifyContent: "center" }}>
-          <Box sx={{ width: "100%", maxWidth: 640 }}>
-            {advancedSearch}
-          </Box>
-        </Box>
-      )}
+      {advancedSearch}
 
       {/* Dynamic record count */}
       {!hideCount && (
