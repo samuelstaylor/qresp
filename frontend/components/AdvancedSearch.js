@@ -7,9 +7,11 @@ import {
   Grid,
   Typography,
   TextField,
+  InputAdornment,
+  IconButton,
   Box,
 } from "@mui/material";
-import { Search, ExpandMore, Clear } from "@mui/icons-material";
+import { Search, ExpandMore, Clear, Close } from "@mui/icons-material";
 import Autocomplete from "@mui/material/Autocomplete";
 
 import LoadingContext from "../Context/Loading/loadingContext";
@@ -34,6 +36,18 @@ const TextSearchField = ({ title, placeholder, value, onChange, name }) => {
           onChange={(e) => onChange(name, e.target.value)}
           size="small"
           fullWidth
+          InputProps={{
+            endAdornment: (
+              <InputAdornment
+                position="end"
+                sx={{ visibility: value ? "visible" : "hidden" }}
+              >
+                <IconButton size="small" onClick={() => onChange(name, "")}>
+                  <Close sx={{ color: "text.secondary", fontSize: 18 }} />
+                </IconButton>
+              </InputAdornment>
+            ),
+          }}
         />
       </Grid>
     </Grid>
@@ -92,6 +106,7 @@ const AdvancedSearch = ({
   clearSearch,
   onSearchStart,
   onSearchResult,
+  serverOptions = [],
 }) => {
   const [show, setShow] = useState(false);
 
@@ -105,6 +120,11 @@ const AdvancedSearch = ({
   };
 
   const [search, setSearch] = useState(initialState);
+  // All servers pre-selected by default.
+  const [selectedNodes, setSelectedNodes] = useState(() => serverOptions.map((s) => s.url));
+  useEffect(() => {
+    setSelectedNodes(serverOptions.map((s) => s.url));
+  }, [serverOptions.length]);
 
   const router = useRouter();
 
@@ -187,13 +207,14 @@ const AdvancedSearch = ({
 
   const onSubmit = (e) => {
     e.preventDefault();
-    // A snapshot: the criteria and servers this run is about, so a retry
-    // cannot silently become a different search.
-    runSearch({ ...search }, [...(selected || [])]);
+    const servers =
+      selectedNodes.length > 0 ? selectedNodes : [...(selected || [])];
+    runSearch({ ...search }, servers);
   };
 
   const onClear = () => {
     setSearch(initialState);
+    setSelectedNodes(serverOptions.map((s) => s.url));
     clearSearch();
   };
 
@@ -227,6 +248,39 @@ const AdvancedSearch = ({
         <Box sx={{ m: 2 }}>
           <form onSubmit={onSubmit}>
             <Grid container direction="column" spacing={1} alignItems="center">
+              {serverOptions.length > 1 && (
+                <Grid size={12}>
+                  <Grid container direction="column" alignItems="stretch" justifyContent="center">
+                    <Grid size={12}>
+                      <Typography variant="h6" color="secondary" align="center">
+                        <Box sx={{ fontWeight: "bold" }}>Qresp Nodes</Box>
+                      </Typography>
+                    </Grid>
+                    <Grid size={12}>
+                      <Autocomplete
+                        multiple
+                        options={serverOptions}
+                        getOptionLabel={(opt) => opt.label}
+                        isOptionEqualToValue={(opt, val) => opt.url === val.url}
+                        value={serverOptions.filter((s) => selectedNodes.includes(s.url))}
+                        onChange={(_, values) => setSelectedNodes(values.map((v) => v.url))}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            variant="outlined"
+                            placeholder={selectedNodes.length === 0 ? "Select nodes…" : ""}
+                            size="small"
+                          />
+                        )}
+                        ChipProps={{ color: "primary", variant: "outlined" }}
+                        fullWidth
+                        limitTags={4}
+                        disableCloseOnSelect
+                      />
+                    </Grid>
+                  </Grid>
+                </Grid>
+              )}
               <Grid container direction="row" spacing={1} justifyContent="center" alignItems="stretch" size={12}>
                 <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                   <TextSearchField
@@ -321,9 +375,11 @@ AdvancedSearch.propTypes = {
   tags: PropTypes.array.isRequired,
   collections: PropTypes.array.isRequired,
   clearSearch: PropTypes.func.isRequired,
-  // The page owns the results and the status; this reports into them.
   onSearchStart: PropTypes.func,
   onSearchResult: PropTypes.func,
+  serverOptions: PropTypes.arrayOf(
+    PropTypes.shape({ url: PropTypes.string, label: PropTypes.string })
+  ),
 };
 
 export default AdvancedSearch;

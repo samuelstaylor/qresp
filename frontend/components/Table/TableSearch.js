@@ -86,10 +86,12 @@ const TableSearch = ({ rows, setFiltered, columns }) => {
               </InputAdornment>
             ),
             endAdornment: (
-              <InputAdornment position="end">
-                {" "}
+              <InputAdornment
+                position="end"
+                sx={{ visibility: query.length > 0 ? "visible" : "hidden" }}
+              >
                 <IconButton size="small" onClick={clearSearch}>
-                  <Close color="primary" />
+                  <Close sx={{ color: "text.secondary", fontSize: 18 }} />
                 </IconButton>
               </InputAdornment>
             ),

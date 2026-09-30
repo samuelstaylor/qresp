@@ -179,6 +179,16 @@ const search = ({
     });
   }
 
+  // Friendly label for each server, for the node selector in AdvancedSearch.
+  const serverOptions = (selectedservers || []).map((url) => {
+    const key = url.replace(/\/+$/, "");
+    let label = (servernames || {})[key] || key;
+    if (label === key) {
+      try { label = new URL(key).host; } catch (_) {}
+    }
+    return { url, label };
+  });
+
   // ONE list across every node that answered, with the same paper shown once.
   //
   // The Explorer now opens on the whole federation, so a paper published on
@@ -360,6 +370,7 @@ const search = ({
                     clearSearch={clearSearch}
                     onSearchStart={onSearchStart}
                     onSearchResult={onSearchResult}
+                    serverOptions={serverOptions}
                   />
                 }
               />
