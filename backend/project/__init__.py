@@ -63,4 +63,7 @@ if Config.get_setting(app.config['env'],'MONGODB_HOST'):
     if _username:
         _mongo.update(username=_username,
                       password=Config.get_setting(app.config['env'],'MONGODB_PASSWORD'))
-    mongoengine.connect(**_mongo)
+    # connect=False defers background thread creation (pymongo monitor) until
+    # the first actual DB operation; avoids hitting the container pids limit
+    # before uvicorn has started serving.
+    mongoengine.connect(**_mongo, connect=False)
