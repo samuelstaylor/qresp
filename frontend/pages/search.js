@@ -5,7 +5,6 @@ import { useRouter } from "next/router";
 import {
   Alert,
   Box,
-  CircularProgress,
   Container,
   Typography,
 } from "@mui/material";
@@ -365,15 +364,6 @@ const search = ({
             </Box>
           ) : (
             <Fragment>
-              {(navigating || loading) && (
-                <Box
-                  sx={{ display: "flex", alignItems: "center", gap: 1.5, py: 1 }}
-                  data-testid="search-loading"
-                >
-                  <CircularProgress size={22} />
-                  <Typography variant="h6">Searching…</Typography>
-                </Box>
-              )}
               <RecordTable
                 rows={rows}
                 columns={columns}
@@ -381,6 +371,7 @@ const search = ({
                 defaultOrder="desc"
                 sortBarOptions={sortBarOptions}
                 hideCount={navigating || countIsUnknown}
+                loading={navigating || loading}
                 advancedSearch={
                   <AdvancedSearch
                     collections={collections}

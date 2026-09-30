@@ -9,6 +9,7 @@ import {
   TableRow,
   Box,
   Button,
+  CircularProgress,
   Typography,
   ToggleButton,
   ToggleButtonGroup,
@@ -58,6 +59,7 @@ const RecordTable = (props) => {
     sortBarOptions,
     advancedSearch,
     hideCount = false,
+    loading = false,
   } = props;
 
   // Scroll to Top of Table
@@ -204,6 +206,16 @@ const RecordTable = (props) => {
             onRequestSort={handleRequestSort}
           />
           <TableBody>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={visibleColumns.length} sx={{ border: 0 }}>
+                  <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1.5, py: 6 }} data-testid="search-loading">
+                    <CircularProgress size={32} />
+                    <Typography variant="body1" color="text.secondary">Loading Records…</Typography>
+                  </Box>
+                </TableCell>
+              </TableRow>
+            ) : (
             <TransitionGroup component={null}>
               {paginatedData.map((row, index) => {
                 return (
@@ -227,6 +239,7 @@ const RecordTable = (props) => {
                 );
               })}
             </TransitionGroup>
+            )}
           </TableBody>
         </Table>
       </TableContainer>
@@ -250,6 +263,7 @@ RecordTable.propTypes = {
     PropTypes.shape({ label: PropTypes.string, field: PropTypes.string })
   ),
   advancedSearch: PropTypes.node,
+  loading: PropTypes.bool,
   hideCount: PropTypes.bool,
 };
 
