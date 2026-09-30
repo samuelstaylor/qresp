@@ -79,11 +79,12 @@ const search = ({
     }
     Promise.allSettled(
       selectedservers.map(async (server) => {
+        const TIMEOUT = { timeout: 20000 };
         const [searchRes, collectionsRes, authorsRes, pubsRes] = await Promise.allSettled([
-          axios.get(`${server}/api/search`),
-          axios.get(`${server}/api/collections`),
-          axios.get(`${server}/api/authors`),
-          axios.get(`${server}/api/publications`),
+          axios.get(`${server}/api/search`, TIMEOUT),
+          axios.get(`${server}/api/collections`, TIMEOUT),
+          axios.get(`${server}/api/authors`, TIMEOUT),
+          axios.get(`${server}/api/publications`, TIMEOUT),
         ]);
         return { server, searchRes, collectionsRes, authorsRes, pubsRes };
       })
