@@ -7,7 +7,6 @@ import {
   TableCell,
   TableContainer,
   TableRow,
-  Grid,
   Box,
   Button,
   Typography,
@@ -128,63 +127,72 @@ const RecordTable = (props) => {
 
   return (
     <TableSearchState>
-      {sortBarOptions && sortBarOptions.length > 0 && (
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: 1.5,
-            py: 1,
-          }}
-        >
-          <Typography variant="body2" color="text.secondary">
-            Sort by:
-          </Typography>
-          <ToggleButtonGroup
-            size="small"
-            value={orderBy}
-            exclusive
-            onChange={handleFieldChange}
-          >
-            {sortBarOptions.map((opt) => (
-              <ToggleButton key={opt.field} value={opt.field}>
-                {opt.label}
-              </ToggleButton>
-            ))}
-          </ToggleButtonGroup>
-          <Button
-            size="small"
-            variant="outlined"
-            onClick={handleDirectionToggle}
-            title={order === "asc" ? "Ascending — click to reverse" : "Descending — click to reverse"}
-            sx={{ minWidth: 36, px: 1, fontWeight: "bold" }}
-          >
-            {order === "asc" ? "▲" : "▼"}
-          </Button>
-        </Box>
-      )}
-      <Grid container direction="row" alignItems="center" ref={tableRef}>
-        <Grid size={{ xs: 12, sm: 6 }}>
-          <RowsPerPageSelector
-            count={rows.length}
-            rowsPerPage={rowsPerPage}
-            onChangeRowsPerPage={handleChangeRowsPerPage}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6 }}>
+      {/* Search bar — centered at top */}
+      <Box sx={{ display: "flex", justifyContent: "center", pt: 1 }}>
+        <Box sx={{ width: "100%", maxWidth: 640 }}>
           <TableSearch
             columns={columns}
             setFiltered={setFiltered}
             rows={rows}
           />
-        </Grid>
-        {advancedSearch && (
-          <Grid size={12}>
+        </Box>
+      </Box>
+
+      {/* Advanced Search — directly below the search bar */}
+      {advancedSearch && (
+        <Box sx={{ display: "flex", justifyContent: "center" }}>
+          <Box sx={{ width: "100%", maxWidth: 640 }}>
             {advancedSearch}
-          </Grid>
+          </Box>
+        </Box>
+      )}
+
+      {/* Sort controls + rows-per-page on the same row */}
+      <Box
+        ref={tableRef}
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: 1,
+          mt: 1,
+        }}
+      >
+        {sortBarOptions && sortBarOptions.length > 0 && (
+          <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1.5 }}>
+            <Typography variant="body2" color="text.secondary">
+              Sort by:
+            </Typography>
+            <ToggleButtonGroup
+              size="small"
+              value={orderBy}
+              exclusive
+              onChange={handleFieldChange}
+            >
+              {sortBarOptions.map((opt) => (
+                <ToggleButton key={opt.field} value={opt.field}>
+                  {opt.label}
+                </ToggleButton>
+              ))}
+            </ToggleButtonGroup>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={handleDirectionToggle}
+              title={order === "asc" ? "Ascending — click to reverse" : "Descending — click to reverse"}
+              sx={{ minWidth: 36, px: 1, fontWeight: "bold" }}
+            >
+              {order === "asc" ? "▲" : "▼"}
+            </Button>
+          </Box>
         )}
-      </Grid>
+        <RowsPerPageSelector
+          count={rows.length}
+          rowsPerPage={rowsPerPage}
+          onChangeRowsPerPage={handleChangeRowsPerPage}
+        />
+      </Box>
       <TableContainer>
         <Table>
           <EnhancedTableHeader

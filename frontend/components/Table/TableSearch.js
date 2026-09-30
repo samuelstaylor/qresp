@@ -33,25 +33,28 @@ const TableSearch = ({ rows, setFiltered, columns }) => {
   };
 
   const filterRows = () => {
-    const regex = new RegExp(query, "gi");
+    // Split into individual terms; all must match (any order, any field).
+    const terms = query.trim().split(/\s+/).filter(Boolean);
+    if (!terms.length) {
+      setFiltered(rows);
+      return;
+    }
+    // Escape special regex chars so a literal "C++" doesn't break the pattern.
+    const regexes = terms.map(
+      (t) => new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i")
+    );
     setFiltered(
       rows.filter((data) => {
-        var keep = false;
-        for (let index = 0; index < columns.length; index++) {
-          const col = columns[index];
-          if (col.options.searchable) {
-            if (col.options.searchValue) {
-              keep =
-                keep ||
-                col.options.searchValue(data[col.name]).toString().match(regex);
-            } else {
-              keep =
-                keep ||
-                col.options.value(data[col.name]).toString().match(regex);
-            }
-          }
+        // Combine all searchable fields into one string for this row.
+        let text = "";
+        for (const col of columns) {
+          if (!col.options.searchable) continue;
+          const val = col.options.searchValue
+            ? col.options.searchValue(data[col.name])
+            : col.options.value(data[col.name]);
+          text += " " + String(val ?? "");
         }
-        return keep;
+        return regexes.every((re) => re.test(text));
       })
     );
   };
@@ -91,7 +94,7 @@ const TableSearch = ({ rows, setFiltered, columns }) => {
               </InputAdornment>
             ),
           }}
-          placeholder="Search..."
+          placeholder="Search by keywords — title, author, tags…"
           // onKeyUp={onChange}
           onChange={onChange}
           size="small"
