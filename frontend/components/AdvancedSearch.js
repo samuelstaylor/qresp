@@ -268,6 +268,11 @@ const AdvancedSearch = ({
                         isOptionEqualToValue={(opt, val) => opt.url === val.url}
                         value={serverOptions.filter((s) => selectedNodes.includes(s.url))}
                         onChange={(_, values) => setSelectedNodes(values.map((v) => v.url))}
+                        renderOption={(props, opt) => (
+                          <li {...props} key={opt.url}>
+                            {opt.menuLabel || opt.label}
+                          </li>
+                        )}
                         renderInput={(params) => (
                           <TextField
                             {...params}
@@ -382,7 +387,7 @@ AdvancedSearch.propTypes = {
   onSearchStart: PropTypes.func,
   onSearchResult: PropTypes.func,
   serverOptions: PropTypes.arrayOf(
-    PropTypes.shape({ url: PropTypes.string, label: PropTypes.string })
+    PropTypes.shape({ url: PropTypes.string, label: PropTypes.string, menuLabel: PropTypes.string })
   ),
 };
 

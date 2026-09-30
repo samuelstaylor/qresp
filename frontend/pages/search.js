@@ -67,6 +67,7 @@ const search = ({
   const [data, setData] = useState(EMPTY_DATA);
   const [error, setError] = useState(EMPTY_ERROR);
   const [loading, setLoading] = useState(true);
+  const [filterAlertOpen, setFilterAlertOpen] = useState(true);
 
   useEffect(() => {
     if (!selectedservers?.length) {
@@ -208,13 +209,23 @@ const search = ({
   }
 
   // Friendly label for each server, for the node selector in AdvancedSearch.
+  // `label` is the short name used for chips once a node is selected.
+  // `menuLabel` is the full name + URL shown in the dropdown before selection.
+  const fullNamesByOrigin = {};
+  SHIPPED_SERVERS.forEach((entry) => {
+    const origin = String(entry.qresp_server_url || "").replace(/\/+$/, "");
+    const full = String(entry.qresp_server_full_name || "").trim();
+    if (origin && full) fullNamesByOrigin[origin] = full;
+  });
+
   const serverOptions = (selectedservers || []).map((url) => {
     const key = url.replace(/\/+$/, "");
     let label = (servernames || {})[key] || key;
     if (label === key) {
       try { label = new URL(key).host; } catch (_) {}
     }
-    return { url, label };
+    const fullName = fullNamesByOrigin[key] || label;
+    return { url, label, menuLabel: `${fullName} (${key})` };
   });
 
   // ONE list across every node that answered, with the same paper shown once.
@@ -286,13 +297,9 @@ const search = ({
           {/* Records ARE here; some of the dropdowns above the table just
               have fewer options than they should. Announcing that as missing
               records contradicted the rows the reader can see. */}
-          {!unavailable && filterFailures.length > 0 ? (
+          {!unavailable && filterAlertOpen && filterFailures.length > 0 ? (
             <Box sx={{ mb: 2 }} data-testid="search-filter-failure">
-              <Alert severity="info">
-                {/* WHICH filters are short, not which institution's node was
-                    short of them. The endpoint names are the actionable part
-                    -- they say which dropdown to distrust -- so they stay;
-                    the node's name is what goes. */}
+              <Alert severity="info" onClose={() => setFilterAlertOpen(false)}>
                 {`Records were loaded, but some search filters have fewer options than usual (${Array.from(
                   new Set(
                     filterFailures.flatMap(([, endpoints]) => endpoints || [])

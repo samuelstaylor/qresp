@@ -9,12 +9,14 @@ export default [
   {
     qresp_server_url: "https://paperstack.uchicago.edu",
     qresp_server_name: "UChicago",
+    qresp_server_full_name: "University of Chicago",
     isActive: "Yes",
     qresp_maintainer_emails: ["datadev@lists.uchicago.edu"],
   },
   {
     qresp_server_url: "https://qresp.hybrid3.duke.edu",
     qresp_server_name: "Duke",
+    qresp_server_full_name: "Duke University",
     isActive: "Yes",
     qresp_maintainer_emails: [""],
   },
