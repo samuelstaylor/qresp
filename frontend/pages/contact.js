@@ -99,61 +99,12 @@ const Contact = () => (
   <Fragment>
     <SEO title="Qresp | Contact" description={contactDescription} />
 
-    {/* ── Hero banner ──────────────────────────────────────────────── */}
-    <Box
-      sx={{
-        backgroundColor: "#800000",
-        py: { xs: 5, sm: 7 },
-        textAlign: "center",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 2,
-      }}
-    >
-      <svg
-        viewBox="-20 0 350 105"
-        width="320"
-        height="96"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        aria-label="Qresp"
-        role="img"
-        style={{ userSelect: "none" }}
-      >
-        <circle cx="40" cy="40" r="35" stroke="white" strokeWidth="8" />
-        <path d="M 17 35 Q 21 18 38 17" stroke="rgba(255,255,255,0.45)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-        <path d="M 63 72 L 78 93" stroke="white" strokeWidth="10" strokeLinecap="round" fill="none" />
-        <g transform="translate(92, 51) scale(1.262)">
-          <rect x="-4" y="-23" width="8" height="7" rx="2" fill="none" stroke="white" strokeWidth="2.5" />
-          <line x1="-5" y1="-16" x2="5" y2="-16" stroke="rgba(255,255,255,0.50)" strokeWidth="1.5" />
-          <rect x="-4" y="-16" width="8" height="25" fill="none" stroke="white" strokeWidth="2.5" />
-          <polygon points="-4,9 4,9 0,19" fill="none" stroke="white" strokeWidth="2.5" strokeLinejoin="round" />
-        </g>
-        <path d="M 97 31 C 104 22 113 22 120 31" stroke="white" strokeWidth="4" strokeLinecap="round" fill="none" />
-        <text x="122" y="75" fontFamily="'Nunito', Arial, sans-serif" fontSize="104" fontWeight="200" fill="white" style={{ userSelect: "none" }}>esp</text>
-      </svg>
-
-      <Box>
-        <Typography
-          variant="h4"
-          component="h1"
-          sx={{ color: "white", fontWeight: 700, letterSpacing: "-0.01em" }}
-        >
-          Contact
-        </Typography>
-        <Typography
-          variant="body1"
-          sx={{ color: "rgba(255,255,255,0.72)", mt: 0.75, fontStyle: "italic", letterSpacing: "0.02em" }}
-        >
-          Questions, bug reports, and contributions — we want to hear from you.
-        </Typography>
-      </Box>
-    </Box>
-
-    {/* ── Content ──────────────────────────────────────────────────── */}
     <Container maxWidth="md">
       <Box sx={{ my: 6, display: "flex", flexDirection: "column", gap: 3 }}>
+
+        <Typography variant="h4" component="h1" sx={{ fontWeight: 700 }}>
+          Contact
+        </Typography>
 
         {/* Intro callout */}
         <Box
