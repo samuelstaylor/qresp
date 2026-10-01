@@ -143,7 +143,7 @@ const btnStyles = css`
     white-space: nowrap;
     pointer-events: none;
     background: rgb(138, 20, 20);
-    clip-path: circle(35px at 50% calc(var(--glass-y) - 84px));
+    clip-path: circle(35px at 50% calc(var(--glass-y) - 54px));
   }
 
   @media (prefers-reduced-motion: no-preference) {
@@ -187,6 +187,12 @@ const btnStyles = css`
       animation: qr-pen-wiggle 0.75s ease-in-out infinite;
       transform-origin: 65% 75%;
     }
+  }
+
+  /* "DOCUMENTATION" is wide — scale it down to fit the 240px card */
+  .qr-btn-docs .qr-btn-label {
+    font-size: 1.25rem;
+    letter-spacing: 0.1em;
   }
 
   /* ── DOCUMENTATION: document fans on hover ──────────────────────── */
@@ -380,8 +386,8 @@ export default function Home() {
               <svg
                 className="qr-pencil-icon"
                 viewBox="0 0 44 44"
-                width="52"
-                height="52"
+                width="80"
+                height="80"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
                 aria-hidden="true"
