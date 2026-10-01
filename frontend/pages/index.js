@@ -317,10 +317,7 @@ export default function Home() {
           <img src="/images/qresp-gif.gif" alt="Qresp Banner" className="poster" />
           <div className="qr-logo-overlay">
             <svg viewBox="0 0 350 105" className="qr-logo-svg" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Qresp" role="img">
-              {/* Q — magnifying glass */}
-              <circle cx="40" cy="40" r="35" fill="rgba(255,255,255,0.08)" />
-              <circle cx="40" cy="40" r="35" stroke="white" strokeWidth="8" />
-              <path d="M 17 35 Q 21 18 38 17" stroke="rgba(255,255,255,0.45)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+              {/* Q — magnifying glass handle */}
               <path d="M 63 72 L 78 93" stroke="white" strokeWidth="10" strokeLinecap="round" fill="none" />
               {/* r — pencil vertical stem */}
               <g transform="translate(92, 51) scale(1.262)">
