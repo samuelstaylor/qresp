@@ -123,17 +123,22 @@ const btnStyles = css`
   }
 
   /*
-   * Zoom overlay — always rendered, clip circle tracks --glass-y from parent.
-   * inset: -30px 0 extends 30px above/below the label-wrap so the full 70px
-   * lens circle is covered; the flex centre stays at 13px (label midpoint)
-   * because the extension is symmetric. The button's overflow:hidden clips
-   * any spill outside the card.
-   * Background matches the glass interior: rgba(255,255,255,0.08) over #800000
-   * computes to rgb(138,20,20).
+   * Zoom overlay — clip circle tracks --glass-y, filling the lens interior
+   * with colour from the moment the hover starts (glass-y=0).
+   *
+   * Layout (button-relative px):
+   *   lens centre y=73 (pad 32 + 1px margin + cy 40), lens top y=38 (r=35)
+   *   label-wrap top y=157  →  extend element 119px above: top = 38px
+   *   inset: -119px 0  (symmetric, height = 119+26+119 = 264px)
+   *   flex centre = 132px from element top = 38+132 = 170px in button ✓
+   *
+   * Clip: circle(35px at 50% calc(glass-y + 35px))
+   *   glass-y=0:  38+(0+35)=73px  (lens start) ✓
+   *   glass-y=97: 38+(97+35)=170px (label centre) ✓
    */
   .qr-label-zoom {
     position: absolute;
-    inset: -30px 0;
+    inset: -119px 0;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -145,7 +150,7 @@ const btnStyles = css`
     white-space: nowrap;
     pointer-events: none;
     background: rgb(138, 20, 20);
-    clip-path: circle(35px at 50% calc(var(--glass-y) - 54px));
+    clip-path: circle(35px at 50% calc(var(--glass-y) + 35px));
   }
 
   @media (prefers-reduced-motion: no-preference) {
