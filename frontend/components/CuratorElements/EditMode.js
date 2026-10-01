@@ -178,23 +178,113 @@ const EditModeController = ({ editId, server, children }) => {
       );
     }
     if (auth && !auth.authenticated) {
+      const features = [
+        {
+          icon: (
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#800000" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+            </svg>
+          ),
+          title: "Curate papers",
+          body: "Annotate published papers with structured metadata — link every figure, dataset, and script to the exact files that produced it.",
+        },
+        {
+          icon: (
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#800000" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" />
+            </svg>
+          ),
+          title: "Save drafts",
+          body: "Work at your own pace. Drafts are stored to your account so you can pick up where you left off from any device.",
+        },
+        {
+          icon: (
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#800000" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <circle cx="12" cy="12" r="3" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14" /><path d="M4.93 4.93a10 10 0 0 0 0 14.14" />
+            </svg>
+          ),
+          title: "Publish and edit",
+          body: "Publish records that are permanently attributed to your account. Return at any time to update or correct them.",
+        },
+        {
+          icon: (
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#800000" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+            </svg>
+          ),
+          title: "Favourite papers",
+          body: "Bookmark papers you find valuable. Your favourites stay synced to your account and are always one click away.",
+        },
+      ];
+
       return (
-        <Box sx={{ mt: 4 }}>
-          <Typography variant="h6" color="secondary" gutterBottom>
-            Sign in to curate and publish a record.
-          </Typography>
-          <Typography variant="body1" color="secondary" gutterBottom>
-            New records are owned by the account that publishes them, so the
-            curator needs a signed-in account. You will come straight back
-            here afterwards.
-          </Typography>
-          <RegularStyledButton
-            component="a"
-            href="/login?next=%2Fcurator"
-            sx={{ mt: 1 }}
+        <Box sx={{ display: "flex", justifyContent: "center", mt: 6, mb: 4, px: 2 }}>
+          <Box
+            sx={{
+              width: "100%",
+              maxWidth: 680,
+              border: "1px solid rgba(128,0,0,0.15)",
+              borderRadius: 3,
+              overflow: "hidden",
+              boxShadow: "0 4px 32px rgba(0,0,0,0.07)",
+            }}
           >
-            Sign in to curate
-          </RegularStyledButton>
+            {/* Header */}
+            <Box
+              sx={{
+                backgroundColor: "#800000",
+                px: 4,
+                py: 3.5,
+                textAlign: "center",
+              }}
+            >
+              <Typography variant="h5" sx={{ color: "#fff", fontWeight: 700, letterSpacing: "-0.01em" }}>
+                Sign in to start curating
+              </Typography>
+              <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.75)", mt: 0.75, fontStyle: "italic" }}>
+                Your account keeps your work safe and your records attributed.
+              </Typography>
+            </Box>
+
+            {/* Feature grid */}
+            <Box sx={{ px: { xs: 3, sm: 4 }, py: 3.5 }}>
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                  gap: 3,
+                  mb: 4,
+                }}
+              >
+                {features.map(({ icon, title, body }) => (
+                  <Box key={title} sx={{ display: "flex", gap: 1.75, alignItems: "flex-start" }}>
+                    <Box sx={{ flexShrink: 0, mt: 0.25 }}>{icon}</Box>
+                    <Box>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#800000", mb: 0.25 }}>
+                        {title}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.55 }}>
+                        {body}
+                      </Typography>
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+
+              <Box sx={{ textAlign: "center" }}>
+                <RegularStyledButton
+                  component="a"
+                  href="/login?next=%2Fcurator"
+                  sx={{ px: 5, py: 1.2, fontSize: "1rem", letterSpacing: "0.05em" }}
+                >
+                  Sign in to curate
+                </RegularStyledButton>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1.5 }}>
+                  You will be brought straight back here after signing in.
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
         </Box>
       );
     }
