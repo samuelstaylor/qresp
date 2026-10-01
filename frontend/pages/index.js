@@ -337,15 +337,10 @@ export default function Home() {
                 xmlns="http://www.w3.org/2000/svg"
                 aria-hidden="true"
               >
-                {/* Faint glass interior */}
-                <circle cx="45" cy="40" r="35" fill="rgba(255,255,255,0.06)" />
-                {/* Rim */}
-                <circle cx="45" cy="40" r="35" stroke="white" strokeWidth="3" />
-                {/* Handle */}
-                <line
-                  x1="69" y1="64" x2="85" y2="106"
-                  stroke="white" strokeWidth="5" strokeLinecap="round"
-                />
+                <circle cx="45" cy="40" r="35" fill="rgba(255,255,255,0.08)" />
+                <circle cx="45" cy="40" r="35" stroke="white" strokeWidth="8" />
+                <path d="M 22 35 Q 26 18 43 17" stroke="rgba(255,255,255,0.45)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+                <path d="M 68 72 L 83 93" stroke="white" strokeWidth="10" strokeLinecap="round" fill="none" />
               </svg>
             </div>
 
