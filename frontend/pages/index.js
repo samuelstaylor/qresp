@@ -106,11 +106,14 @@ const btnStyles = css`
    * Fixed radius 35px matches the SVG lens; no radius animation needed.
    */
 
-  /* Default: smooth exit when hover ends */
+  /* Set --glass-y = 0 explicitly so the transition has a declared start value */
+  .qr-btn-explore {
+    --glass-y: 0px;
+  }
+
   .qr-glass-icon {
     display: block;
     transform: translateY(0px) rotate(0deg);
-    transition: transform 0.45s ease-out;
   }
 
   .qr-label-wrap {
@@ -120,9 +123,9 @@ const btnStyles = css`
   }
 
   /*
-   * Zoom overlay — always rendered, revealed only where the clip circle falls
-   * within the label-wrap. background:#800000 erases the normal text under
-   * the lens. font-size 2.9rem stays in plain-px space (no transform:scale).
+   * Zoom overlay — always rendered, clip circle tracks --glass-y from parent.
+   * No separate clip-path transition: --glass-y's own transition drives the
+   * position per-frame, avoiding double-interpolation.
    */
   .qr-label-zoom {
     position: absolute;
@@ -139,33 +142,30 @@ const btnStyles = css`
     pointer-events: none;
     background: #800000;
     clip-path: circle(35px at 50% calc(var(--glass-y) - 84px));
-    transition: clip-path 0.4s ease-out;
   }
 
   @media (prefers-reduced-motion: no-preference) {
     /*
-     * Two synchronized 0.8s ease-out animations on hover:
-     *   qr-glass-y-anim → updates --glass-y on the button; clip tracks it live
-     *   qr-glass-move   → visual transform (Y descent + slight wrist rotation)
-     * Same duration + easing keeps glass and lens circle in perfect lock-step.
-     * On hover-exit, animations are removed and default transitions take over.
+     * CSS transitions (not animations) for smooth in AND out:
+     *   --glass-y on the button transitions 0→97px hover-in, 97→0px hover-out.
+     *   .qr-label-zoom inherits the live value each frame → clip tracks glass.
+     *   .qr-glass-icon uses its own transform transition (same easing) so the
+     *   lens and clip circle stay in lock-step in both directions.
      */
-    @keyframes qr-glass-y-anim {
-      from { --glass-y: 0px;  }
-      to   { --glass-y: 97px; }
-    }
-
-    @keyframes qr-glass-move {
-      from { transform: translateY(0px)  rotate(0deg);   }
-      to   { transform: translateY(97px) rotate(-10deg); }
+    .qr-btn-explore {
+      transition: --glass-y 0.8s ease-out, transform 0.22s ease, box-shadow 0.22s ease;
     }
 
     .qr-btn-explore:hover {
-      animation: qr-glass-y-anim 0.8s ease-out forwards;
+      --glass-y: 97px;
+    }
+
+    .qr-glass-icon {
+      transition: transform 0.8s ease-out;
     }
 
     .qr-btn-explore:hover .qr-glass-icon {
-      animation: qr-glass-move 0.8s ease-out forwards;
+      transform: translateY(97px) rotate(-10deg);
     }
   }
 
@@ -246,8 +246,8 @@ export default function Home() {
             {/*
               Magnifying glass — white outline, faint interior.
               ViewBox 0 0 90 114:
-                Lens   cx=40 cy=40 r=35  (visual radius 35px at 1:1 scale)
-                Handle (64,64) → (80,106)  strokeWidth=5 round cap
+                Lens   cx=45 cy=40 r=35  (centered in 90px SVG → aligns clip at 50%)
+                Handle (69,64) → (85,106)  same angle as before, shifted +5x
               SVG 114px tall, centred in 116px icon-area (1px margin top).
               Lens centre: 1+40=41px from icon-area top, 73px from button top.
               translateY(97) lands the lens centre on the label centre (170px).
@@ -263,12 +263,12 @@ export default function Home() {
                 aria-hidden="true"
               >
                 {/* Faint glass interior */}
-                <circle cx="40" cy="40" r="35" fill="rgba(255,255,255,0.06)" />
+                <circle cx="45" cy="40" r="35" fill="rgba(255,255,255,0.06)" />
                 {/* Rim */}
-                <circle cx="40" cy="40" r="35" stroke="white" strokeWidth="3" />
+                <circle cx="45" cy="40" r="35" stroke="white" strokeWidth="3" />
                 {/* Handle */}
                 <line
-                  x1="64" y1="64" x2="80" y2="106"
+                  x1="69" y1="64" x2="85" y2="106"
                   stroke="white" strokeWidth="5" strokeLinecap="round"
                 />
               </svg>
