@@ -20,7 +20,8 @@ import Link from "next/link";
 
 const NavIcon = ({ children }) => (
   <svg viewBox="0 0 20 20" width="17" height="17" fill="none" stroke="currentColor"
-    strokeLinecap="round" strokeLinejoin="round" xmlns="http://www.w3.org/2000/svg">
+    strokeLinecap="round" strokeLinejoin="round" xmlns="http://www.w3.org/2000/svg"
+    style={{ display: "block", transform: "translateY(-2px)" }}>
     {children}
   </svg>
 );
@@ -131,21 +132,20 @@ const Header = () => {
                   },
                   "& .qr-hdr-tagline": {
                     display: "inline-block",
-                    overflow: "hidden",
-                    maxWidth: 0,
-                    opacity: 0,
                     whiteSpace: "nowrap",
-                    transition: "max-width 0.55s ease-out, opacity 0.35s ease",
-                    fontSize: "0.68rem",
+                    clipPath: "inset(0 100% 0 0)",
+                    opacity: 0,
+                    transition: "clip-path 0.55s ease-out, opacity 0.35s ease",
+                    fontSize: "0.9rem",
                     fontStyle: "italic",
                     fontWeight: 300,
                     letterSpacing: "0.03em",
                     color: "rgba(255,255,255,0.85)",
-                    marginLeft: "8px",
+                    marginLeft: "10px",
                     verticalAlign: "middle",
                   },
                   "&:hover .qr-hdr-tagline": {
-                    maxWidth: "700px",
+                    clipPath: "inset(0 0% 0 0)",
                     opacity: 1,
                   },
                 }}
