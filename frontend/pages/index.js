@@ -6,6 +6,17 @@ import Picture from "../components/picture";
 import { Box, Typography, Container } from "@mui/material";
 
 const btnStyles = css`
+  /*
+   * Typed custom property — enables animating a CSS length that descendant
+   * clip-path can reference. inherits:true propagates the animated value
+   * from .qr-btn-explore to its children on every frame.
+   */
+  @property --glass-y {
+    syntax: '<length>';
+    initial-value: 0px;
+    inherits: true;
+  }
+
   /* ── button row ──────────────────────────────────────────────────── */
   .qr-btns {
     display: flex;
@@ -75,32 +86,30 @@ const btnStyles = css`
     margin-top: 0.1rem;
   }
 
-  /* ── EXPLORE: magnifying glass + dynamic zoom ────────────────────── */
+  /* ── EXPLORE: magnifying glass + real-time zoom tracking ────────── */
 
   /*
-   * Layout math (all in button-relative px):
-   *   padding-top            32
-   *   icon-area              116   (SVG 90×114, centred → 1px top margin)
-   *   lens cy=40 in SVG      → lens centre in icon-area = 1+40 = 41
-   *   lens centre in button  = 32+41 = 73
-   *   gap (0.55rem ≈ 9px)    9
-   *   label starts at        32+116+9 = 157
-   *   label height ≈26px     → label centre = 157+13 = 170
-   *   glass must travel      170−73 = 97px
+   * Layout math (button-relative px):
+   *   padding-top 32 + icon-area 116 (SVG centred → 1px top margin, cy=40)
+   *   → lens centre in button = 32 + 1 + 40 = 73
+   *   gap 0.55rem ≈ 9px → label-wrap starts at 32+116+9 = 157
+   *   label height ≈26px → label centre at 170
+   *   glass travels 170−73 = 97px to reach the label centre
    *
-   * The clip opens only after the glass enters the label area
-   * (glass travels ≈84px before the lens edge reaches the label top).
-   * Both animations share the same 1.4s ease-out duration so they look
-   * physically coupled — the clip grows as the glass settles onto the text.
-   *
-   * Exit: when hover ends both animations are removed; the default
-   * transitions on each element smoothly return them to their resting state.
+   * --glass-y is animated on .qr-btn-explore:hover (0→97px) and inherited
+   * by the zoom overlay. The clip circle centre tracks it in real time:
+   *   y in label-wrap coords = var(--glass-y) − 84px
+   *   When glass-y=0:   y=−84 → circle fully above label → invisible ✓
+   *   When glass-y=49:  y=−35 → circle bottom just grazes label top
+   *   When glass-y=84:  y=  0 → circle centred on label top → half visible
+   *   When glass-y=97:  y= 13 → circle centred on label → full lens ✓
+   * Fixed radius 35px matches the SVG lens; no radius animation needed.
    */
 
-  /* Default: smooth exit transition */
+  /* Default: smooth exit when hover ends */
   .qr-glass-icon {
     display: block;
-    transform: translateY(0px);
+    transform: translateY(0px) rotate(0deg);
     transition: transform 0.45s ease-out;
   }
 
@@ -111,10 +120,9 @@ const btnStyles = css`
   }
 
   /*
-   * Zoom overlay — font-size 2.9rem (≈1.76× base) keeps clip-path
-   * coordinates in plain pixel space (no scale transform).
-   * background:#800000 erases the normal text inside the lens circle.
-   * Default clip radius = 0 → invisible.
+   * Zoom overlay — always rendered, revealed only where the clip circle falls
+   * within the label-wrap. background:#800000 erases the normal text under
+   * the lens. font-size 2.9rem stays in plain-px space (no transform:scale).
    */
   .qr-label-zoom {
     position: absolute;
@@ -130,42 +138,34 @@ const btnStyles = css`
     white-space: nowrap;
     pointer-events: none;
     background: #800000;
-    clip-path: circle(0px at 50% 50%);
-    transition: clip-path 0.35s ease-out;  /* smooth close on exit */
+    clip-path: circle(35px at 50% calc(var(--glass-y) - 84px));
+    transition: clip-path 0.4s ease-out;
   }
 
   @media (prefers-reduced-motion: no-preference) {
     /*
-     * Glass descends 97px with a slow ease-out (1.4s).
-     * The animation replaces the default transition while hovering;
-     * removing hover restores the default transition for the return trip.
+     * Two synchronized 0.8s ease-out animations on hover:
+     *   qr-glass-y-anim → updates --glass-y on the button; clip tracks it live
+     *   qr-glass-move   → visual transform (Y descent + slight wrist rotation)
+     * Same duration + easing keeps glass and lens circle in perfect lock-step.
+     * On hover-exit, animations are removed and default transitions take over.
      */
-    @keyframes qr-glass-descend {
-      from { transform: translateY(0px);  }
-      to   { transform: translateY(97px); }
+    @keyframes qr-glass-y-anim {
+      from { --glass-y: 0px;  }
+      to   { --glass-y: 97px; }
     }
 
-    /*
-     * Clip opens dynamically as the glass descends:
-     *   0 %–72%  → circle(0px)   glass is still above the label
-     *   72%–100% → grows to circle(36px)   glass enters + settles on text
-     *
-     * 72% of 1.4s = 1.01s. With ease-out the glass covers ~88% of 97px
-     * by then (≈85px), which is just when the lens edge reaches the label.
-     * The final 28% of time (0.39s) is the glass slow-landing on the text —
-     * exactly when the letters appear to swell through the lens.
-     */
-    @keyframes qr-zoom-open {
-      0%, 72% { clip-path: circle(0px  at 50% 50%); }
-      100%    { clip-path: circle(35px at 50% 50%); }
+    @keyframes qr-glass-move {
+      from { transform: translateY(0px)  rotate(0deg);   }
+      to   { transform: translateY(97px) rotate(-10deg); }
+    }
+
+    .qr-btn-explore:hover {
+      animation: qr-glass-y-anim 0.8s ease-out forwards;
     }
 
     .qr-btn-explore:hover .qr-glass-icon {
-      animation: qr-glass-descend 1.4s ease-out forwards;
-    }
-
-    .qr-btn-explore:hover .qr-label-zoom {
-      animation: qr-zoom-open 1.4s ease-out forwards;
+      animation: qr-glass-move 0.8s ease-out forwards;
     }
   }
 
