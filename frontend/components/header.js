@@ -37,8 +37,8 @@ const CuratorIcon = (
     <g transform="translate(10,10) rotate(-45)">
       <rect x="-2" y="-7" width="4" height="3" rx="1" strokeWidth="1.6" />
       <line x1="-2.5" y1="-4" x2="2.5" y2="-4" strokeWidth="1.1" opacity="0.6" />
-      <rect x="-2" y="-4" width="4" height="7" strokeWidth="1.6" />
-      <polygon points="-2,3 2,3 0,7" strokeWidth="1.6" />
+      <rect x="-2" y="-4" width="4" height="10" strokeWidth="1.6" />
+      <polygon points="-2,6 2,6 0,11" strokeWidth="1.6" />
     </g>
   </NavIcon>
 );
@@ -124,9 +124,29 @@ const Header = () => {
                 href="/"
                 sx={{
                   transition: "filter 0.25s ease",
+                  alignItems: "center",
                   "&:hover": {
                     filter: "drop-shadow(0 0 10px rgba(255,255,255,0.8))",
                     backgroundColor: "transparent",
+                  },
+                  "& .qr-hdr-tagline": {
+                    display: "inline-block",
+                    overflow: "hidden",
+                    maxWidth: 0,
+                    opacity: 0,
+                    whiteSpace: "nowrap",
+                    transition: "max-width 0.55s ease-out, opacity 0.35s ease",
+                    fontSize: "0.68rem",
+                    fontStyle: "italic",
+                    fontWeight: 300,
+                    letterSpacing: "0.03em",
+                    color: "rgba(255,255,255,0.85)",
+                    marginLeft: "8px",
+                    verticalAlign: "middle",
+                  },
+                  "&:hover .qr-hdr-tagline": {
+                    maxWidth: "700px",
+                    opacity: 1,
                   },
                 }}
               >
@@ -153,6 +173,7 @@ const Header = () => {
                   <path d="M 97 31 C 104 22 113 22 120 31" stroke="white" strokeWidth="4" strokeLinecap="round" fill="none" />
                   <text x="122" y="75" fontFamily="'Nunito', Arial, sans-serif" fontSize="104" fontWeight="200" fill="white" style={{ textTransform: "none" }}>esp</text>
                 </svg>
+                <span className="qr-hdr-tagline">— Curation and Exploration of Reproducible Scientific Papers</span>
               </Button>
             </Box>
             <Box

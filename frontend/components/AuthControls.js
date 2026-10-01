@@ -11,16 +11,16 @@ import { loginHref } from "../Utils/safeNext";
 // button — a slightly different surface from the plain AppBar so it reads as
 // an interactive control without adding a heavy contrasting block.
 const pillSx = {
-  color: "#FFF",
+  color: "#800000",
   whiteSpace: "nowrap",
-  border: "1px solid rgba(255,255,255,0.35)",
-  backgroundColor: "rgba(255,255,255,0.1)",
+  backgroundColor: "#ffffff",
   borderRadius: "20px",
-  px: 1.5,
+  px: 2,
+  fontWeight: 600,
   textTransform: "none",
   "&:hover": {
-    backgroundColor: "rgba(255,255,255,0.2)",
-    borderColor: "rgba(255,255,255,0.6)",
+    backgroundColor: "rgba(255,255,255,0.88)",
+    boxShadow: "0 0 14px rgba(255,255,255,0.45)",
   },
 };
 
