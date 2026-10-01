@@ -59,6 +59,8 @@ const btnStyles = css`
    * "Explore" and "Curate" always sit at the same Y position.
    */
   .qr-icon-area {
+    position: relative;
+    z-index: 1;
     height: 116px;
     display: flex;
     align-items: center;
@@ -258,6 +260,24 @@ const btnStyles = css`
     transition: transform 0.4s ease, filter 0.4s ease;
   }
 
+  .qr-logo-tagline {
+    text-align: center;
+    color: white;
+    font-size: 0.9rem;
+    letter-spacing: 0.06em;
+    margin-top: 0.6rem;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    pointer-events: none;
+    user-select: none;
+    white-space: nowrap;
+    text-shadow: 0 1px 12px rgba(0,0,0,0.9), 0 2px 4px rgba(0,0,0,0.8);
+  }
+
+  .qr-logo-svg:hover ~ .qr-logo-tagline {
+    opacity: 1;
+  }
+
   @media (prefers-reduced-motion: no-preference) {
     .qr-logo-svg:hover {
       transform: scale(1.07);
@@ -304,6 +324,7 @@ export default function Home() {
               {/* esp */}
               <text x="122" y="75" fontFamily="'Nunito', Arial, sans-serif" fontSize="104" fontWeight="200" fill="white" style={{ userSelect: "none" }}>esp</text>
             </svg>
+          <div className="qr-logo-tagline">Curation and Exploration of Reproducible Scientific Papers</div>
           </div>
         </div>
 
