@@ -279,7 +279,7 @@ const EditModeController = ({ editId, server, children }) => {
                 >
                   Sign in to curate
                 </RegularStyledButton>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1.5 }}>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1.5, fontStyle: "italic", pl: 3 }}>
                   You will be brought straight back here after signing in.
                 </Typography>
               </Box>
