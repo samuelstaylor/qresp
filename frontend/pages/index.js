@@ -5,121 +5,192 @@ import SEO from "../components/seo";
 import Picture from "../components/picture";
 import { Box, Typography, Container } from "@mui/material";
 
-// r=18 circle circumference ≈ 113 — used for glare-sweep dashoffset
-const panelStyles = css`
-  .qr-panels {
-    display: flex;
-    width: 100%;
-    min-height: 60vh;
+// @property must be top-level (cannot nest inside @media).
+// --qr-x drives both the clip-path circle position and the glass overlay
+// translateX — a single animatable value keeps them in perfect sync.
+const btnStyles = css`
+  @property --qr-x {
+    syntax: "<length>";
+    initial-value: -70px;
+    inherits: true;
   }
 
-  .qr-panel {
-    flex: 1;
+  /* ── button row ─────────────────────────────────────────────────── */
+  .qr-btns {
+    display: flex;
+    flex-direction: row;
+    gap: 1.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    padding: 0.25rem 1rem 2rem;
+  }
+
+  .qr-btn {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    gap: 0.45rem;
     text-decoration: none;
+    width: 270px;
+    padding: 1.8rem 2rem 1.6rem;
+    border-radius: 14px;
     cursor: pointer;
-    transition: opacity 0.35s ease, filter 0.35s ease, transform 0.35s ease;
-    padding: 2.5rem 1.5rem;
-    position: relative;
     overflow: hidden;
-    user-select: none;
-    -webkit-user-select: none;
-    border: none;
-    outline: none;
+    transition: transform 0.22s ease, box-shadow 0.22s ease;
   }
 
-  .qr-panel:focus-visible {
-    outline: 3px solid rgba(255, 255, 255, 0.7);
-    outline-offset: -6px;
+  .qr-btn:focus-visible {
+    outline: 3px solid rgba(255, 255, 255, 0.75);
+    outline-offset: 3px;
   }
 
-  .qr-panels:hover .qr-panel {
-    opacity: 0.68;
-    filter: brightness(0.80);
+  .qr-btn:hover {
+    transform: translateY(-5px);
   }
 
-  .qr-panels:hover .qr-panel:hover {
-    opacity: 1;
-    filter: brightness(1.10);
-    transform: scale(1.015);
+  .qr-btn-explorer {
+    background: #8b0000;
+    box-shadow: 0 4px 20px rgba(139, 0, 0, 0.55);
+  }
+  .qr-btn-explorer:hover {
+    box-shadow: 0 14px 36px rgba(139, 0, 0, 0.65);
   }
 
-  .qr-explorer { background: #8B0000; }
-  .qr-curator  { background: #1a1a2e; }
+  .qr-btn-curator {
+    background: #1a1a2e;
+    box-shadow: 0 4px 20px rgba(26, 26, 46, 0.65);
+  }
+  .qr-btn-curator:hover {
+    box-shadow: 0 14px 36px rgba(26, 26, 46, 0.80);
+  }
 
-  .qr-label {
-    font-size: clamp(1.8rem, 3.5vw, 2.8rem);
+  .qr-btn-sub {
+    font-size: 0.80rem;
+    color: rgba(255, 255, 255, 0.55);
+    letter-spacing: 0.05em;
+    text-align: center;
+    line-height: 1.3;
+  }
+
+  /* ── EXPLORER: magnifying-glass text effect ─────────────────────── */
+
+  /* Wrapper that the glass and zoom-text are measured against */
+  .qr-explorer-wrap {
+    position: relative;
+    display: inline-block;
+    /* Enough padding so the glass isn't clipped by the button's overflow:hidden
+       when it just enters / exits the text area */
+    padding: 0.6rem 0 0.3rem;
+  }
+
+  /* The normal (always visible) label */
+  .qr-explorer-label {
+    display: block;
+    font-size: 1.72rem;
     font-weight: 900;
     letter-spacing: 0.14em;
-    color: #fff;
-    margin: 1.4rem 0 0.5rem;
-    font-family: inherit;
-    text-align: center;
+    color: white;
     text-transform: uppercase;
+    line-height: 1;
+    white-space: nowrap;
   }
 
-  .qr-sublabel {
-    font-size: clamp(0.78rem, 1.4vw, 0.98rem);
-    color: rgba(255, 255, 255, 0.58);
-    letter-spacing: 0.08em;
-    font-family: inherit;
-    text-align: center;
+  /* Zoomed copy of the same label — starts invisible (clip-path radius 0) */
+  .qr-explorer-zoom {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.72rem;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    color: white;
+    text-transform: uppercase;
+    white-space: nowrap;
+    pointer-events: none;
+    /* hidden by default */
+    clip-path: circle(0px at -70px 50%);
+    /* scale 1.65× from the lens center — transform-origin is updated
+       by the animation via var(--qr-x) */
+    transform: scale(1.65);
+    transform-origin: -70px 50%;
   }
 
-  @media (max-width: 768px) {
-    .qr-panels  { flex-direction: column; min-height: unset; }
-    .qr-panel   { min-height: 44vh; }
+  /* The magnifying glass SVG that slides across */
+  .qr-glass-wrap {
+    position: absolute;
+    /* Position so the lens circle centre aligns with x=0 of the wrapper
+       when translateX is 0; left=-27 because circle cx=27 inside the SVG */
+    left: -27px;
+    /* Vertically: circle cy=27 inside SVG → top = 50% − 27px */
+    top: calc(50% - 27px);
+    width: 64px;   /* fits circle r=24 + handle */
+    height: 82px;
+    pointer-events: none;
+    opacity: 0;    /* hidden when not hovering */
+    /* default position: circle centre at --qr-x = -70px (off left) */
+    transform: translateX(-70px);
+    transition: opacity 0.15s ease;
   }
 
-  /* ── Animated keyframes (only when motion is OK) ─────────────────── */
+  /* ── CURATOR pencil icon ─────────────────────────────────────────── */
+  .qr-pencil-icon {
+    display: block;
+    margin-bottom: 0.1rem;
+    transition: transform 0.2s ease;
+  }
+
+  /* ── Animation — only when motion is OK ─────────────────────────── */
   @media (prefers-reduced-motion: no-preference) {
-    @keyframes qr-glare {
-      from { stroke-dashoffset: 0;    }
-      to   { stroke-dashoffset: -113; }
+    /* Scan: sweep the custom property from -70px (off-left) to 260px (off-right) */
+    @keyframes qr-scan {
+      0%,  8% { --qr-x: -70px; }
+      44%, 56% { --qr-x: 260px; }
+      92%,100% { --qr-x: -70px; }
     }
 
-    @keyframes qr-lens-glow {
-      0%,100% { filter: drop-shadow(0 0 4px rgba(255, 180, 180, 0.40)); }
-      50%     { filter: drop-shadow(0 0 18px rgba(255, 200, 200, 0.95)); }
+    @keyframes qr-pen-wiggle {
+      0%, 100% { transform: rotate(0deg); }
+      25%      { transform: rotate(-7deg); }
+      75%      { transform: rotate(7deg);  }
     }
 
-    @keyframes qr-draw {
-      0%   { stroke-dashoffset: 85; }
-      65%  { stroke-dashoffset: 0;  }
-      100% { stroke-dashoffset: 0;  }
+    /* Trigger the scan on hover — animates --qr-x for this element
+       and all inheriting children */
+    .qr-btn-explorer:hover {
+      animation: qr-scan 2.8s ease-in-out infinite;
     }
 
-    @keyframes qr-tip-pulse {
-      0%,100% { opacity: 0.55; }
-      50%     { opacity: 1; filter: drop-shadow(0 0 5px rgba(140, 210, 255, 1)); }
+    /* Reveal and animate the zoomed text through the moving lens */
+    .qr-btn-explorer:hover .qr-explorer-zoom {
+      clip-path: circle(26px at var(--qr-x) 50%);
+      transform: scale(1.65);
+      transform-origin: var(--qr-x) 50%;
     }
 
-    @keyframes qr-pencil-jitter {
-      0%   { transform: translate(0px,    0px);    }
-      20%  { transform: translate(0.8px, -0.7px);  }
-      40%  { transform: translate(0.3px,  0.9px);  }
-      60%  { transform: translate(-0.8px, 0.4px);  }
-      80%  { transform: translate(0.6px, -0.5px);  }
-      100% { transform: translate(0px,    0px);    }
+    /* Move the glass overlay so its circle centre matches var(--qr-x) */
+    .qr-btn-explorer:hover .qr-glass-wrap {
+      opacity: 1;
+      transform: translateX(var(--qr-x));
     }
 
-    .qr-explorer:hover .qr-lenses  { animation: qr-lens-glow 1.9s ease-in-out infinite; }
-    .qr-explorer:hover .qr-glare-l { animation: qr-glare 2.4s linear infinite; }
-    .qr-explorer:hover .qr-glare-r { animation: qr-glare 2.4s linear infinite 0.7s; }
-
-    .qr-curator:hover .qr-drawn-line { animation: qr-draw 2.2s ease-out infinite; }
-    .qr-curator:hover .qr-tip-dot   { animation: qr-tip-pulse 1.1s ease-in-out infinite; }
-    .qr-curator:hover .qr-pencil    { animation: qr-pencil-jitter 0.85s ease-in-out infinite; }
+    /* Pencil wiggle on curator hover */
+    .qr-btn-curator:hover .qr-pencil-icon {
+      animation: qr-pen-wiggle 0.75s ease-in-out infinite;
+      transform-origin: 50% 80%;
+    }
   }
 
-  /* ── Reduced-motion fallback: static glows ───────────────────────── */
+  /* ── Reduced-motion fallback ─────────────────────────────────────── */
   @media (prefers-reduced-motion: reduce) {
-    .qr-explorer:hover .qr-lenses    { filter: drop-shadow(0 0 16px rgba(255, 200, 200, 0.9)); }
-    .qr-curator:hover  .qr-drawn-line { stroke-dashoffset: 0; transition: stroke-dashoffset 0.01s; }
-    .qr-curator:hover  .qr-tip-dot   { opacity: 1; filter: drop-shadow(0 0 6px rgba(140, 210, 255, 1)); }
+    .qr-btn-explorer:hover .qr-explorer-label {
+      text-shadow: 0 0 14px rgba(255, 200, 200, 0.70);
+    }
+    .qr-btn-curator:hover .qr-pencil-icon {
+      filter: drop-shadow(0 0 8px rgba(140, 180, 255, 0.80));
+    }
   }
 `;
 
@@ -130,15 +201,12 @@ export default function Home() {
 
   return (
     <Fragment>
-      <SEO
-        title="Qresp"
-        description={qrespDescription}
-        author={qrespAuthor}
-      />
-      <Global styles={panelStyles} />
+      <SEO title="Qresp" description={qrespDescription} author={qrespAuthor} />
+      <Global styles={btnStyles} />
 
       <Box sx={{ display: "flex", flexDirection: "column", flexGrow: 1 }}>
-        {/* ── Banner ─────────────────────────────────────────────── */}
+
+        {/* ── Banner ──────────────────────────────────────────────── */}
         <div style={{ position: "relative", overflow: "hidden", maxHeight: "48vh" }}>
           <Picture
             imgSrc="/images/qrespPoster"
@@ -153,7 +221,7 @@ export default function Home() {
           />
         </div>
 
-        {/* ── Description ────────────────────────────────────────── */}
+        {/* ── Description ─────────────────────────────────────────── */}
         <Box sx={{ display: "flex", m: 3, alignItems: "center", justifyContent: "center" }}>
           <Container>
             <Typography variant="h5" align="center" gutterBottom>
@@ -167,176 +235,109 @@ export default function Home() {
           </Container>
         </Box>
 
-        {/* ── CTA Panels ─────────────────────────────────────────── */}
-        <div className="qr-panels">
+        {/* ── CTA Buttons ─────────────────────────────────────────── */}
+        <div className="qr-btns">
 
-          {/* EXPLORER panel */}
-          <Link href="/explorer" className="qr-panel qr-explorer">
-            {/* Binoculars SVG
-                Left lens: cx=40 cy=82 r=24
-                Right lens: cx=120 cy=82 r=24
-                Glare ring r=18, circumference≈113, dasharray="22 91" → dashoffset sweeps full circle */}
-            <svg
-              className="qr-icon"
-              viewBox="0 0 160 115"
-              width="200"
-              height="175"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              aria-hidden="true"
-            >
-              {/* Left barrel */}
-              <rect
-                x="14" y="12" width="52" height="44" rx="12"
-                fill="rgba(255,255,255,0.10)"
-                stroke="white" strokeWidth="2.5"
-              />
-              {/* Right barrel */}
-              <rect
-                x="94" y="12" width="52" height="44" rx="12"
-                fill="rgba(255,255,255,0.10)"
-                stroke="white" strokeWidth="2.5"
-              />
-              {/* Bridge connecting barrels */}
-              <path
-                d="M66 30 Q80 21 94 30"
-                stroke="white" strokeWidth="2.5" strokeLinecap="round"
-              />
-              {/* Top eyepiece ridges (decorative) */}
-              <line x1="22" y1="20" x2="58" y2="20" stroke="rgba(255,255,255,0.30)" strokeWidth="1.5"/>
-              <line x1="102" y1="20" x2="138" y2="20" stroke="rgba(255,255,255,0.30)" strokeWidth="1.5"/>
+          {/* EXPLORER — magnifying glass scans over the label on hover */}
+          <Link href="/explorer" className="qr-btn qr-btn-explorer">
 
-              {/* Left outer lens — carries the glow animation */}
-              <circle
-                cx="40" cy="82" r="24"
-                fill="rgba(255,255,255,0.07)"
-                stroke="white" strokeWidth="2.5"
-                className="qr-lenses"
-              />
-              {/* Left inner lens ring */}
-              <circle
-                cx="40" cy="82" r="16"
-                fill="rgba(255,255,255,0.04)"
-                stroke="rgba(255,255,255,0.32)" strokeWidth="1.5"
-              />
-              {/* Left glare arc (sweeps around the lens) */}
-              <circle
-                cx="40" cy="82" r="18"
-                fill="none"
-                stroke="rgba(255,255,255,0.80)" strokeWidth="3" strokeLinecap="round"
-                strokeDasharray="22 91"
-                className="qr-glare-l"
-              />
+            <div className="qr-explorer-wrap">
+              {/* Normal label (always visible) */}
+              <span className="qr-explorer-label">Explorer</span>
 
-              {/* Right outer lens */}
-              <circle
-                cx="120" cy="82" r="24"
-                fill="rgba(255,255,255,0.07)"
-                stroke="white" strokeWidth="2.5"
-                className="qr-lenses"
-              />
-              {/* Right inner lens ring */}
-              <circle
-                cx="120" cy="82" r="16"
-                fill="rgba(255,255,255,0.04)"
-                stroke="rgba(255,255,255,0.32)" strokeWidth="1.5"
-              />
-              {/* Right glare arc (delayed by 0.7s in CSS) */}
-              <circle
-                cx="120" cy="82" r="18"
-                fill="none"
-                stroke="rgba(255,255,255,0.80)" strokeWidth="3" strokeLinecap="round"
-                strokeDasharray="22 91"
-                className="qr-glare-r"
-              />
-            </svg>
+              {/* Zoomed label — same text, clipped to the moving lens circle.
+                  transform: scale(1.65) with transform-origin: var(--qr-x) 50%
+                  means the letter directly under the lens stays in place and
+                  appears 1.65× larger — genuine optical magnification. */}
+              <span className="qr-explorer-zoom" aria-hidden="true">Explorer</span>
 
-            <span className="qr-label">Explorer</span>
-            <span className="qr-sublabel">Browse reproducible papers</span>
+              {/* Magnifying glass SVG — its circle centre tracks var(--qr-x)
+                  via translateX so the rim perfectly frames the zoomed region.
+                  ViewBox 0 0 64 82:
+                    lens circle  cx=27 cy=27 r=24
+                    handle line  (45,45) → (60,74)                          */}
+              <div className="qr-glass-wrap" aria-hidden="true">
+                <svg
+                  viewBox="0 0 64 82"
+                  width="64"
+                  height="82"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  {/* Lens fill — just enough to distinguish from background */}
+                  <circle cx="27" cy="27" r="23" fill="rgba(255,255,255,0.07)" />
+                  {/* Lens rim */}
+                  <circle
+                    cx="27" cy="27" r="23"
+                    stroke="white" strokeWidth="3"
+                  />
+                  {/* Handle */}
+                  <line
+                    x1="44" y1="44" x2="59" y2="74"
+                    stroke="white" strokeWidth="4.5" strokeLinecap="round"
+                  />
+                </svg>
+              </div>
+            </div>
+
+            <span className="qr-btn-sub">Browse reproducible papers</span>
           </Link>
 
-          {/* CURATOR panel */}
-          <Link href="/curator" className="qr-panel qr-curator">
-            {/* Pencil-writing-on-paper SVG
-                Paper: x=18 y=12 w=82 h=104
-                Drawn line: M28,76 Q56,68 88,76  (dasharray=90, dashoffset animates 90→0)
-                Pencil: translate(88,72) rotate(25°), tip at origin */}
+          {/* CURATOR — pencil icon wiggles on hover */}
+          <Link href="/curator" className="qr-btn qr-btn-curator">
+
+            {/* Pencil SVG — diagonal, upper-left eraser → lower-right tip.
+                Group is translate(22,22) rotate(-45°) so the whole pencil
+                is centred in the 44×44 viewBox at 45°.                     */}
             <svg
-              className="qr-icon"
-              viewBox="0 0 160 155"
-              width="190"
-              height="185"
+              className="qr-pencil-icon"
+              viewBox="0 0 44 44"
+              width="48"
+              height="48"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
               aria-hidden="true"
             >
-              {/* Paper sheet */}
-              <rect
-                x="18" y="12" width="82" height="104" rx="4"
-                fill="rgba(255,255,255,0.08)"
-                stroke="white" strokeWidth="2"
-              />
-              {/* Paper fold at top-right corner */}
-              <polygon
-                points="82,12 100,12 100,28"
-                fill="rgba(255,255,255,0.18)"
-                stroke="white" strokeWidth="1.5"
-              />
-              <line x1="82" y1="12" x2="100" y2="28" stroke="white" strokeWidth="1.5"/>
-
-              {/* Ruled lines on paper */}
-              <line x1="28" y1="44" x2="90" y2="44" stroke="rgba(255,255,255,0.22)" strokeWidth="1"/>
-              <line x1="28" y1="60" x2="90" y2="60" stroke="rgba(255,255,255,0.22)" strokeWidth="1"/>
-              {/* Third line is where the pencil writes — will be replaced by drawn line */}
-              <line x1="28" y1="76" x2="90" y2="76" stroke="rgba(255,255,255,0.12)" strokeWidth="1"/>
-              <line x1="28" y1="92" x2="90" y2="92" stroke="rgba(255,255,255,0.22)" strokeWidth="1"/>
-              <line x1="28" y1="108" x2="90" y2="108" stroke="rgba(255,255,255,0.22)" strokeWidth="1"/>
-
-              {/* The line being drawn — stroke-dashoffset animation reveals it left-to-right */}
-              <path
-                d="M28,76 Q56,69 88,76"
-                fill="none"
-                stroke="rgba(140,210,255,0.90)" strokeWidth="2.5" strokeLinecap="round"
-                strokeDasharray="85"
-                strokeDashoffset="85"
-                className="qr-drawn-line"
-              />
-
-              {/* Pencil — static SVG transform positions it; CSS animation adds jitter
-                  translate(88,72): move origin to near tip target position
-                  rotate(25): lean 25° clockwise so eraser is upper-right of tip
-                  Tip at local (0,0) → SVG (88,72); eraser at local (0,-52) rotated 25° → SVG ≈ (66,25) */}
-              <g transform="translate(88, 72) rotate(25)" className="qr-pencil">
-                {/* Graphite tip */}
-                <circle cx="0" cy="0" r="2.5" fill="rgba(80,80,80,0.95)" className="qr-tip-dot"/>
-                {/* Wood cone */}
-                <polygon
-                  points="-4,-10 4,-10 0,0"
-                  fill="rgba(210,175,130,0.90)"
-                  stroke="rgba(255,255,255,0.70)" strokeWidth="1"
-                />
-                {/* Pencil body (yellow) */}
+              <g transform="translate(22,22) rotate(-45)">
+                {/* Eraser cap */}
                 <rect
-                  x="-5.5" y="-42" width="11" height="32"
-                  fill="rgba(255,215,50,0.92)"
-                  stroke="white" strokeWidth="1.5"
+                  x="-4" y="-22" width="8" height="6" rx="2"
+                  fill="rgba(255,140,140,0.88)" stroke="white" strokeWidth="1.5"
                 />
                 {/* Metal ferrule */}
                 <rect
-                  x="-6.5" y="-46" width="13" height="4"
+                  x="-5" y="-16" width="10" height="3.5"
                   fill="rgba(200,200,200,0.85)"
                 />
-                {/* Eraser cap */}
+                {/* Pencil body (yellow) */}
                 <rect
-                  x="-5.5" y="-55" width="11" height="9" rx="2"
-                  fill="rgba(255,140,140,0.88)"
-                  stroke="white" strokeWidth="1.5"
+                  x="-4" y="-12.5" width="8" height="22"
+                  fill="rgba(255,215,50,0.93)" stroke="white" strokeWidth="1.5"
                 />
+                {/* Wooden cone */}
+                <polygon
+                  points="-4,9.5 4,9.5 0,18"
+                  fill="rgba(210,175,130,0.90)" stroke="white" strokeWidth="1.5"
+                />
+                {/* Graphite tip */}
+                <circle cx="0" cy="18" r="2" fill="rgba(80,80,80,0.95)" />
               </g>
             </svg>
 
-            <span className="qr-label">Curator</span>
-            <span className="qr-sublabel">Annotate and publish data</span>
+            <span
+              style={{
+                fontSize: "1.72rem",
+                fontWeight: 900,
+                letterSpacing: "0.14em",
+                color: "white",
+                textTransform: "uppercase",
+                lineHeight: 1,
+              }}
+            >
+              Curator
+            </span>
+
+            <span className="qr-btn-sub">Annotate and publish data</span>
           </Link>
 
         </div>
