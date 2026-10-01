@@ -263,15 +263,20 @@ const btnStyles = css`
   .qr-logo-tagline {
     text-align: center;
     color: white;
-    font-size: 0.9rem;
+    font-size: clamp(1.2rem, 4vw, 2.8rem);
+    font-weight: 300;
+    font-style: italic;
     letter-spacing: 0.06em;
-    margin-top: 0.6rem;
+    margin-top: 1rem;
+    max-width: 90vw;
     opacity: 0;
-    transition: opacity 0.4s ease;
+    transition: opacity 0.5s ease;
     pointer-events: none;
     user-select: none;
-    white-space: nowrap;
-    text-shadow: 0 1px 12px rgba(0,0,0,0.9), 0 2px 4px rgba(0,0,0,0.8);
+    text-shadow:
+      0 0 40px rgba(255, 255, 255, 0.7),
+      0 0 80px rgba(255, 180, 180, 0.35),
+      0 3px 10px rgba(0, 0, 0, 0.95);
   }
 
   .qr-logo-svg:hover ~ .qr-logo-tagline {
@@ -328,19 +333,29 @@ export default function Home() {
           </div>
         </div>
 
-        {/* ── Description ─────────────────────────────────────────── */}
-        <Box sx={{ display: "flex", m: 3, alignItems: "center", justifyContent: "center" }}>
-          <Container>
-            <Typography variant="h5" align="center" gutterBottom>
-              <Box sx={{ fontWeight: "fontWeightBold" }}>
-                The open source software Qresp {'"'}Curation and Exploration of
-                Reproducible Scientific Papers{'"'} <br /> facilitates the
-                organization, annotation and exploration of data presented in
-                scientific papers.
-              </Box>
+        {/* ── Intro ───────────────────────────────────────────────── */}
+        <Box sx={{ py: 5, px: 3, textAlign: "center" }}>
+          <Container maxWidth="sm">
+            <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: 700, letterSpacing: "-0.01em" }}>
+              Open science, made reproducible.
+            </Typography>
+            <Typography variant="body1" sx={{ fontSize: "1.1rem", lineHeight: 1.8, color: "text.secondary" }}>
+              Qresp lets researchers annotate published papers with structured
+              metadata — linking every figure, dataset, and script to the exact
+              files that produced it, so any result can be traced and reproduced.
             </Typography>
           </Container>
         </Box>
+
+        {/* ── Section label ───────────────────────────────────────── */}
+        <Typography
+          variant="overline"
+          align="center"
+          display="block"
+          sx={{ mb: 1.5, letterSpacing: "0.2em", color: "text.disabled", fontSize: "0.75rem" }}
+        >
+          What would you like to do?
+        </Typography>
 
         {/* ── CTA Buttons ─────────────────────────────────────────── */}
         <div className="qr-btns">
