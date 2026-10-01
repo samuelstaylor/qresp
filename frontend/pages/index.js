@@ -45,12 +45,11 @@ const btnStyles = css`
   }
 
   /*
-   * Fixed-height icon area: both buttons get the same 90px block above
-   * the label, so "Explore" and "Curate" always sit at the same Y.
-   * The icons are centred within that block.
+   * Fixed-height icon area (116px) — both icons are centred within it so
+   * "Explore" and "Curate" always sit at the same Y position.
    */
   .qr-icon-area {
-    height: 90px;
+    height: 116px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -76,38 +75,35 @@ const btnStyles = css`
     margin-top: 0.1rem;
   }
 
-  /* ── EXPLORE: magnifying glass descends on hover ─────────────────── */
+  /* ── EXPLORE: magnifying glass + dynamic zoom ────────────────────── */
 
   /*
-   * The glass lives inside .qr-icon-area (90px tall).
-   * Lens SVG: viewBox 0 0 68 88, lens cx=30 cy=30 r=27.
-   * At 1:1 px scale the visual lens radius = 27px.
+   * Layout math (all in button-relative px):
+   *   padding-top            32
+   *   icon-area              116   (SVG 90×114, centred → 1px top margin)
+   *   lens cy=40 in SVG      → lens centre in icon-area = 1+40 = 41
+   *   lens centre in button  = 32+41 = 73
+   *   gap (0.55rem ≈ 9px)    9
+   *   label starts at        32+116+9 = 157
+   *   label height ≈26px     → label centre = 157+13 = 170
+   *   glass must travel      170−73 = 97px
    *
-   * On hover the glass slides down so its lens centre aligns with the
-   * label's centre:
-   *   distance = (90px icon-area − lens cy 30) + gap 8px + label-centre 13px
-   *            = 60 + 8 + 13 = 81px
+   * The clip opens only after the glass enters the label area
+   * (glass travels ≈84px before the lens edge reaches the label top).
+   * Both animations share the same 1.4s ease-out duration so they look
+   * physically coupled — the clip grows as the glass settles onto the text.
    *
-   * Transition going BACK (exit) uses ease-out — no bounce.
-   * Transition going TO hover (enter) uses spring cubic-bezier.
+   * Exit: when hover ends both animations are removed; the default
+   * transitions on each element smoothly return them to their resting state.
    */
+
+  /* Default: smooth exit transition */
   .qr-glass-icon {
     display: block;
-    transition: transform 0.30s ease-out;
+    transform: translateY(0px);
+    transition: transform 0.45s ease-out;
   }
 
-  @media (prefers-reduced-motion: no-preference) {
-    .qr-btn-explore:hover .qr-glass-icon {
-      transform: translateY(81px);
-      transition: transform 0.46s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-  }
-
-  /*
-   * Label wrapper: holds the normal label + the zoom overlay.
-   * overflow:hidden stops the oversized zoom text from painting outside
-   * before clip-path takes effect.
-   */
   .qr-label-wrap {
     position: relative;
     overflow: hidden;
@@ -115,17 +111,10 @@ const btnStyles = css`
   }
 
   /*
-   * Zoom overlay — a LARGER font-size (not scale transform).
-   * Using transform:scale inflates the clip-path's coordinate space so the
-   * visible circle ends up bigger than the lens.  Using a larger font-size
-   * keeps the clip-path coordinates in normal pixel space, so
-   * circle(27px) matches the 27px visual lens radius exactly.
-   *
-   * background: #800000 covers the normal text inside the lens so only
-   * the zoomed letters are visible there.
-   *
-   * clip-path starts at radius 0 (invisible); on hover it opens to 27px,
-   * showing ~2-3 magnified characters through the lens.
+   * Zoom overlay — font-size 2.9rem (≈1.76× base) keeps clip-path
+   * coordinates in plain pixel space (no scale transform).
+   * background:#800000 erases the normal text inside the lens circle.
+   * Default clip radius = 0 → invisible.
    */
   .qr-label-zoom {
     position: absolute;
@@ -141,17 +130,42 @@ const btnStyles = css`
     white-space: nowrap;
     pointer-events: none;
     background: #800000;
-    /* hidden by default */
     clip-path: circle(0px at 50% 50%);
-    /* fast collapse on exit, no delay */
-    transition: clip-path 0.14s ease;
+    transition: clip-path 0.35s ease-out;  /* smooth close on exit */
   }
 
   @media (prefers-reduced-motion: no-preference) {
+    /*
+     * Glass descends 97px with a slow ease-out (1.4s).
+     * The animation replaces the default transition while hovering;
+     * removing hover restores the default transition for the return trip.
+     */
+    @keyframes qr-glass-descend {
+      from { transform: translateY(0px);  }
+      to   { transform: translateY(97px); }
+    }
+
+    /*
+     * Clip opens dynamically as the glass descends:
+     *   0 %–72%  → circle(0px)   glass is still above the label
+     *   72%–100% → grows to circle(36px)   glass enters + settles on text
+     *
+     * 72% of 1.4s = 1.01s. With ease-out the glass covers ~88% of 97px
+     * by then (≈85px), which is just when the lens edge reaches the label.
+     * The final 28% of time (0.39s) is the glass slow-landing on the text —
+     * exactly when the letters appear to swell through the lens.
+     */
+    @keyframes qr-zoom-open {
+      0%, 72% { clip-path: circle(0px  at 50% 50%); }
+      100%    { clip-path: circle(35px at 50% 50%); }
+    }
+
+    .qr-btn-explore:hover .qr-glass-icon {
+      animation: qr-glass-descend 1.4s ease-out forwards;
+    }
+
     .qr-btn-explore:hover .qr-label-zoom {
-      /* radius matches the 27px visual lens; delay lets the glass arrive first */
-      clip-path: circle(27px at 50% 50%);
-      transition: clip-path 0.20s ease 0.30s;
+      animation: qr-zoom-open 1.4s ease-out forwards;
     }
   }
 
@@ -230,34 +244,32 @@ export default function Home() {
           <Link href="/explorer" className="qr-btn qr-btn-explore">
 
             {/*
-              Magnifying glass — white outline, faint glass interior.
-              ViewBox 0 0 68 88:
-                Lens  cx=30 cy=30 r=27  (visual radius 27px at 1:1 scale)
-                Handle (49,49) → (63,82)  strokeWidth=4.5 round cap
-              The lens centre sits 30px from the SVG top.  Inside the 90px
-              icon-area, the SVG is vertically centred, so the lens centre
-              is at (90−68)/2 + 30 = 41px from the icon-area top.
-              translateY(81) = (90−30) + gap(8) + label-half(13) − (90−68)/2 ...
-              simplified: move until lens centre meets label centre.
+              Magnifying glass — white outline, faint interior.
+              ViewBox 0 0 90 114:
+                Lens   cx=40 cy=40 r=35  (visual radius 35px at 1:1 scale)
+                Handle (64,64) → (80,106)  strokeWidth=5 round cap
+              SVG 114px tall, centred in 116px icon-area (1px margin top).
+              Lens centre: 1+40=41px from icon-area top, 73px from button top.
+              translateY(97) lands the lens centre on the label centre (170px).
             */}
             <div className="qr-icon-area">
               <svg
                 className="qr-glass-icon"
-                viewBox="0 0 68 88"
-                width="68"
-                height="88"
+                viewBox="0 0 90 114"
+                width="90"
+                height="114"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
                 aria-hidden="true"
               >
-                {/* Faint glass interior — just enough to read as a lens */}
-                <circle cx="30" cy="30" r="26" fill="rgba(255,255,255,0.06)" />
+                {/* Faint glass interior */}
+                <circle cx="40" cy="40" r="35" fill="rgba(255,255,255,0.06)" />
                 {/* Rim */}
-                <circle cx="30" cy="30" r="26" stroke="white" strokeWidth="2.5" />
+                <circle cx="40" cy="40" r="35" stroke="white" strokeWidth="3" />
                 {/* Handle */}
                 <line
-                  x1="49" y1="49" x2="63" y2="82"
-                  stroke="white" strokeWidth="4.5" strokeLinecap="round"
+                  x1="64" y1="64" x2="80" y2="106"
+                  stroke="white" strokeWidth="5" strokeLinecap="round"
                 />
               </svg>
             </div>
