@@ -117,18 +117,21 @@ const btnStyles = css`
 
   .qr-label-wrap {
     position: relative;
-    overflow: hidden;
     line-height: 1;
   }
 
   /*
    * Zoom overlay — always rendered, clip circle tracks --glass-y from parent.
-   * No separate clip-path transition: --glass-y's own transition drives the
-   * position per-frame, avoiding double-interpolation.
+   * inset: -30px 0 extends 30px above/below the label-wrap so the full 70px
+   * lens circle is covered; the flex centre stays at 13px (label midpoint)
+   * because the extension is symmetric. The button's overflow:hidden clips
+   * any spill outside the card.
+   * Background matches the glass interior: rgba(255,255,255,0.08) over #800000
+   * computes to rgb(138,20,20).
    */
   .qr-label-zoom {
     position: absolute;
-    inset: 0;
+    inset: -30px 0;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -139,7 +142,7 @@ const btnStyles = css`
     text-transform: uppercase;
     white-space: nowrap;
     pointer-events: none;
-    background: #800000;
+    background: rgb(138, 20, 20);
     clip-path: circle(35px at 50% calc(var(--glass-y) - 84px));
   }
 
