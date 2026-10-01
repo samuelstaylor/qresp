@@ -59,7 +59,7 @@ const ExternalStyledButton = (props) => {
 };
 
 const InternalStyledButton = (props) => {
-  const { text, url, active } = props;
+  const { text, url, active, icon } = props;
 
   // Next 13+ <Link> renders its own <a>; render the Link as the Button root
   // instead of nesting a button inside an anchor.
@@ -70,6 +70,7 @@ const InternalStyledButton = (props) => {
       variant="text"
       color="inherit"
       size="large"
+      startIcon={icon}
       sx={active ? {
         borderBottom: "3px solid #fff",
         borderRadius: 0,
@@ -90,6 +91,7 @@ InternalStyledButton.propTypes = {
   text: PropTypes.string.isRequired,
   url: PropTypes.string.isRequired,
   active: PropTypes.bool,
+  icon: PropTypes.node,
 };
 
 export {

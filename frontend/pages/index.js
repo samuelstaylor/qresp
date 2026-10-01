@@ -2,7 +2,6 @@ import { Fragment } from "react";
 import { Global, css } from "@emotion/react";
 import Link from "next/link";
 import SEO from "../components/seo";
-import Picture from "../components/picture";
 import { Box, Typography, Container } from "@mui/material";
 
 const btnStyles = css`
@@ -187,11 +186,76 @@ const btnStyles = css`
     }
   }
 
+  /* ── DOCUMENTATION: document fans on hover ──────────────────────── */
+  .qr-doc-icon { display: block; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    @keyframes qr-doc-fan {
+      0%,100% { transform: rotate(0deg);  }
+      30%     { transform: rotate(-7deg); }
+      70%     { transform: rotate(7deg);  }
+    }
+    .qr-btn-docs:hover .qr-doc-icon {
+      animation: qr-doc-fan 0.8s ease-in-out infinite;
+      transform-origin: 50% 90%;
+    }
+  }
+
+  /* ── CONTACT: envelope bounces on hover ──────────────────────────── */
+  .qr-mail-icon { display: block; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    @keyframes qr-mail-bounce {
+      0%,100% { transform: translateY(0px);  }
+      40%     { transform: translateY(-9px); }
+      65%     { transform: translateY(-4px); }
+    }
+    .qr-btn-contact:hover .qr-mail-icon {
+      animation: qr-mail-bounce 0.7s ease-in-out infinite;
+    }
+  }
+
   /* ── Reduced-motion: static glow only ───────────────────────────── */
   @media (prefers-reduced-motion: reduce) {
-    .qr-btn-explore:hover .qr-btn-label,
-    .qr-btn-curate:hover  .qr-btn-label {
+    .qr-btn-explore:hover  .qr-btn-label,
+    .qr-btn-curate:hover   .qr-btn-label,
+    .qr-btn-docs:hover     .qr-btn-label,
+    .qr-btn-contact:hover  .qr-btn-label {
       text-shadow: 0 0 18px rgba(255, 200, 200, 0.65);
+    }
+  }
+
+  /* ── Banner logo overlay ─────────────────────────────────────────── */
+  .qr-logo-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10;
+    pointer-events: none;
+  }
+
+  .qr-logo-svg {
+    width: 62vw;
+    min-width: 300px;
+    max-width: 760px;
+    height: auto;
+    pointer-events: auto;
+    user-select: none;
+    filter:
+      drop-shadow(0 2px 18px rgba(0, 0, 0, 1))
+      drop-shadow(0 6px 40px rgba(0, 0, 0, 0.85))
+      drop-shadow(0 0 8px rgba(255, 255, 255, 0.18));
+    transition: transform 0.4s ease, filter 0.4s ease;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .qr-logo-svg:hover {
+      transform: scale(1.07);
+      filter:
+        drop-shadow(0 4px 28px rgba(0, 0, 0, 1))
+        drop-shadow(0 10px 60px rgba(0, 0, 0, 0.9))
+        drop-shadow(0 0 22px rgba(255, 255, 255, 0.35));
     }
   }
 `;
@@ -210,17 +274,28 @@ export default function Home() {
 
         {/* ── Banner ──────────────────────────────────────────────── */}
         <div style={{ position: "relative", overflow: "hidden", maxHeight: "48vh" }}>
-          <Picture
-            imgSrc="/images/qrespPoster"
-            imgAlt="Qresp Banner Blurred Background"
-            width="100%"
-            className="blur"
-          />
-          <Picture
-            imgSrc="/images/qrespPoster"
-            imgAlt="Qresp Banner"
-            className="poster"
-          />
+          <img src="/images/qresp-gif.gif" alt="Qresp Banner Blurred Background" width="100%" className="blur" />
+          <img src="/images/qresp-gif.gif" alt="Qresp Banner" className="poster" />
+          <div className="qr-logo-overlay">
+            <svg viewBox="0 0 350 105" className="qr-logo-svg" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Qresp" role="img">
+              {/* Q — magnifying glass */}
+              <circle cx="45" cy="40" r="35" fill="rgba(255,255,255,0.08)" />
+              <circle cx="45" cy="40" r="35" stroke="white" strokeWidth="8" />
+              <path d="M 22 35 Q 26 18 43 17" stroke="rgba(255,255,255,0.45)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+              <path d="M 68 72 L 83 93" stroke="white" strokeWidth="10" strokeLinecap="round" fill="none" />
+              {/* r — pencil vertical stem */}
+              <g transform="translate(92, 51) scale(1.262)">
+                <rect x="-4" y="-23" width="8" height="7" rx="2" fill="none" stroke="white" strokeWidth="2.5" />
+                <line x1="-5" y1="-16" x2="5" y2="-16" stroke="rgba(255,255,255,0.50)" strokeWidth="1.5" />
+                <rect x="-4" y="-16" width="8" height="25" fill="none" stroke="white" strokeWidth="2.5" />
+                <polygon points="-4,9 4,9 0,19" fill="none" stroke="white" strokeWidth="2.5" strokeLinejoin="round" />
+              </g>
+              {/* r — shoulder arm */}
+              <path d="M 97 31 C 101 22 118 22 120 30" stroke="white" strokeWidth="4" strokeLinecap="round" fill="none" />
+              {/* esp */}
+              <text x="122" y="75" fontFamily="'Nunito', Arial, sans-serif" fontSize="104" fontWeight="200" fill="white" style={{ userSelect: "none" }}>esp</text>
+            </svg>
+          </div>
         </div>
 
         {/* ── Description ─────────────────────────────────────────── */}
@@ -337,6 +412,33 @@ export default function Home() {
 
             <span className="qr-btn-label">Curate</span>
             <span className="qr-btn-sub">Annotate and publish data</span>
+          </Link>
+
+          {/* DOCUMENTATION ──────────────────────────────────────────── */}
+          <Link href="/documentation" className="qr-btn qr-btn-docs">
+            <div className="qr-icon-area">
+              <svg className="qr-doc-icon" viewBox="0 0 44 44" width="74" height="74" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M 9 3 L 27 3 L 35 11 L 35 41 L 9 41 Z" stroke="white" strokeWidth="1.8" strokeLinejoin="round" />
+                <path d="M 27 3 L 27 11 L 35 11" stroke="white" strokeWidth="1.6" strokeLinejoin="round" />
+                <line x1="14" y1="18" x2="30" y2="18" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
+                <line x1="14" y1="24" x2="30" y2="24" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
+                <line x1="14" y1="30" x2="23" y2="30" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+            </div>
+            <span className="qr-btn-label">Documentation</span>
+            <span className="qr-btn-sub">Guides and references</span>
+          </Link>
+
+          {/* CONTACT ─────────────────────────────────────────────────── */}
+          <Link href="/contact" className="qr-btn qr-btn-contact">
+            <div className="qr-icon-area">
+              <svg className="qr-mail-icon" viewBox="0 0 44 44" width="74" height="74" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <rect x="4" y="11" width="36" height="24" rx="2" stroke="white" strokeWidth="1.8" />
+                <polyline points="4,11 22,27 40,11" stroke="white" strokeWidth="1.8" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <span className="qr-btn-label">Contact</span>
+            <span className="qr-btn-sub">Get in touch</span>
           </Link>
 
         </div>

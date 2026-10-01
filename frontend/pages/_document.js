@@ -18,6 +18,10 @@ export default function MyDocument(props) {
           rel="stylesheet"
           href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap"
         />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Nunito:wght@200&display=swap"
+        />
       </Head>
       <body>
         <Main />

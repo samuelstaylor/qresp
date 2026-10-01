@@ -16,9 +16,49 @@ import StyledButton, { InternalStyledButton } from "./button";
 
 import AuthControls from "./AuthControls";
 
-import Picture from "./picture";
-
 import Link from "next/link";
+
+const NavIcon = ({ children }) => (
+  <svg viewBox="0 0 20 20" width="17" height="17" fill="none" stroke="currentColor"
+    strokeLinecap="round" strokeLinejoin="round" xmlns="http://www.w3.org/2000/svg">
+    {children}
+  </svg>
+);
+
+const ExplorerIcon = (
+  <NavIcon>
+    <circle cx="8.5" cy="8.5" r="5.5" strokeWidth="1.8" />
+    <line x1="12.5" y1="12.5" x2="17.5" y2="17.5" strokeWidth="2.2" />
+  </NavIcon>
+);
+
+const CuratorIcon = (
+  <NavIcon>
+    <g transform="translate(10,10) rotate(-45)">
+      <rect x="-2" y="-7" width="4" height="3" rx="1" strokeWidth="1.6" />
+      <line x1="-2.5" y1="-4" x2="2.5" y2="-4" strokeWidth="1.1" opacity="0.6" />
+      <rect x="-2" y="-4" width="4" height="7" strokeWidth="1.6" />
+      <polygon points="-2,3 2,3 0,7" strokeWidth="1.6" />
+    </g>
+  </NavIcon>
+);
+
+const DocumentIcon = (
+  <NavIcon>
+    <path d="M 4 1.5 L 13 1.5 L 16.5 5.5 L 16.5 18.5 L 3.5 18.5 L 3.5 1.5 Z" strokeWidth="1.7" />
+    <path d="M 13 1.5 L 13 5.5 L 16.5 5.5" strokeWidth="1.5" />
+    <line x1="6" y1="8.5" x2="14" y2="8.5" strokeWidth="1.3" />
+    <line x1="6" y1="11.5" x2="14" y2="11.5" strokeWidth="1.3" />
+    <line x1="6" y1="14.5" x2="11" y2="14.5" strokeWidth="1.3" />
+  </NavIcon>
+);
+
+const MailIcon = (
+  <NavIcon>
+    <rect x="1.5" y="4.5" width="17" height="12" rx="1.5" strokeWidth="1.7" />
+    <polyline points="1.5,4.5 10,12 18.5,4.5" strokeWidth="1.5" />
+  </NavIcon>
+);
 
 // Defined at module scope (not per-render) with the paper slot styled via its
 // global class, since withStyles' classes map is gone in MUI v5+.
@@ -56,14 +96,14 @@ const Header = () => {
   // it never disappears into the drawer.
   const links = (
     <Fragment>
-      <InternalStyledButton text="Explorer" url="/explorer" active={isActive("/explorer")} />
-      <InternalStyledButton text="Curator" url="/curator" active={isActive("/curator")} />
+      <InternalStyledButton text="Explorer" url="/explorer" active={isActive("/explorer")} icon={ExplorerIcon} />
+      <InternalStyledButton text="Curator" url="/curator" active={isActive("/curator")} icon={CuratorIcon} />
       {/* Both are pages now, not jumps out of the app.
           Documentation was an external link to qresp.org and Contact was a
           bare `mailto:` — a navigation item that handed the page to a mail
           client, and did nothing at all on a machine with none configured. */}
-      <InternalStyledButton text="Documentation" url="/documentation" active={isActive("/documentation")} />
-      <InternalStyledButton text="Contact" url="/contact" active={isActive("/contact")} />
+      <InternalStyledButton text="Documentation" url="/documentation" active={isActive("/documentation")} icon={DocumentIcon} />
+      <InternalStyledButton text="Contact" url="/contact" active={isActive("/contact")} icon={MailIcon} />
     </Fragment>
   );
 
@@ -90,11 +130,29 @@ const Header = () => {
                   },
                 }}
               >
-                <Picture
-                  imgSrc="/images/qrespLogo"
-                  imgAlt="Qresp Logo"
-                  height="64px"
-                />
+                <svg
+                  viewBox="0 0 350 105"
+                  width="167"
+                  height="50"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-label="Qresp"
+                  role="img"
+                  style={{ userSelect: "none", display: "block" }}
+                >
+                  <circle cx="45" cy="40" r="35" fill="rgba(255,255,255,0.08)" />
+                  <circle cx="45" cy="40" r="35" stroke="white" strokeWidth="8" />
+                  <path d="M 22 35 Q 26 18 43 17" stroke="rgba(255,255,255,0.45)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+                  <path d="M 68 72 L 83 93" stroke="white" strokeWidth="10" strokeLinecap="round" fill="none" />
+                  <g transform="translate(92, 51) scale(1.262)">
+                    <rect x="-4" y="-23" width="8" height="7" rx="2" fill="none" stroke="white" strokeWidth="2.5" />
+                    <line x1="-5" y1="-16" x2="5" y2="-16" stroke="rgba(255,255,255,0.50)" strokeWidth="1.5" />
+                    <rect x="-4" y="-16" width="8" height="25" fill="none" stroke="white" strokeWidth="2.5" />
+                    <polygon points="-4,9 4,9 0,19" fill="none" stroke="white" strokeWidth="2.5" strokeLinejoin="round" />
+                  </g>
+                  <path d="M 97 31 C 101 22 118 22 120 30" stroke="white" strokeWidth="4" strokeLinecap="round" fill="none" />
+                  <text x="122" y="75" fontFamily="'Nunito', Arial, sans-serif" fontSize="104" fontWeight="200" fill="white" style={{ textTransform: "none" }}>esp</text>
+                </svg>
               </Button>
             </Box>
             <Box
