@@ -44,12 +44,9 @@ const LoginPage = () => {
   return (
     <Container maxWidth="sm">
       <SEO title="Sign in" />
-      {/* A fixed page, not a collapsible section: there is nothing here to
-          expand or hide, and a sign-in screen should never need a click
-          before it can be used. */}
       <Box
         sx={{
-          minHeight: "60vh",
+          minHeight: "80vh",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -57,73 +54,88 @@ const LoginPage = () => {
         }}
       >
         <Paper
-          elevation={4}
-          sx={{
-            width: "100%",
-            maxWidth: 440,
-            p: { xs: 3, sm: 4 },
-            borderRadius: 2,
-            textAlign: "center",
-          }}
+          elevation={6}
+          sx={{ width: "100%", maxWidth: 420, borderRadius: 3, overflow: "hidden" }}
         >
-          <Typography variant="h5" color="secondary" gutterBottom>
-            Sign in to Qresp
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Signing in lets you curate and publish records, save drafts to your
-            account, and edit the records you own.
-          </Typography>
-
+          {/* Branded maroon header */}
           <Box
-            sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}
+            sx={{
+              backgroundColor: "#800000",
+              py: 4,
+              px: 3,
+              textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 1.5,
+            }}
           >
-            <Box>
-              <RegularStyledButton
-                fullWidth
-                component="a"
-                href={providerHref("microsoft", next)}
-              >
-                Continue with Microsoft
-              </RegularStyledButton>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                display="block"
-                sx={{ mt: 0.75 }}
-              >
-                Use your work or school account. Many institutions issue one —
-                if yours does, this signs you in with it.
-              </Typography>
-            </Box>
-
-            <Box>
-              <RegularStyledButton
-                fullWidth
-                component="a"
-                href={providerHref("google", next)}
-              >
-                Continue with Google
-              </RegularStyledButton>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                display="block"
-                sx={{ mt: 0.75 }}
-              >
-                Use a personal or institutional Google account.
-              </Typography>
-            </Box>
+            <svg
+              viewBox="0 0 350 105"
+              width="150"
+              height="45"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-label="Qresp"
+              role="img"
+              style={{ userSelect: "none" }}
+            >
+              <circle cx="40" cy="40" r="35" fill="rgba(255,255,255,0.08)" />
+              <circle cx="40" cy="40" r="35" stroke="white" strokeWidth="8" />
+              <path d="M 17 35 Q 21 18 38 17" stroke="rgba(255,255,255,0.45)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+              <path d="M 63 72 L 78 93" stroke="white" strokeWidth="10" strokeLinecap="round" fill="none" />
+              <g transform="translate(92, 51) scale(1.262)">
+                <rect x="-4" y="-23" width="8" height="7" rx="2" fill="none" stroke="white" strokeWidth="2.5" />
+                <line x1="-5" y1="-16" x2="5" y2="-16" stroke="rgba(255,255,255,0.50)" strokeWidth="1.5" />
+                <rect x="-4" y="-16" width="8" height="25" fill="none" stroke="white" strokeWidth="2.5" />
+                <polygon points="-4,9 4,9 0,19" fill="none" stroke="white" strokeWidth="2.5" strokeLinejoin="round" />
+              </g>
+              <path d="M 97 31 C 104 22 113 22 120 31" stroke="white" strokeWidth="4" strokeLinecap="round" fill="none" />
+              <text x="122" y="75" fontFamily="'Nunito', Arial, sans-serif" fontSize="104" fontWeight="200" fill="white">esp</text>
+            </svg>
+            <Typography
+              variant="body2"
+              sx={{ color: "rgba(255,255,255,0.75)", fontStyle: "italic", letterSpacing: "0.03em" }}
+            >
+              Curation and Exploration of Reproducible Scientific Papers
+            </Typography>
           </Box>
 
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            display="block"
-            sx={{ mt: 4 }}
-          >
-            Qresp only receives your name and email address from the provider,
-            and uses them to attribute the records you publish.
-          </Typography>
+          {/* Sign-in options */}
+          <Box sx={{ p: { xs: 3, sm: 4 }, textAlign: "center" }}>
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: 700, color: "#800000", mb: 0.5 }}>
+              Sign in to continue
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3.5 }}>
+              Signing in lets you curate and publish records, save drafts, and
+              edit the records you own.
+            </Typography>
+
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <Box>
+                <RegularStyledButton fullWidth component="a" href={providerHref("microsoft", next)}>
+                  Continue with Microsoft
+                </RegularStyledButton>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75 }}>
+                  Work or school account — most institutions issue one.
+                </Typography>
+              </Box>
+
+              <Box>
+                <RegularStyledButton fullWidth component="a" href={providerHref("google", next)}>
+                  Continue with Google
+                </RegularStyledButton>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75 }}>
+                  Personal or institutional Google account.
+                </Typography>
+              </Box>
+            </Box>
+
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 4, lineHeight: 1.6 }}>
+              Qresp receives only your name and email address, used solely to
+              attribute the records you publish.
+            </Typography>
+          </Box>
         </Paper>
       </Box>
     </Container>

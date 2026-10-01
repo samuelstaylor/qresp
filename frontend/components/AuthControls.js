@@ -86,8 +86,8 @@ const AuthControls = () => {
 
   return (
     <Button
-      size="small"
-      sx={{ ...pillSx, flexShrink: 0 }}
+      size="large"
+      sx={{ ...pillSx, flexShrink: 0, textTransform: "uppercase", letterSpacing: "0.08em" }}
       component="a"
       href={loginHref((router && router.asPath) || "/")}
     >
