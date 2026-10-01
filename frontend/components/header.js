@@ -160,6 +160,8 @@ const Header = () => {
                   role="img"
                   style={{ userSelect: "none", display: "block" }}
                 >
+                  <circle cx="40" cy="40" r="35" stroke="white" strokeWidth="8" />
+                  <path d="M 17 35 Q 21 18 38 17" stroke="rgba(255,255,255,0.45)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
                   <path d="M 63 72 L 78 93" stroke="white" strokeWidth="10" strokeLinecap="round" fill="none" />
                   <g transform="translate(92, 51) scale(1.262)">
                     <rect x="-4" y="-23" width="8" height="7" rx="2" fill="none" stroke="white" strokeWidth="2.5" />
