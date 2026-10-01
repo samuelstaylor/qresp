@@ -5,24 +5,15 @@ import SEO from "../components/seo";
 import Picture from "../components/picture";
 import { Box, Typography, Container } from "@mui/material";
 
-// @property must be top-level (cannot nest inside @media).
-// --qr-x drives both the clip-path circle position and the glass overlay
-// translateX — a single animatable value keeps them in perfect sync.
 const btnStyles = css`
-  @property --qr-x {
-    syntax: "<length>";
-    initial-value: -70px;
-    inherits: true;
-  }
-
-  /* ── button row ─────────────────────────────────────────────────── */
+  /* ── button row ──────────────────────────────────────────────────── */
   .qr-btns {
     display: flex;
     flex-direction: row;
-    gap: 1.5rem;
+    gap: 1.6rem;
     justify-content: center;
     flex-wrap: wrap;
-    padding: 0.25rem 1rem 2rem;
+    padding: 0.25rem 1rem 2.5rem;
   }
 
   .qr-btn {
@@ -30,14 +21,22 @@ const btnStyles = css`
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.45rem;
+    gap: 0.5rem;
     text-decoration: none;
-    width: 270px;
-    padding: 1.8rem 2rem 1.6rem;
+    width: 240px;
+    padding: 2rem 2rem 1.6rem;
     border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: #800000;
+    box-shadow: 0 4px 20px rgba(100, 0, 0, 0.50);
     cursor: pointer;
-    overflow: hidden;
     transition: transform 0.22s ease, box-shadow 0.22s ease;
+    overflow: hidden;
+  }
+
+  .qr-btn:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 14px 38px rgba(100, 0, 0, 0.65);
   }
 
   .qr-btn:focus-visible {
@@ -45,151 +44,109 @@ const btnStyles = css`
     outline-offset: 3px;
   }
 
-  .qr-btn:hover {
-    transform: translateY(-5px);
-  }
-
-  .qr-btn-explorer {
-    background: #8b0000;
-    box-shadow: 0 4px 20px rgba(139, 0, 0, 0.55);
-  }
-  .qr-btn-explorer:hover {
-    box-shadow: 0 14px 36px rgba(139, 0, 0, 0.65);
-  }
-
-  .qr-btn-curator {
-    background: #1a1a2e;
-    box-shadow: 0 4px 20px rgba(26, 26, 46, 0.65);
-  }
-  .qr-btn-curator:hover {
-    box-shadow: 0 14px 36px rgba(26, 26, 46, 0.80);
-  }
-
-  .qr-btn-sub {
-    font-size: 0.80rem;
-    color: rgba(255, 255, 255, 0.55);
-    letter-spacing: 0.05em;
-    text-align: center;
-    line-height: 1.3;
-  }
-
-  /* ── EXPLORER: magnifying-glass text effect ─────────────────────── */
-
-  /* Wrapper that the glass and zoom-text are measured against */
-  .qr-explorer-wrap {
-    position: relative;
-    display: inline-block;
-    /* Enough padding so the glass isn't clipped by the button's overflow:hidden
-       when it just enters / exits the text area */
-    padding: 0.6rem 0 0.3rem;
-  }
-
-  /* The normal (always visible) label */
-  .qr-explorer-label {
-    display: block;
-    font-size: 1.72rem;
+  .qr-btn-label {
+    font-size: 1.65rem;
     font-weight: 900;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.16em;
     color: white;
     text-transform: uppercase;
     line-height: 1;
     white-space: nowrap;
   }
 
-  /* Zoomed copy of the same label — starts invisible (clip-path radius 0) */
-  .qr-explorer-zoom {
+  .qr-btn-sub {
+    font-size: 0.78rem;
+    color: rgba(255, 255, 255, 0.52);
+    letter-spacing: 0.07em;
+    text-align: center;
+    line-height: 1.35;
+    margin-top: 0.1rem;
+  }
+
+  /* ── EXPLORE: magnifying glass descends on hover ─────────────────── */
+
+  /* Glass icon — sits above the label in idle state, slides down on hover.
+     Transition going BACK to idle uses ease-out (smooth, no bounce).
+     Transition going TO hover uses a spring curve (snappy entry). */
+  .qr-glass-icon {
+    display: block;
+    flex-shrink: 0;
+    transition: transform 0.30s ease-out;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .qr-btn-explore:hover .qr-glass-icon {
+      /* Slide the glass lens down to sit over the label text.
+         Glass SVG: 58px tall, lens cy=24. Button gap between items: 0.5rem ≈ 8px.
+         Label height ≈ 28px. Distance lens-centre→label-centre ≈ (58−24)+8+14 = 56px. */
+      transform: translateY(56px);
+      transition: transform 0.44s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+  }
+
+  /* Label text area — holds the normal label + the zoomed overlay */
+  .qr-label-wrap {
+    position: relative;
+    line-height: 1;
+  }
+
+  /* Zoomed label: same text scaled 1.7× from the centre.
+     Clipped to a circle that opens when the glass arrives. */
+  .qr-label-zoom {
     position: absolute;
     inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.72rem;
+    font-size: 1.65rem;
     font-weight: 900;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.16em;
     color: white;
     text-transform: uppercase;
     white-space: nowrap;
     pointer-events: none;
-    /* hidden by default */
-    clip-path: circle(0px at -70px 50%);
-    /* scale 1.65× from the lens center — transform-origin is updated
-       by the animation via var(--qr-x) */
-    transform: scale(1.65);
-    transform-origin: -70px 50%;
+    /* hidden by default — clip circle has radius 0 */
+    clip-path: circle(0px at 50% 50%);
+    transform: scale(1.7);
+    transform-origin: 50% 50%;
+    /* exit: close quickly with no delay */
+    transition: clip-path 0.14s ease;
   }
 
-  /* The magnifying glass SVG that slides across */
-  .qr-glass-wrap {
-    position: absolute;
-    /* Position so the lens circle centre aligns with x=0 of the wrapper
-       when translateX is 0; left=-27 because circle cx=27 inside the SVG */
-    left: -27px;
-    /* Vertically: circle cy=27 inside SVG → top = 50% − 27px */
-    top: calc(50% - 27px);
-    width: 64px;   /* fits circle r=24 + handle */
-    height: 82px;
-    pointer-events: none;
-    opacity: 0;    /* hidden when not hovering */
-    /* default position: circle centre at --qr-x = -70px (off left) */
-    transform: translateX(-70px);
-    transition: opacity 0.15s ease;
+  @media (prefers-reduced-motion: no-preference) {
+    .qr-btn-explore:hover .qr-label-zoom {
+      /* Open to match the visual lens radius (≈ 22px at 1:1 SVG scale).
+         Delay lets the glass travel most of the way down before revealing. */
+      clip-path: circle(22px at 50% 50%);
+      transition: clip-path 0.20s ease 0.28s;
+    }
   }
 
-  /* ── CURATOR pencil icon ─────────────────────────────────────────── */
+  /* ── CURATE: pencil wiggles on hover ─────────────────────────────── */
   .qr-pencil-icon {
     display: block;
-    margin-bottom: 0.1rem;
-    transition: transform 0.2s ease;
+    flex-shrink: 0;
+    transition: filter 0.22s ease;
   }
 
-  /* ── Animation — only when motion is OK ─────────────────────────── */
   @media (prefers-reduced-motion: no-preference) {
-    /* Scan: sweep the custom property from -70px (off-left) to 260px (off-right) */
-    @keyframes qr-scan {
-      0%,  8% { --qr-x: -70px; }
-      44%, 56% { --qr-x: 260px; }
-      92%,100% { --qr-x: -70px; }
-    }
-
     @keyframes qr-pen-wiggle {
-      0%, 100% { transform: rotate(0deg); }
-      25%      { transform: rotate(-7deg); }
-      75%      { transform: rotate(7deg);  }
+      0%,100% { transform: rotate(0deg);  }
+      30%     { transform: rotate(-8deg); }
+      70%     { transform: rotate(8deg);  }
     }
 
-    /* Trigger the scan on hover — animates --qr-x for this element
-       and all inheriting children */
-    .qr-btn-explorer:hover {
-      animation: qr-scan 2.8s ease-in-out infinite;
-    }
-
-    /* Reveal and animate the zoomed text through the moving lens */
-    .qr-btn-explorer:hover .qr-explorer-zoom {
-      clip-path: circle(26px at var(--qr-x) 50%);
-      transform: scale(1.65);
-      transform-origin: var(--qr-x) 50%;
-    }
-
-    /* Move the glass overlay so its circle centre matches var(--qr-x) */
-    .qr-btn-explorer:hover .qr-glass-wrap {
-      opacity: 1;
-      transform: translateX(var(--qr-x));
-    }
-
-    /* Pencil wiggle on curator hover */
-    .qr-btn-curator:hover .qr-pencil-icon {
+    .qr-btn-curate:hover .qr-pencil-icon {
       animation: qr-pen-wiggle 0.75s ease-in-out infinite;
-      transform-origin: 50% 80%;
+      transform-origin: 65% 75%;   /* pivot near the tip */
     }
   }
 
-  /* ── Reduced-motion fallback ─────────────────────────────────────── */
+  /* ── Reduced-motion: static hover glows ──────────────────────────── */
   @media (prefers-reduced-motion: reduce) {
-    .qr-btn-explorer:hover .qr-explorer-label {
-      text-shadow: 0 0 14px rgba(255, 200, 200, 0.70);
-    }
-    .qr-btn-curator:hover .qr-pencil-icon {
-      filter: drop-shadow(0 0 8px rgba(140, 180, 255, 0.80));
+    .qr-btn-explore:hover .qr-btn-label,
+    .qr-btn-curate:hover .qr-btn-label {
+      text-shadow: 0 0 16px rgba(255, 200, 200, 0.65);
     }
   }
 `;
@@ -238,57 +195,64 @@ export default function Home() {
         {/* ── CTA Buttons ─────────────────────────────────────────── */}
         <div className="qr-btns">
 
-          {/* EXPLORER — magnifying glass scans over the label on hover */}
-          <Link href="/explorer" className="qr-btn qr-btn-explorer">
+          {/* EXPLORE button ─────────────────────────────────────── */}
+          <Link href="/explorer" className="qr-btn qr-btn-explore">
 
-            <div className="qr-explorer-wrap">
-              {/* Normal label (always visible) */}
-              <span className="qr-explorer-label">Explorer</span>
+            {/*
+              Magnifying glass — white outline only (no fills).
+              ViewBox 0 0 58 74:
+                Lens circle  cx=26 cy=24 r=22  (stroke 2.5, subtle fill)
+                Handle line  (42,40) → (54,68)  (stroke 4, round cap)
+              The lens centre is at y=24 within the 58-tall SVG.
+              On hover, translateY(56px) slides the lens over the label below.
+            */}
+            <svg
+              className="qr-glass-icon"
+              viewBox="0 0 58 74"
+              width="58"
+              height="74"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              {/* Very faint interior so the lens circle reads as a distinct shape */}
+              <circle cx="26" cy="24" r="21" fill="rgba(255,255,255,0.06)" />
+              {/* Rim */}
+              <circle cx="26" cy="24" r="21" stroke="white" strokeWidth="2.5" />
+              {/* Handle */}
+              <line
+                x1="42" y1="40" x2="55" y2="68"
+                stroke="white" strokeWidth="4" strokeLinecap="round"
+              />
+            </svg>
 
-              {/* Zoomed label — same text, clipped to the moving lens circle.
-                  transform: scale(1.65) with transform-origin: var(--qr-x) 50%
-                  means the letter directly under the lens stays in place and
-                  appears 1.65× larger — genuine optical magnification. */}
-              <span className="qr-explorer-zoom" aria-hidden="true">Explorer</span>
-
-              {/* Magnifying glass SVG — its circle centre tracks var(--qr-x)
-                  via translateX so the rim perfectly frames the zoomed region.
-                  ViewBox 0 0 64 82:
-                    lens circle  cx=27 cy=27 r=24
-                    handle line  (45,45) → (60,74)                          */}
-              <div className="qr-glass-wrap" aria-hidden="true">
-                <svg
-                  viewBox="0 0 64 82"
-                  width="64"
-                  height="82"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  {/* Lens fill — just enough to distinguish from background */}
-                  <circle cx="27" cy="27" r="23" fill="rgba(255,255,255,0.07)" />
-                  {/* Lens rim */}
-                  <circle
-                    cx="27" cy="27" r="23"
-                    stroke="white" strokeWidth="3"
-                  />
-                  {/* Handle */}
-                  <line
-                    x1="44" y1="44" x2="59" y2="74"
-                    stroke="white" strokeWidth="4.5" strokeLinecap="round"
-                  />
-                </svg>
-              </div>
+            {/* Label area with zoom overlay */}
+            <div className="qr-label-wrap">
+              <span className="qr-btn-label">Explore</span>
+              {/*
+                Zoomed copy — clip-path opens to a 22px-radius circle centred on
+                the label when the glass arrives. transform: scale(1.7) from the
+                same centre means the letter(s) directly under the lens stay in
+                place and appear 1.7× larger, showing ~3 magnified characters.
+              */}
+              <span className="qr-label-zoom" aria-hidden="true">Explore</span>
             </div>
 
             <span className="qr-btn-sub">Browse reproducible papers</span>
           </Link>
 
-          {/* CURATOR — pencil icon wiggles on hover */}
-          <Link href="/curator" className="qr-btn qr-btn-curator">
+          {/* CURATE button ──────────────────────────────────────── */}
+          <Link href="/curator" className="qr-btn qr-btn-curate">
 
-            {/* Pencil SVG — diagonal, upper-left eraser → lower-right tip.
-                Group is translate(22,22) rotate(-45°) so the whole pencil
-                is centred in the 44×44 viewBox at 45°.                     */}
+            {/*
+              Pencil — white outline only, no colour fills.
+              ViewBox 0 0 44 44, group translate(22,22) rotate(-45°):
+                eraser cap at top  (-4,−23) → (4,−16) rounded rect
+                separator line     at y=−16
+                body               (-4,−16) → (4, 9)
+                wood cone tip      triangle to point (0,19)
+              All shapes: fill=none, stroke=white.
+            */}
             <svg
               className="qr-pencil-icon"
               viewBox="0 0 44 44"
@@ -301,42 +265,29 @@ export default function Home() {
               <g transform="translate(22,22) rotate(-45)">
                 {/* Eraser cap */}
                 <rect
-                  x="-4" y="-22" width="8" height="6" rx="2"
-                  fill="rgba(255,140,140,0.88)" stroke="white" strokeWidth="1.5"
+                  x="-4" y="-23" width="8" height="7" rx="2"
+                  fill="none" stroke="white" strokeWidth="1.8"
                 />
-                {/* Metal ferrule */}
+                {/* Ferrule line */}
+                <line
+                  x1="-5" y1="-16" x2="5" y2="-16"
+                  stroke="rgba(255,255,255,0.55)" strokeWidth="1.2"
+                />
+                {/* Pencil body */}
                 <rect
-                  x="-5" y="-16" width="10" height="3.5"
-                  fill="rgba(200,200,200,0.85)"
+                  x="-4" y="-16" width="8" height="25"
+                  fill="none" stroke="white" strokeWidth="1.8"
                 />
-                {/* Pencil body (yellow) */}
-                <rect
-                  x="-4" y="-12.5" width="8" height="22"
-                  fill="rgba(255,215,50,0.93)" stroke="white" strokeWidth="1.5"
-                />
-                {/* Wooden cone */}
+                {/* Wood cone */}
                 <polygon
-                  points="-4,9.5 4,9.5 0,18"
-                  fill="rgba(210,175,130,0.90)" stroke="white" strokeWidth="1.5"
+                  points="-4,9 4,9 0,19"
+                  fill="none" stroke="white" strokeWidth="1.8"
+                  strokeLinejoin="round"
                 />
-                {/* Graphite tip */}
-                <circle cx="0" cy="18" r="2" fill="rgba(80,80,80,0.95)" />
               </g>
             </svg>
 
-            <span
-              style={{
-                fontSize: "1.72rem",
-                fontWeight: 900,
-                letterSpacing: "0.14em",
-                color: "white",
-                textTransform: "uppercase",
-                lineHeight: 1,
-              }}
-            >
-              Curator
-            </span>
-
+            <span className="qr-btn-label">Curate</span>
             <span className="qr-btn-sub">Annotate and publish data</span>
           </Link>
 
