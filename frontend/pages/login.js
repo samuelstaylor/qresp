@@ -71,7 +71,7 @@ const LoginPage = () => {
             }}
           >
             <svg
-              viewBox="0 0 350 105"
+              viewBox="-20 0 350 105"
               width="150"
               height="45"
               fill="none"
