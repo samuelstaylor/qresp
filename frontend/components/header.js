@@ -140,17 +140,17 @@ const Header = () => {
                   role="img"
                   style={{ userSelect: "none", display: "block" }}
                 >
-                  <circle cx="45" cy="40" r="35" fill="rgba(255,255,255,0.08)" />
-                  <circle cx="45" cy="40" r="35" stroke="white" strokeWidth="8" />
-                  <path d="M 22 35 Q 26 18 43 17" stroke="rgba(255,255,255,0.45)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-                  <path d="M 68 72 L 83 93" stroke="white" strokeWidth="10" strokeLinecap="round" fill="none" />
+                  <circle cx="40" cy="40" r="35" fill="rgba(255,255,255,0.08)" />
+                  <circle cx="40" cy="40" r="35" stroke="white" strokeWidth="8" />
+                  <path d="M 17 35 Q 21 18 38 17" stroke="rgba(255,255,255,0.45)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+                  <path d="M 63 72 L 78 93" stroke="white" strokeWidth="10" strokeLinecap="round" fill="none" />
                   <g transform="translate(92, 51) scale(1.262)">
                     <rect x="-4" y="-23" width="8" height="7" rx="2" fill="none" stroke="white" strokeWidth="2.5" />
                     <line x1="-5" y1="-16" x2="5" y2="-16" stroke="rgba(255,255,255,0.50)" strokeWidth="1.5" />
                     <rect x="-4" y="-16" width="8" height="25" fill="none" stroke="white" strokeWidth="2.5" />
                     <polygon points="-4,9 4,9 0,19" fill="none" stroke="white" strokeWidth="2.5" strokeLinejoin="round" />
                   </g>
-                  <path d="M 97 31 C 101 22 118 22 120 30" stroke="white" strokeWidth="4" strokeLinecap="round" fill="none" />
+                  <path d="M 97 31 C 104 22 113 22 120 31" stroke="white" strokeWidth="4" strokeLinecap="round" fill="none" />
                   <text x="122" y="75" fontFamily="'Nunito', Arial, sans-serif" fontSize="104" fontWeight="200" fill="white" style={{ textTransform: "none" }}>esp</text>
                 </svg>
               </Button>
