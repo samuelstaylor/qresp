@@ -27,6 +27,10 @@ services:
       - QRESP_MONGODB_HOST=db
       - QRESP_MONGODB_PORT=27017
       - QRESP_MONGODB_DB_NAME=explorer
+      # Flask session signing key. Required: Flask-Session returns NullSession
+      # (raises RuntimeError on every access) if this is unset.
+      # This value is dev-only; production must use a long random secret.
+      - QRESP_FLASK_SECRET_KEY=dev-secret-key-change-in-production
     volumes:
       - ./backend:/home/flask/app/web/
     networks:
