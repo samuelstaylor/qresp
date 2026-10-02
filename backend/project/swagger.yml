@@ -574,6 +574,14 @@ paths:
             properties:
               paper_id:
                 type: string
+              server_url:
+                type: string
+              title:
+                type: string
+              authors:
+                type: string
+              year:
+                type: integer
       responses:
         200:
           description: Paper favorited
@@ -581,8 +589,6 @@ paths:
           description: paper_id is required
         401:
           description: Authentication required
-        404:
-          description: Paper not found
   /account/favorites/{paper_id}:
     delete:
       operationId: "project.api.remove_favorite"

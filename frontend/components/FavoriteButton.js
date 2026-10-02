@@ -6,7 +6,14 @@ import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
 import FavoritesContext from "../Context/Favorites/favoritesContext";
 import AuthContext from "../Context/Auth/authContext";
 
-const FavoriteButton = ({ paperId, size = "small" }) => {
+const FavoriteButton = ({
+  paperId,
+  size = "small",
+  server = "",
+  title = "",
+  authors = "",
+  year = null,
+}) => {
   const { authenticated } = useContext(AuthContext);
   const { loading, isFavorite, toggleFavorite } = useContext(FavoritesContext);
 
@@ -21,7 +28,7 @@ const FavoriteButton = ({ paperId, size = "small" }) => {
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          if (!loading) toggleFavorite(paperId);
+          if (!loading) toggleFavorite(paperId, { server_url: server, title, authors, year });
         }}
         aria-label={favorited ? "Remove from favorites" : "Add to favorites"}
         sx={{ color: favorited ? "#800000" : "text.secondary", opacity: loading ? 0.4 : 1 }}

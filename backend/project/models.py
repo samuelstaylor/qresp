@@ -500,13 +500,17 @@ class CuratorDraft(Document):
 class Favorite(Document):
     """One user's bookmark of one published paper.
 
-    Favorites are private to their owner. The paper_id is the MongoDB ObjectId
-    string of the Paper document — never a DOI or external id, since we need
-    a stable key for toggle operations. No paper data is duplicated here;
-    the account page fetches basic metadata for each favorited id separately.
+    Papers live on remote Qresp servers, so paper_id alone is not enough to
+    look up metadata later. server_url records which node owns this paper.
+    title/authors/year are cached at favorite-time so the account page can
+    render without making cross-server requests.
     """
     owner_email = StringField(required=True, max_length=254)
     paper_id = StringField(required=True, max_length=24)
+    server_url = StringField(max_length=500, default="")
+    title = StringField(max_length=500, default="")
+    authors = StringField(max_length=1000, default="")
+    year = IntField()
     created_at = DateTimeField()
     meta = {
         'collection': 'favorites',

@@ -40,10 +40,9 @@ const FavoritesState = ({ children }) => {
   );
 
   const toggleFavorite = useCallback(
-    async (paperId) => {
+    async (paperId, meta = {}) => {
       const id = String(paperId);
       const wasFavorited = favorites.has(id);
-      // Optimistic update
       setFavorites((prev) => {
         const next = new Set(prev);
         if (wasFavorited) next.delete(id);
@@ -54,10 +53,15 @@ const FavoritesState = ({ children }) => {
         if (wasFavorited) {
           await axios.delete(`/api/account/favorites/${encodeURIComponent(id)}`);
         } else {
-          await axios.post("/api/account/favorites", { paper_id: id });
+          await axios.post("/api/account/favorites", {
+            paper_id: id,
+            server_url: meta.server_url || "",
+            title: meta.title || "",
+            authors: meta.authors || "",
+            year: meta.year || null,
+          });
         }
       } catch {
-        // Roll back on error
         setFavorites((prev) => {
           const next = new Set(prev);
           if (wasFavorited) next.add(id);

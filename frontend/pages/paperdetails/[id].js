@@ -118,7 +118,14 @@ const PaperDetails = ({ paper, error, preview = false, query }) => {
           )}
           {!preview && (
             <Box sx={{ display: "flex", justifyContent: "flex-end", mb: -1 }}>
-              <FavoriteButton paperId={query.id} size="medium" />
+              <FavoriteButton
+                paperId={query.id}
+                size="medium"
+                server={query.server || ""}
+                title={title || ""}
+                authors={typeof authors === "string" ? authors : (authors || []).join(", ")}
+                year={year ? Number(year) : null}
+              />
             </Box>
           )}
           <ReferenceInfo referenceData={referenceData} />

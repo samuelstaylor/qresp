@@ -435,7 +435,7 @@ const AccountPage = () => {
                   size="small"
                   variant="outlined"
                   component={Link}
-                  href={`/paperdetails/${encodeURIComponent(paper.id)}?server=${encodeURIComponent(origin)}`}
+                  href={`/paperdetails/${encodeURIComponent(paper.id)}?server=${encodeURIComponent(paper.server_url || origin)}`}
                 >
                   View
                 </Button>

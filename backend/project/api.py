@@ -836,7 +836,9 @@ def paper_permissions(id):
 
 def account_favorites():
     """
-    List paper IDs favorited by the current session user
+    List papers favorited by the current session user.
+    Metadata is returned from the stored Favorite document (cached at
+    favorite-time) so no cross-server lookups are needed.
     Handler for GET: /api/account/favorites
     """
     user = get_current_user()
@@ -845,43 +847,46 @@ def account_favorites():
 
     email = _session_email(user)
     favs = Favorite.objects(owner_email=email).order_by("-created_at")
-    paper_ids = [f.paper_id for f in favs]
-
-    papers = []
-    for pid in paper_ids:
-        try:
-            paper = Paper.objects.get(id=pid)
-            papers.append(_paper_summary(paper))
-        except Exception:
-            pass
-
+    papers = [
+        {
+            "id": f.paper_id,
+            "server_url": f.server_url or "",
+            "title": f.title or "",
+            "authors": f.authors or "",
+            "year": f.year,
+        }
+        for f in favs
+    ]
     return {"favorites": papers, "count": len(papers)}, 200
 
 
 @csrf_protect
 def add_favorite(body):
     """
-    Favorite a paper
+    Favorite a paper (idempotent).
+    Papers live on remote Qresp servers, so we accept server_url and cached
+    metadata (title, authors, year) from the frontend instead of doing a local
+    Paper lookup.
     Handler for POST: /api/account/favorites
     """
     user = get_current_user()
     if not user:
         return {"error": "authentication required"}, 401
 
-    paper_id = (body or {}).get("paper_id", "")
+    b = body or {}
+    paper_id = b.get("paper_id", "")
     if not paper_id:
         return {"error": "paper_id is required"}, 400
-
-    try:
-        Paper.objects.get(id=str(paper_id))
-    except (DoesNotExist, MongoValidationError):
-        return {"error": "Paper not found"}, 404
 
     email = _session_email(user)
     try:
         fav = Favorite(
             owner_email=email,
             paper_id=str(paper_id),
+            server_url=(b.get("server_url") or "").strip().rstrip("/"),
+            title=(b.get("title") or "")[:500],
+            authors=(b.get("authors") or "")[:1000],
+            year=b.get("year") or None,
             created_at=datetime.utcnow(),
         )
         fav.save()

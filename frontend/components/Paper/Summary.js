@@ -24,6 +24,7 @@ const Summary = ({ rowdata }) => {
     _Search__tags,
     _Search__title,
     _Search__server,
+    _Search__year,
   } = rowdata;
 
   const { setQuery } = useContext(TableSearchContext);
@@ -55,7 +56,13 @@ const Summary = ({ rowdata }) => {
                     </Typography>
                   </Link>
                 </span>
-                <FavoriteButton paperId={_Search__id} />
+                <FavoriteButton
+                  paperId={_Search__id}
+                  server={_Search__server}
+                  title={_Search__title}
+                  authors={_Search__authors}
+                  year={_Search__year}
+                />
               </Box>
             </Grid>
             <Grid size={12}>
