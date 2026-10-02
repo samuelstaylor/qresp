@@ -5,6 +5,7 @@ import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -14,7 +15,15 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { Add, Edit, OpenInNew, People, ToggleOff, ToggleOn } from "@mui/icons-material";
+import {
+  Add,
+  Article,
+  Edit,
+  OpenInNew,
+  People,
+  ToggleOff,
+  ToggleOn,
+} from "@mui/icons-material";
 
 import SEO from "../../components/seo";
 import AccountLayout from "../../components/Account/AccountLayout";
@@ -22,6 +31,12 @@ import OwnerlessRecords from "../../components/Account/OwnerlessRecords";
 import AllRecords from "../../components/Account/AllRecords";
 import AuthContext from "../../Context/Auth/authContext";
 import { getServer } from "../../Utils/utils";
+
+const formatDate = (v) => {
+  if (!v) return "";
+  const d = new Date(v);
+  return isNaN(d) ? "" : d.toLocaleString();
+};
 
 const RecordsPage = () => {
   const { loading, authenticated, user } = useContext(AuthContext);
@@ -83,15 +98,14 @@ const RecordsPage = () => {
 
   let content;
   if (loading) {
-    content = <Typography color="text.secondary">Checking sign-in…</Typography>;
+    content = (
+      <Box sx={{ display: "flex", justifyContent: "center", mt: 6 }}>
+        <CircularProgress />
+      </Box>
+    );
   } else if (!authenticated) {
     content = (
-      <Paper variant="outlined" sx={{ p: 4, borderRadius: 3, maxWidth: 440 }}>
-        <Typography variant="h6" gutterBottom>Sign in to view your records</Typography>
-        <Typography variant="body2" color="text.secondary">
-          Use &ldquo;Sign in&rdquo; in the header to access your published records.
-        </Typography>
-      </Paper>
+      <Typography color="text.secondary">Please sign in.</Typography>
     );
   } else {
     content = (
@@ -113,22 +127,14 @@ const RecordsPage = () => {
         )}
 
         {papers === null ? (
-          <Typography color="text.secondary">Loading records…</Typography>
+          <Box sx={{ display: "flex", justifyContent: "center", mt: 6 }}>
+            <CircularProgress />
+          </Box>
         ) : papers.length === 0 ? (
-          <Paper variant="outlined" sx={{ p: 4, borderRadius: 3, textAlign: "center" }}>
-            <Typography variant="h6" gutterBottom>No published records yet</Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Records you publish will appear here and can be edited or managed.
-            </Typography>
-            <Button
-              variant="outlined"
-              startIcon={<Add />}
-              component={Link}
-              href="/curator"
-            >
-              Create your first record
-            </Button>
-          </Paper>
+          <Box sx={{ textAlign: "center", mt: 8 }}>
+            <Article sx={{ fontSize: 56, color: "text.disabled", mb: 1.5 }} />
+            <Typography color="text.secondary">No published records yet.</Typography>
+          </Box>
         ) : (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
             {papers.map((paper) => {
@@ -148,7 +154,7 @@ const RecordsPage = () => {
                   <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1, flexWrap: "wrap" }}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap", mb: 0.25 }}>
-                        <Typography fontWeight={600} noWrap sx={{ maxWidth: "100%" }}>
+                        <Typography fontWeight={700} noWrap sx={{ maxWidth: "100%" }}>
                           {paper.title}{paper.year ? ` (${paper.year})` : ""}
                         </Typography>
                         {paper.role === "editor" && (
@@ -161,6 +167,11 @@ const RecordsPage = () => {
                       <Typography variant="body2" color="text.secondary" noWrap>
                         {paper.authors}
                       </Typography>
+                      {paper.updated_at && (
+                        <Typography variant="caption" color="text.secondary">
+                          Updated {formatDate(paper.updated_at)}
+                        </Typography>
+                      )}
                     </Box>
                     <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", flexShrink: 0 }}>
                       {!deactivated && (
@@ -181,7 +192,7 @@ const RecordsPage = () => {
                         component={Link}
                         href={`/curator?edit=${encodeURIComponent(paper.id)}&server=${encodeURIComponent(origin)}`}
                       >
-                        Edit
+                        Edit in Curator
                       </Button>
                       {canManage && (
                         <Button
@@ -315,11 +326,11 @@ const RecordsPage = () => {
   return (
     <Fragment>
       <SEO
-        title="Qresp | My Records"
+        title="Qresp | My Published Records"
         description="Manage your published Qresp records"
         author="Qresp Team"
       />
-      <AccountLayout pageTitle="My Records">{content}</AccountLayout>
+      <AccountLayout pageTitle="My Published Records">{content}</AccountLayout>
     </Fragment>
   );
 };

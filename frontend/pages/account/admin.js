@@ -35,7 +35,7 @@ const AdminPage = () => {
       <SEO title="Qresp | Admin" />
       <AccountLayout pageTitle="Admin Tools">
         <Box sx={{ mb: 4 }}>
-          <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
+          <Typography variant="h6" fontWeight={700} mb={2}>
             Ownerless Records
           </Typography>
           <Divider sx={{ mb: 2 }} />
@@ -43,7 +43,7 @@ const AdminPage = () => {
         </Box>
 
         <Box>
-          <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
+          <Typography variant="h6" fontWeight={700} mb={2}>
             All Records
           </Typography>
           <Divider sx={{ mb: 2 }} />

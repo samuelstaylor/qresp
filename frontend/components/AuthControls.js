@@ -2,9 +2,10 @@ import { Fragment, useContext, useRef, useState } from "react";
 import { Button, Divider, ListItemIcon, Menu, MenuItem, Typography } from "@mui/material";
 import {
   AccountCircle,
+  AdminPanelSettings,
   Article,
   EditNote,
-  Favorite,
+  Favorite as FavoriteIcon,
   Logout,
 } from "@mui/icons-material";
 import Link from "next/link";
@@ -34,7 +35,7 @@ const AuthControls = () => {
   const closeTimerRef = useRef(null);
 
   const scheduleClose = () => {
-    closeTimerRef.current = setTimeout(() => setMenuAnchor(null), 120);
+    closeTimerRef.current = setTimeout(() => setMenuAnchor(null), 150);
   };
   const cancelClose = () => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
@@ -93,20 +94,26 @@ const AuthControls = () => {
           <Divider />
           <MenuItem component={Link} href="/account" onClick={closeMenu}>
             <ListItemIcon><AccountCircle fontSize="small" /></ListItemIcon>
-            Profile
+            My Profile
           </MenuItem>
           <MenuItem component={Link} href="/account/records" onClick={closeMenu}>
             <ListItemIcon><Article fontSize="small" /></ListItemIcon>
             My Records
           </MenuItem>
           <MenuItem component={Link} href="/account/favorites" onClick={closeMenu}>
-            <ListItemIcon><Favorite fontSize="small" /></ListItemIcon>
-            Favorites
+            <ListItemIcon><FavoriteIcon fontSize="small" /></ListItemIcon>
+            My Favorites
           </MenuItem>
           <MenuItem component={Link} href="/account/drafts" onClick={closeMenu}>
             <ListItemIcon><EditNote fontSize="small" /></ListItemIcon>
-            Drafts
+            My Drafts
           </MenuItem>
+          {user.is_admin && (
+            <MenuItem component={Link} href="/account/admin" onClick={closeMenu}>
+              <ListItemIcon><AdminPanelSettings fontSize="small" /></ListItemIcon>
+              Admin
+            </MenuItem>
+          )}
           <Divider />
           <MenuItem
             onClick={() => { closeMenu(); logout(); }}
