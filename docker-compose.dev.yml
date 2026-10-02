@@ -18,6 +18,15 @@ services:
     depends_on:
       - db
     restart: on-failure
+    # Connexion 3 wraps Flask (WSGI) with a2wsgi, which spawns a thread per
+    # request via run_in_executor(). Without these two settings the container
+    # hits the kernel thread/pids limit and every request fails with
+    # "RuntimeError: can't start new thread".
+    #   seccomp:unconfined — removes the seccomp filter (same as staging-full)
+    #   pids_limit: -1     — no cgroup pids cap on this container
+    security_opt:
+      - seccomp:unconfined
+    pids_limit: -1
     build:
       context: ./backend
       dockerfile: Dockerfile.dev
