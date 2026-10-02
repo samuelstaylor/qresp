@@ -26,11 +26,27 @@ git branch -d feat/my-feature && git push origin --delete feat/my-feature
 
 ---
 
-## Docker (dev — hot reload, use this day-to-day)
+## First-time setup (fresh clone)
+
+```bash
+# 1. Create .env.dev from the committed template, then fill in real credentials
+cp .env.dev.example .env.dev
+# Edit .env.dev and set QRESP_FLASK_SECRET_KEY, QRESP_GOOGLE_CLIENT_ID,
+# QRESP_GOOGLE_CLIENT_SECRET, QRESP_GOOGLE_REDIRECT_URI.
+# The docker-compose.dev.yml backend service will fail to start without this file.
+
+# 2. Generate self-signed TLS certs (only needed once)
+sh nginx/generate-local-certs.sh
+```
+
+---
+
+## Docker (dev — use this day-to-day)
 
 ```bash
 # Start (or rebuild) dev stack — accessible at https://localhost:8444
-docker-compose -f docker-compose.dev.yml up --build -d
+# NOTE: backend Python/YAML changes require a restart (no hot-reload on this kernel)
+sudo docker-compose -f docker-compose.dev.yml up --build -d
 
 # Stop dev stack
 docker-compose -f docker-compose.dev.yml down

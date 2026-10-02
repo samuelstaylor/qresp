@@ -47,3 +47,5 @@ CLAUDE.md
 # Secrets / local env overrides — never commit credentials
 .env
 .env.*
+# ...but the example template (no real secrets) should be committed
+!.env.*.example
