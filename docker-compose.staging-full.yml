@@ -25,7 +25,9 @@ services:
       - ./backend:/home/flask/app/web/
     networks:
       - backend
-    command: python -m uvicorn project:connexionapp --host 0.0.0.0 --port 5000
+    # --loop asyncio and --http h11: bypass uvloop/httptools C extensions that
+    # segfault (exit 139) on this host's Linux 4.15 kernel.
+    command: python -m uvicorn project:connexionapp --host 0.0.0.0 --port 5000 --loop asyncio --http h11
 
   mongodb:
     image: mongo:4.4

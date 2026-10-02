@@ -34,7 +34,10 @@ services:
     # Connexion 3 is ASGI. watchfiles (used by uvicorn --reload) panics on
     # Python 3.14 in this environment; code is bind-mounted so changes are
     # live without auto-reload.
-    command: python -m uvicorn project:connexionapp --host 0.0.0.0 --port 5000
+    # --loop asyncio and --http h11 force pure-Python implementations, bypassing
+    # uvloop and httptools (C extensions from connexion[uvicorn]→uvicorn[standard])
+    # that segfault (exit 139) on this host's Linux 4.15 kernel.
+    command: python -m uvicorn project:connexionapp --host 0.0.0.0 --port 5000 --loop asyncio --http h11
 
   gui:
     restart: always
