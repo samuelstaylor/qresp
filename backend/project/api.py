@@ -857,12 +857,12 @@ def account_favorites():
     return {"favorites": papers, "count": len(papers)}, 200
 
 
+@csrf_protect
 def add_favorite(body):
     """
     Favorite a paper
     Handler for POST: /api/account/favorites
     """
-    csrf_protect()
     user = get_current_user()
     if not user:
         return {"error": "authentication required"}, 401
@@ -890,12 +890,12 @@ def add_favorite(body):
     return {"paper_id": str(paper_id), "favorited": True}, 200
 
 
+@csrf_protect
 def remove_favorite(paper_id):
     """
     Unfavorite a paper
     Handler for DELETE: /api/account/favorites/{paper_id}
     """
-    csrf_protect()
     user = get_current_user()
     if not user:
         return {"error": "authentication required"}, 401
