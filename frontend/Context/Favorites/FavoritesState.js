@@ -69,8 +69,28 @@ const FavoritesState = ({ children }) => {
     [favorites]
   );
 
+  // Always-delete variant for the account page "Remove" button: avoids the
+  // toggle direction being wrong when the favorites Set is stale.
+  const removeFavorite = useCallback(async (paperId) => {
+    const id = String(paperId);
+    setFavorites((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    try {
+      await axios.delete(`/api/account/favorites/${encodeURIComponent(id)}`);
+    } catch {
+      setFavorites((prev) => {
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+      });
+    }
+  }, []);
+
   return (
-    <FavoritesContext.Provider value={{ favorites, loading, isFavorite, toggleFavorite }}>
+    <FavoritesContext.Provider value={{ favorites, loading, isFavorite, toggleFavorite, removeFavorite }}>
       {children}
     </FavoritesContext.Provider>
   );

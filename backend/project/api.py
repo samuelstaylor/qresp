@@ -7,6 +7,7 @@ from datetime import datetime
 
 from flask import request
 from mongoengine import Q as MongoQ
+from mongoengine.errors import DoesNotExist, NotUniqueError, ValidationError as MongoValidationError
 
 from project.auth import (can_edit_paper, can_manage_paper, csrf_protect,
                           get_current_user, is_admin, paper_role, stamp_owner)
@@ -873,7 +874,7 @@ def add_favorite(body):
 
     try:
         Paper.objects.get(id=str(paper_id))
-    except Exception:
+    except (DoesNotExist, MongoValidationError):
         return {"error": "Paper not found"}, 404
 
     email = _session_email(user)
@@ -884,7 +885,7 @@ def add_favorite(body):
             created_at=datetime.utcnow(),
         )
         fav.save()
-    except Exception:
+    except NotUniqueError:
         pass  # already favorited — idempotent
 
     return {"paper_id": str(paper_id), "favorited": True}, 200

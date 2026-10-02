@@ -5,6 +5,7 @@ const FavoritesContext = createContext({
   loading: false,
   isFavorite: () => false,
   toggleFavorite: async () => {},
+  removeFavorite: async () => {},
 });
 
 export default FavoritesContext;

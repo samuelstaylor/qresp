@@ -8,7 +8,7 @@ import AuthContext from "../Context/Auth/authContext";
 
 const FavoriteButton = ({ paperId, size = "small" }) => {
   const { authenticated } = useContext(AuthContext);
-  const { isFavorite, toggleFavorite } = useContext(FavoritesContext);
+  const { loading, isFavorite, toggleFavorite } = useContext(FavoritesContext);
 
   if (!authenticated) return null;
 
@@ -21,10 +21,10 @@ const FavoriteButton = ({ paperId, size = "small" }) => {
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          toggleFavorite(paperId);
+          if (!loading) toggleFavorite(paperId);
         }}
         aria-label={favorited ? "Remove from favorites" : "Add to favorites"}
-        sx={{ color: favorited ? "#800000" : "text.secondary" }}
+        sx={{ color: favorited ? "#800000" : "text.secondary", opacity: loading ? 0.4 : 1 }}
       >
         {favorited ? (
           <FavoriteIcon fontSize={size} />

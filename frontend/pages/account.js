@@ -42,7 +42,7 @@ const formatDate = (value) => {
 
 const AccountPage = () => {
   const { loading, authenticated, user, logout } = useContext(AuthContext);
-  const { favorites, loading: favLoading, toggleFavorite } = useContext(FavoritesContext);
+  const { removeFavorite } = useContext(FavoritesContext);
   const [favoritePapers, setFavoritePapers] = useState(null);
   const [papers, setPapers] = useState(null);
   const [drafts, setDrafts] = useState(null);
@@ -444,7 +444,7 @@ const AccountPage = () => {
                   variant="outlined"
                   color="error"
                   onClick={() => {
-                    toggleFavorite(paper.id);
+                    removeFavorite(paper.id);
                     setFavoritePapers((items) =>
                       (items || []).filter((p) => p.id !== paper.id)
                     );
