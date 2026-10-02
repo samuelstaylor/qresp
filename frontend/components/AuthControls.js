@@ -1,15 +1,18 @@
-import { Fragment, useContext, useState } from "react";
-import { Button, Menu, MenuItem, ListItemIcon } from "@mui/material";
-import { Logout, AccountCircle } from "@mui/icons-material";
+import { Fragment, useContext, useRef, useState } from "react";
+import { Button, Divider, ListItemIcon, Menu, MenuItem, Typography } from "@mui/material";
+import {
+  AccountCircle,
+  Article,
+  EditNote,
+  Favorite,
+  Logout,
+} from "@mui/icons-material";
 import Link from "next/link";
 import { useRouter } from "next/router";
 
 import AuthContext from "../Context/Auth/authContext";
 import { loginHref } from "../Utils/safeNext";
 
-// Pill-shaped button style shared by both the signed-in badge and the sign-in
-// button — a slightly different surface from the plain AppBar so it reads as
-// an interactive control without adding a heavy contrasting block.
 const pillSx = {
   color: "#800000",
   whiteSpace: "nowrap",
@@ -28,8 +31,19 @@ const AuthControls = () => {
   const { loading, authenticated, user, logout } = useContext(AuthContext);
   const router = useRouter();
   const [menuAnchor, setMenuAnchor] = useState(null);
+  const closeTimerRef = useRef(null);
 
-  const openMenu = (e) => setMenuAnchor(e.currentTarget);
+  const scheduleClose = () => {
+    closeTimerRef.current = setTimeout(() => setMenuAnchor(null), 120);
+  };
+  const cancelClose = () => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+  };
+
+  const openMenu = (e) => {
+    cancelClose();
+    setMenuAnchor(e.currentTarget);
+  };
   const closeMenu = () => setMenuAnchor(null);
 
   if (loading) return null;
@@ -41,6 +55,8 @@ const AuthControls = () => {
     return (
       <Fragment>
         <Button
+          onMouseEnter={openMenu}
+          onMouseLeave={scheduleClose}
           onClick={openMenu}
           aria-haspopup="true"
           aria-expanded={Boolean(menuAnchor) ? "true" : undefined}
@@ -60,23 +76,43 @@ const AuthControls = () => {
           onClose={closeMenu}
           anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
           transformOrigin={{ vertical: "top", horizontal: "right" }}
-          slotProps={{ paper: { elevation: 3, sx: { mt: 0.5, minWidth: 160 } } }}
+          slotProps={{
+            paper: {
+              elevation: 4,
+              sx: { mt: 0.5, minWidth: 200, borderRadius: 2 },
+              onMouseEnter: cancelClose,
+              onMouseLeave: scheduleClose,
+            },
+          }}
         >
-          <MenuItem component={Link} href="/account" onClick={closeMenu}>
-            <ListItemIcon>
-              <AccountCircle fontSize="small" />
-            </ListItemIcon>
-            My account
+          <MenuItem disabled sx={{ opacity: "1 !important", py: 0.5 }}>
+            <Typography variant="caption" color="text.secondary" noWrap>
+              {user.email}
+            </Typography>
           </MenuItem>
+          <Divider />
+          <MenuItem component={Link} href="/account" onClick={closeMenu}>
+            <ListItemIcon><AccountCircle fontSize="small" /></ListItemIcon>
+            Profile
+          </MenuItem>
+          <MenuItem component={Link} href="/account/records" onClick={closeMenu}>
+            <ListItemIcon><Article fontSize="small" /></ListItemIcon>
+            My Records
+          </MenuItem>
+          <MenuItem component={Link} href="/account/favorites" onClick={closeMenu}>
+            <ListItemIcon><Favorite fontSize="small" /></ListItemIcon>
+            Favorites
+          </MenuItem>
+          <MenuItem component={Link} href="/account/drafts" onClick={closeMenu}>
+            <ListItemIcon><EditNote fontSize="small" /></ListItemIcon>
+            Drafts
+          </MenuItem>
+          <Divider />
           <MenuItem
-            onClick={() => {
-              closeMenu();
-              logout();
-            }}
+            onClick={() => { closeMenu(); logout(); }}
+            sx={{ color: "error.main" }}
           >
-            <ListItemIcon>
-              <Logout fontSize="small" />
-            </ListItemIcon>
+            <ListItemIcon><Logout fontSize="small" sx={{ color: "error.main" }} /></ListItemIcon>
             Sign out
           </MenuItem>
         </Menu>
