@@ -48,7 +48,9 @@ services:
     # --loop asyncio and --http h11 force pure-Python implementations, bypassing
     # uvloop and httptools (C extensions from connexion[uvicorn]→uvicorn[standard])
     # that segfault (exit 139) on this host's Linux 4.15 kernel.
-    command: python -m uvicorn project:connexionapp --host 0.0.0.0 --port 5000 --loop asyncio --http h11
+    # --reload-impl statreload uses OS-level stat() polling instead of the
+    # default watchfiles C extension, which segfaults on this kernel (4.15).
+    command: python -m uvicorn project:connexionapp --host 0.0.0.0 --port 5000 --loop asyncio --http h11 --reload --reload-impl statreload
 
   gui:
     restart: always
