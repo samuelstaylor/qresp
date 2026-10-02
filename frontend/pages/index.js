@@ -244,7 +244,7 @@ const btnStyles = css`
   /* ── Banner logo overlay ─────────────────────────────────────────── */
   .qr-logo-overlay {
     position: absolute;
-    top: 50%;
+    top: 53%;
     left: 50%;
     transform: translate(-50%, -50%);
     z-index: 10;
@@ -268,13 +268,14 @@ const btnStyles = css`
   .qr-logo-tagline {
     text-align: center;
     color: white;
-    font-size: clamp(1.2rem, 4vw, 2.8rem);
+    font-size: clamp(0.85rem, 2.5vw, 1.4rem);
     font-weight: 300;
     font-style: italic;
     letter-spacing: 0.06em;
-    margin-top: 1rem;
+    margin-top: 0.75rem;
     max-width: 90vw;
-    opacity: 0;
+    white-space: nowrap;
+    opacity: 0.75;
     transition: opacity 0.5s ease;
     pointer-events: none;
     user-select: none;
