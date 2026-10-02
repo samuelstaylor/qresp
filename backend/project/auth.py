@@ -52,6 +52,13 @@ GOOGLE_SCOPES = ["openid", "email", "profile"]
 MICROSOFT_AUTHORITY_BASE = "https://login.microsoftonline.com"
 MICROSOFT_DEFAULT_TENANT = "organizations"
 MICROSOFT_SCOPES = "openid profile email"
+GITHUB_AUTH_URI = "https://github.com/login/oauth/authorize"
+GITHUB_TOKEN_URI = "https://github.com/login/oauth/access_token"
+GITHUB_USER_URI = "https://api.github.com/user"
+GITHUB_EMAILS_URI = "https://api.github.com/user/emails"
+GITHUB_SCOPES = ["read:user", "user:email"]
+GITHUB_STATE_KEY = "github_state"
+
 MICROSOFT_STATE_KEY = "microsoft_state"
 MICROSOFT_NONCE_KEY = "microsoft_nonce"
 MICROSOFT_PKCE_KEY = "microsoft_code_verifier"
@@ -634,6 +641,111 @@ def microsoft_callback(code=None, state=None, error=None):
         user["account_id"] = account_id
     session[AUTH_SESSION_KEY] = user
 
+    target = _safe_next_path(session.pop(AUTH_NEXT_KEY, None)) or "/"
+    return redirect(target, code=302)
+
+
+def _github_config():
+    """GitHub OAuth client settings (QRESP_GITHUB_* env vars).
+    Returns None values when not configured — the app boots fine without them."""
+    cfg = {}
+    for key in ("GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET", "GITHUB_REDIRECT_URI"):
+        value = Config.get_setting("GITHUB", key)
+        cfg[key] = value.strip() if value else None
+    return cfg
+
+
+def _github_ready(cfg):
+    return bool(cfg["GITHUB_CLIENT_ID"] and cfg["GITHUB_CLIENT_SECRET"]
+                and cfg["GITHUB_REDIRECT_URI"])
+
+
+def github_login(next=None):
+    """GET /api/auth/github — start the GitHub OAuth identity flow."""
+    cfg = _github_config()
+    if not _github_ready(cfg):
+        return {"error": "GitHub login is not configured on this server."}, 503
+
+    next_path = _safe_next_path(next)
+    if next_path:
+        session[AUTH_NEXT_KEY] = next_path
+    else:
+        session.pop(AUTH_NEXT_KEY, None)
+
+    oauth = OAuth2Session(cfg["GITHUB_CLIENT_ID"],
+                          redirect_uri=cfg["GITHUB_REDIRECT_URI"],
+                          scope=GITHUB_SCOPES)
+    authorization_url, state = oauth.authorization_url(GITHUB_AUTH_URI)
+    session[GITHUB_STATE_KEY] = state
+    return redirect(authorization_url, code=302)
+
+
+def github_callback(state=None, code=None, error=None):
+    """GET /api/auth/github/callback — finish GitHub OAuth and create session."""
+    cfg = _github_config()
+    if not _github_ready(cfg):
+        return {"error": "GitHub login is not configured on this server."}, 503
+
+    if error:
+        print("GitHub sign-in returned an error: %s" % str(error)[:100])
+        return {"error": "GitHub sign-in was cancelled or did not complete. "
+                         "Please try again."}, 400
+
+    expected_state = session.pop(GITHUB_STATE_KEY, None)
+    if not expected_state or not state or state != expected_state:
+        return {"error": "Invalid OAuth state, please retry signing in."}, 400
+    if not code:
+        return {"error": "Missing authorization code."}, 400
+
+    try:
+        oauth = OAuth2Session(cfg["GITHUB_CLIENT_ID"],
+                              redirect_uri=cfg["GITHUB_REDIRECT_URI"],
+                              state=expected_state)
+        # GitHub requires Accept header for JSON token response
+        oauth.fetch_token(GITHUB_TOKEN_URI,
+                          client_secret=cfg["GITHUB_CLIENT_SECRET"],
+                          code=code,
+                          headers={"Accept": "application/json"})
+        user_info = oauth.get(GITHUB_USER_URI,
+                              headers={"Accept": "application/json"}).json()
+    except Exception as e:
+        print("GitHub sign-in failed: %s" % type(e).__name__)
+        return {"error": "GitHub sign-in failed, please try again."}, 400
+
+    # GitHub may not expose email on the user profile if it's set to private;
+    # the user:email scope lets us fetch it from the emails endpoint.
+    email = (user_info.get("email") or "").strip().lower()
+    if not email:
+        try:
+            emails = oauth.get(GITHUB_EMAILS_URI,
+                               headers={"Accept": "application/json"}).json()
+            primary = next(
+                (e for e in emails if e.get("primary") and e.get("verified")),
+                None,
+            )
+            if primary:
+                email = (primary.get("email") or "").strip().lower()
+        except Exception:
+            pass
+
+    if not email:
+        return {"error": "GitHub account did not provide a verified email address. "
+                         "Make sure your email is verified on GitHub."}, 400
+
+    name = (user_info.get("name") or user_info.get("login") or "").strip() or email
+    user = {
+        "email": email,
+        "name": name,
+        "is_admin": email in _admin_emails(),
+        "provider": "github",
+        "github_id": user_info.get("id"),
+    }
+    account_id = _record_external_identity(
+        "https://github.com", str(user_info.get("id", "")), "github",
+        email, name)
+    if account_id:
+        user["account_id"] = account_id
+    session[AUTH_SESSION_KEY] = user
     target = _safe_next_path(session.pop(AUTH_NEXT_KEY, None)) or "/"
     return redirect(target, code=302)
 

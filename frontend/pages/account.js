@@ -261,6 +261,8 @@ const AccountPage = () => {
               ? "Google"
               : user.provider === "microsoft"
               ? "Microsoft"
+              : user.provider === "github"
+              ? "GitHub"
               : user.provider}
           </Typography>
           <Box sx={{ mt: 2 }}>

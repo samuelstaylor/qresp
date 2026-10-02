@@ -1403,6 +1403,49 @@ paths:
           description: Invalid state/nonce, missing code, or rejected identity token
         503:
           description: Microsoft sign-in is not configured on this server
+  /auth/github:
+    get:
+      operationId: "project.auth.github_login"
+      tags:
+        - "Authentication"
+      summary: "Starts GitHub OAuth sign-in (read:user + user:email scopes)"
+      parameters:
+        - in: query
+          name: next
+          type: string
+          required: false
+          description: Same-origin path to return to after sign-in
+      responses:
+        302:
+          description: Redirect to GitHub authorization page
+        503:
+          description: GitHub sign-in is not configured on this server
+  /auth/github/callback:
+    get:
+      operationId: "project.auth.github_callback"
+      tags:
+        - "Authentication"
+      summary: "Completes GitHub OAuth sign-in and stores the session user"
+      parameters:
+        - in: query
+          name: state
+          type: string
+          required: false
+        - in: query
+          name: code
+          type: string
+          required: false
+        - in: query
+          name: error
+          type: string
+          required: false
+      responses:
+        302:
+          description: Signed in; redirect back to the app
+        400:
+          description: Invalid state, missing code, or no verified email on the account
+        503:
+          description: GitHub sign-in is not configured on this server
   /auth/register:
     post:
       operationId: "project.auth.local_register"
