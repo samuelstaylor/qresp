@@ -281,6 +281,24 @@ class ExternalIdentity(Document):
     }
 
 
+class LocalAccount(Document):
+    """Email/password account created directly on Qresp.
+
+    The password is stored only as a Werkzeug-PBKDF2 hash; plaintext is never
+    persisted. Email is the linking key — a LocalAccount and an
+    ExternalIdentity with the same email share the same ownership records.
+    """
+    email = StringField(required=True, unique=True, max_length=254)
+    password_hash = StringField(required=True)
+    name = StringField(max_length=200, default="")
+    created_at = DateTimeField()
+    last_login_at = DateTimeField()
+    meta = {
+        'collection': 'local_accounts',
+        'indexes': [{'fields': ['email'], 'unique': True}],
+    }
+
+
 class AssistUsage(Document):
     """Per-user daily counter for AI-assist requests (keyword suggestions).
     Persistent so one account cannot exhaust the provider quota; only the

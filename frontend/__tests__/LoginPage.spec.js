@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 
 jest.mock("axios");
 import axios from "axios";
@@ -22,7 +22,7 @@ const renderLogin = () =>
   );
 
 const anonymous = () =>
-  axios.get.mockResolvedValue({ data: { authenticated: false, user: null } });
+  axios.get.mockResolvedValue({ data: { authenticated: false, user: null, csrf_token: "tok" } });
 
 describe("/login", () => {
   beforeEach(() => {
@@ -33,7 +33,7 @@ describe("/login", () => {
     mockReplace.mockReset();
   });
 
-  it("offers exactly the two supported providers", async () => {
+  it("offers exactly the two supported OAuth providers as links", async () => {
     anonymous();
     renderLogin();
 
@@ -46,19 +46,20 @@ describe("/login", () => {
     expect(screen.getAllByRole("link")).toHaveLength(2);
   });
 
-  it("is a fixed page: the heading and controls are always visible", async () => {
+  it("shows a heading and email/password form with OAuth providers always visible", async () => {
     anonymous();
     renderLogin();
 
-    // A real heading, not an expandable section header.
     const heading = await screen.findByRole("heading", {
       name: /sign in to qresp/i,
     });
     expect(heading).toBeInTheDocument();
-    // Nothing to expand: no accordion/collapse control gates the providers.
+    // Email/password form fields are visible in sign-in mode.
+    expect(screen.getByLabelText(/email address/i)).toBeVisible();
+    expect(screen.getByLabelText(/^password$/i)).toBeVisible();
+    // Nothing gates the providers behind an accordion.
     expect(screen.queryByRole("button", { name: /expand/i })).toBeNull();
     expect(document.querySelector(".MuiAccordion-root")).toBeNull();
-    // Both providers are reachable without any prior interaction.
     expect(
       screen.getByRole("link", { name: /continue with microsoft/i })
     ).toBeVisible();
@@ -84,7 +85,6 @@ describe("/login", () => {
     expect(
       await screen.findByText(/use your work or school account/i)
     ).toBeInTheDocument();
-    // No blanket claim that every university uses Microsoft.
     expect(screen.queryByText(/all universit/i)).toBeNull();
     expect(screen.queryByText(/every universit/i)).toBeNull();
   });
@@ -152,6 +152,68 @@ describe("/login", () => {
     });
     renderLogin();
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/account"));
+  });
+
+  it("switches to create-account mode showing name and confirm-password fields", async () => {
+    anonymous();
+    renderLogin();
+    await screen.findByRole("heading", { name: /sign in to qresp/i });
+
+    fireEvent.click(screen.getByRole("button", { name: /create account/i }));
+
+    expect(screen.getByLabelText(/name.*optional/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/confirm password/i)).toBeInTheDocument();
+  });
+
+  it("calls local-login on form submit and redirects on success", async () => {
+    anonymous();
+    axios.post.mockResolvedValue({
+      data: { authenticated: true, user: { email: "a@b.com", name: "A", is_admin: false, provider: "local" } },
+    });
+    renderLogin();
+    await screen.findByRole("heading", { name: /sign in to qresp/i });
+
+    fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: "a@b.com" } });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "secret123" } });
+    fireEvent.click(screen.getByRole("button", { name: /sign in with email/i }));
+
+    await waitFor(() =>
+      expect(axios.post).toHaveBeenCalledWith("/api/auth/local-login", {
+        email: "a@b.com",
+        password: "secret123",
+      })
+    );
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/account"));
+  });
+
+  it("shows an error when local-login fails", async () => {
+    anonymous();
+    axios.post.mockRejectedValue({
+      response: { status: 401, data: { error: "Invalid email or password." } },
+    });
+    renderLogin();
+    await screen.findByRole("heading", { name: /sign in to qresp/i });
+
+    fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: "a@b.com" } });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "wrong" } });
+    fireEvent.click(screen.getByRole("button", { name: /sign in with email/i }));
+
+    expect(await screen.findByText(/invalid email or password/i)).toBeInTheDocument();
+  });
+
+  it("rejects mismatched passwords on create-account without a network call", async () => {
+    anonymous();
+    renderLogin();
+    await screen.findByRole("heading", { name: /sign in to qresp/i });
+
+    fireEvent.click(screen.getByRole("button", { name: /create account/i }));
+    fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: "x@y.com" } });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "abcdefgh" } });
+    fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: "different" } });
+    fireEvent.click(screen.getByRole("button", { name: /create account with email/i }));
+
+    expect(screen.getByText(/passwords do not match/i)).toBeInTheDocument();
+    expect(axios.post).not.toHaveBeenCalled();
   });
 });
 

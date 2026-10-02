@@ -102,6 +102,34 @@ const AuthState = (props) => {
     }
   };
 
+  const localLogin = async (email, password) => {
+    try {
+      const res = await axios.post("/api/auth/local-login", { email, password });
+      dispatch({ type: SET_AUTH, payload: res.data });
+      return { ok: true };
+    } catch (err) {
+      const msg =
+        (err.response && err.response.data && err.response.data.error) ||
+        "Sign-in failed. Please check your email and password.";
+      dispatch({ type: AUTH_ERROR, payload: msg });
+      return { ok: false, error: msg };
+    }
+  };
+
+  const register = async (email, password, name) => {
+    try {
+      const res = await axios.post("/api/auth/register", { email, password, name });
+      dispatch({ type: SET_AUTH, payload: res.data });
+      return { ok: true };
+    } catch (err) {
+      const msg =
+        (err.response && err.response.data && err.response.data.error) ||
+        "Registration failed. Please try again.";
+      dispatch({ type: AUTH_ERROR, payload: msg });
+      return { ok: false, error: msg };
+    }
+  };
+
   const devLogin = async (email, name, isAdmin) => {
     try {
       const res = await axios.post("/api/auth/dev-login", {
@@ -149,6 +177,8 @@ const AuthState = (props) => {
         user: state.user,
         error: state.error,
         refresh,
+        localLogin,
+        register,
         devLogin,
         logout,
       }}

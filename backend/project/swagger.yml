@@ -1350,6 +1350,64 @@ paths:
           description: Invalid state/nonce, missing code, or rejected identity token
         503:
           description: Microsoft sign-in is not configured on this server
+  /auth/register:
+    post:
+      operationId: "project.auth.local_register"
+      tags:
+        - "Authentication"
+      summary: "Create a new email/password account and sign in"
+      parameters:
+        - in: body
+          name: body
+          required: true
+          description: New account credentials
+          schema:
+            type: object
+            required:
+              - email
+              - password
+            properties:
+              email:
+                type: string
+              password:
+                type: string
+              name:
+                type: string
+      responses:
+        200:
+          description: Account created and signed in
+        400:
+          description: Invalid email or password too short
+        409:
+          description: Email already registered
+  /auth/local-login:
+    post:
+      operationId: "project.auth.local_login"
+      tags:
+        - "Authentication"
+      summary: "Sign in with email and password"
+      parameters:
+        - in: body
+          name: body
+          required: true
+          description: Sign-in credentials
+          schema:
+            type: object
+            required:
+              - email
+              - password
+            properties:
+              email:
+                type: string
+              password:
+                type: string
+      responses:
+        200:
+          description: Signed in
+        400:
+          description: Missing email or password
+        401:
+          description: Invalid email or password
   /auth/me:
     get:
       operationId: "project.auth.me"

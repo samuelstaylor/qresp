@@ -18,6 +18,8 @@ import secrets
 from datetime import datetime
 from urllib.parse import urlencode
 
+from werkzeug.security import check_password_hash, generate_password_hash
+
 import jwt
 import requests
 from flask import redirect, request, session
@@ -651,6 +653,76 @@ def logout():
     """POST /api/auth/logout — clear only auth-related session data."""
     session.pop(AUTH_SESSION_KEY, None)
     return {"success": True}, 200
+
+
+def local_register(body):
+    """POST /api/auth/register — create a new email/password account.
+
+    On success the new account is immediately signed in. Email is
+    case-insensitively normalised and serves as the linking key across all
+    sign-in providers: a LocalAccount and an ExternalIdentity (Google /
+    Microsoft) that share the same email address share the same paper
+    ownership records.
+    """
+    email = (body.get("email") or "").strip().lower()
+    password = body.get("password") or ""
+    name = (body.get("name") or "").strip()
+
+    if not _EMAIL_RE.match(email):
+        return {"error": "A valid email address is required."}, 400
+    if len(password) < 8:
+        return {"error": "Password must be at least 8 characters."}, 400
+
+    from project.models import LocalAccount
+    now = datetime.utcnow()
+
+    if LocalAccount.objects(email=email).first():
+        return {"error": "An account with this email already exists. "
+                         "Please sign in instead."}, 409
+
+    account = LocalAccount(
+        email=email,
+        password_hash=generate_password_hash(password),
+        name=name or email,
+        created_at=now,
+        last_login_at=now,
+    )
+    account.save()
+
+    user = {
+        "email": email,
+        "name": account.name,
+        "is_admin": email in _admin_emails(),
+        "provider": "local",
+    }
+    session[AUTH_SESSION_KEY] = user
+    return {"authenticated": True, "user": user}, 200
+
+
+def local_login(body):
+    """POST /api/auth/local-login — sign in with email and password."""
+    email = (body.get("email") or "").strip().lower()
+    password = body.get("password") or ""
+
+    if not email or not password:
+        return {"error": "Email and password are required."}, 400
+
+    from project.models import LocalAccount
+    account = LocalAccount.objects(email=email).first()
+    if not account or not check_password_hash(account.password_hash, password):
+        return {"error": "Invalid email or password."}, 401
+
+    account.last_login_at = datetime.utcnow()
+    account.save()
+
+    user = {
+        "email": email,
+        "name": account.name or email,
+        "is_admin": email in _admin_emails(),
+        "provider": "local",
+    }
+    session[AUTH_SESSION_KEY] = user
+    return {"authenticated": True, "user": user}, 200
 
 
 def dev_login(credentials):
