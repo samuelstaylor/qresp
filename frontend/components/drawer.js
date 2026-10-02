@@ -11,56 +11,66 @@ import {
   Tooltip,
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
-import { ExpandMore, Edit } from "@mui/icons-material";
+import { CheckCircle, Edit, ExpandMore } from "@mui/icons-material";
 
-const StyledAccordion = styled(Accordion)({
-  borderRadius: "0.5em",
-  margin: "8px 0 !important",
-  "&::before": {
-    backgroundColor: "rgba(0,0,0,0.03)",
+const StyledAccordion = styled(Accordion)(({ theme }) => ({
+  borderRadius: "8px !important",
+  margin: "10px 0 !important",
+  border: `1px solid ${theme.palette.divider}`,
+  boxShadow: "none",
+  "&::before": { display: "none" },
+  "&.Mui-expanded": {
+    borderColor: "#800000",
+    borderLeftWidth: 3,
+  },
+}));
+
+const StyledAccordionSummary = styled(AccordionSummary)({
+  backgroundColor: "transparent",
+  minHeight: 52,
+  "&.Mui-expanded": { minHeight: 52 },
+  "& .MuiAccordionSummary-content": {
+    margin: "10px 0",
+    alignItems: "center",
+    gap: 8,
   },
 });
 
-const StyledAccordionSummary = styled(AccordionSummary)({
-  backgroundColor: "rgba(0,0,0,.03)",
-});
-
 const Drawer = (props) => {
-  const { heading, children, defaultOpen = false, editor } = props;
-
-  const [open, setOpen] = useState(defaultOpen ? true : false);
+  const { heading, children, defaultOpen = false, editor, status } = props;
+  const [open, setOpen] = useState(defaultOpen);
 
   return (
     <StyledAccordion
-      elevation={4}
-      square={true}
       slotProps={{ transition: { timeout: 200 } }}
-      id={heading.toLowerCase()}
       expanded={open}
-      onChange={(event, expanded) => {
-        setOpen(expanded);
-      }}
+      onChange={(_, expanded) => setOpen(expanded)}
     >
       <StyledAccordionSummary expandIcon={<ExpandMore />}>
-        <Typography variant="h4" style={{ color: "#333333" }}>
-          <Box sx={{ fontWeight: "bold" }}>
-            {heading}
-            {editor ? (
-              <Tooltip
-                title={<Typography variant="subtitle2">Edit</Typography>}
-                placement="right"
-                arrow
-              >
-                <IconButton onClick={editor}>
-                  <Edit color="primary" />
-                </IconButton>
-              </Tooltip>
-            ) : null}
-          </Box>
+        {status === "complete" && (
+          <CheckCircle sx={{ fontSize: 18, color: "#2e7d32", flexShrink: 0 }} />
+        )}
+        <Typography
+          variant="subtitle1"
+          fontWeight={600}
+          sx={{ color: open ? "#800000" : "#333333", flex: 1, transition: "color 0.2s" }}
+        >
+          {heading}
         </Typography>
+        {editor && (
+          <Tooltip title="Edit" placement="right" arrow>
+            <IconButton
+              size="small"
+              onClick={(e) => { e.stopPropagation(); editor(); }}
+              sx={{ color: "#800000", mr: 0.5 }}
+            >
+              <Edit fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
       </StyledAccordionSummary>
-      <AccordionDetails>
-        <Box style={{ width: "100%" }} sx={{ display: "flex", flexDirection: "column" }}>
+      <AccordionDetails sx={{ pt: 0, pb: 2 }}>
+        <Box sx={{ width: "100%", display: "flex", flexDirection: "column" }}>
           {children}
         </Box>
       </AccordionDetails>
@@ -75,6 +85,7 @@ Drawer.propTypes = {
   children: PropTypes.any,
   defaultOpen: PropTypes.bool,
   editor: PropTypes.func,
+  status: PropTypes.oneOf(["complete", "incomplete", "optional"]),
 };
 
 export default Drawer;

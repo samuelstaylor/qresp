@@ -1,16 +1,25 @@
 import { useState, useContext, Fragment } from "react";
 
 import {
-  Grid,
-
+  Box,
+  Button,
+  Divider,
   Dialog,
   DialogActions,
   DialogTitle,
   DialogContent,
   TextField,
+  Tooltip,
+  Typography,
 } from "@mui/material";
 
-import { GetApp, Visibility } from "@mui/icons-material";
+import {
+  GetApp,
+  RestartAlt,
+  SaveOutlined,
+  UploadFile,
+  Visibility,
+} from "@mui/icons-material";
 
 import axios from "axios";
 
@@ -19,7 +28,6 @@ import { useRouter } from "next/router";
 import { convertStateToViewSchema } from "../../Utils/model";
 
 import { getServer } from "../../Utils/utils";
-import StyledTooltip from "../tooltip";
 import { RegularStyledButton } from "../button";
 
 import CuratorContext from "../../Context/Curator/curatorContext";
@@ -169,54 +177,6 @@ const TopActions = () => {
     },
   };
 
-  const buttons = {
-    saveDraft: (fullWidth = false) => (
-      <StyledTooltip title="Save this work as a draft in your account">
-        <RegularStyledButton fullWidth={fullWidth} onClick={onClicks.saveDraft}>
-          Save Draft
-        </RegularStyledButton>
-      </StyledTooltip>
-    ),
-    resume: (fullWidth = false) => (
-      <StyledTooltip title="Continue with an existing metadata file (json)">
-        <RegularStyledButton fullWidth={fullWidth} onClick={onClicks.resume}>
-          Upload Metadata
-        </RegularStyledButton>
-      </StyledTooltip>
-    ),
-    scratch: (fullWidth = false) => (
-      <StyledTooltip title="Clear the session and start afresh">
-        <RegularStyledButton fullWidth={fullWidth} onClick={onClicks.scratch}>
-          Start from Scratch
-        </RegularStyledButton>
-      </StyledTooltip>
-    ),
-    download: (fullWidth = false) => (
-      <StyledTooltip title="Export metadata of the paper being curated">
-        <RegularStyledButton
-          fullWidth={fullWidth}
-          endIcon={<GetApp />}
-          href={`data:text/json;charset=utf-8,${encodeURIComponent(
-            JSON.stringify(onClicks.download(metadata), null, 2)
-          )}`}
-          download="metadata.json"
-        >
-          Export Metadata
-        </RegularStyledButton>
-      </StyledTooltip>
-    ),
-    preview: (fullWidth = false) => (
-      <StyledTooltip title="Preview the curated paper">
-        <RegularStyledButton
-          fullWidth={fullWidth}
-          endIcon={<Visibility />}
-          onClick={onClicks.preview}
-        >
-          Preview
-        </RegularStyledButton>
-      </StyledTooltip>
-    ),
-  };
 
   const onFileUpload = async (e) => {
     e.preventDefault();
@@ -246,51 +206,101 @@ const TopActions = () => {
 
   return (
     <Fragment>
-      <Grid container direction="row" spacing={1}>
-        {/* MUI v6+ removed <Hidden>; responsive display lives on each item so
-            the Grid container keeps its direct Grid children. */}
-        <Grid container direction="row" spacing={1} size={{ xs: 12, sm: 6 }}>
-          <Grid sx={{ display: { xs: "none", sm: "block" } }}>
-            {buttons.saveDraft()}
-          </Grid>
-          <Grid sx={{ display: { xs: "none", sm: "block" } }}>
-            {buttons.resume()}
-          </Grid>
-          <Grid sx={{ display: { xs: "none", sm: "block" } }}>
-            {buttons.scratch()}
-          </Grid>
-          <Grid sx={{ display: { xs: "block", sm: "none" } }} size={12}>
-            {buttons.saveDraft(true)}
-          </Grid>
-          <Grid sx={{ display: { xs: "block", sm: "none" } }} size={5}>
-            {buttons.resume(true)}
-          </Grid>
-          <Grid sx={{ display: { xs: "block", sm: "none" } }} size={7}>
-            {buttons.scratch(true)}
-          </Grid>
-        </Grid>
-        <Grid container direction="row-reverse" spacing={1} size={{ xs: 12, sm: 6 }}>
-          <Grid sx={{ display: { xs: "none", sm: "block" } }}>
-            {buttons.preview()}
-          </Grid>
-          <Grid sx={{ display: { xs: "none", sm: "block" } }}>
-            {buttons.download()}
-          </Grid>
-          <Grid sx={{ display: { xs: "block", sm: "none" } }} size={6}>
-            {buttons.preview(true)}
-          </Grid>
-          <Grid sx={{ display: { xs: "block", sm: "none" } }} size={6}>
-            {buttons.download(true)}
-          </Grid>
-        </Grid>
-      </Grid>
+      {/* ── Toolbar ─────────────────────────────────────────────────── */}
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: 1,
+        }}
+      >
+        {/* Left group — draft workflow */}
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ mr: 0.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", display: { xs: "none", sm: "block" } }}
+        >
+          Draft
+        </Typography>
+
+        <Tooltip title="Save this work as a named draft in your account">
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<SaveOutlined />}
+            onClick={onClicks.saveDraft}
+            sx={{ borderColor: "#800000", color: "#800000", "&:hover": { borderColor: "#800000", bgcolor: "rgba(128,0,0,0.06)" } }}
+          >
+            Save Draft
+          </Button>
+        </Tooltip>
+
+        <Tooltip title="Load a previously exported metadata JSON file">
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<UploadFile />}
+            onClick={onClicks.resume}
+            sx={{ color: "text.secondary", borderColor: "divider" }}
+          >
+            Upload Metadata
+          </Button>
+        </Tooltip>
+
+        <Tooltip title="Clear the form and start a fresh submission">
+          <Button
+            variant="text"
+            size="small"
+            startIcon={<RestartAlt />}
+            onClick={onClicks.scratch}
+            color="error"
+            sx={{ ml: 0.5 }}
+          >
+            Start Fresh
+          </Button>
+        </Tooltip>
+
+        {/* Spacer */}
+        <Box sx={{ flex: 1 }} />
+
+        <Divider orientation="vertical" flexItem sx={{ display: { xs: "none", sm: "block" } }} />
+
+        {/* Right group — view/export */}
+        <Tooltip title="Export the current metadata as a JSON file">
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<GetApp />}
+            href={`data:text/json;charset=utf-8,${encodeURIComponent(
+              JSON.stringify(onClicks.download(metadata), null, 2)
+            )}`}
+            download="metadata.json"
+            sx={{ color: "text.secondary", borderColor: "divider" }}
+          >
+            Export
+          </Button>
+        </Tooltip>
+
+        <Tooltip title="Preview how this paper will look when published">
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<Visibility />}
+            onClick={onClicks.preview}
+            sx={{ bgcolor: "#800000", "&:hover": { bgcolor: "#9a0000" } }}
+          >
+            Preview
+          </Button>
+        </Tooltip>
+      </Box>
       <Dialog
         open={resumeDialogOpen}
         onClose={() => setResumeDialogOpen(false)}
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Proceed</DialogTitle>
+        <DialogTitle>Load Metadata JSON</DialogTitle>
         <DialogContent dividers>
           <input
             accept="application/json"

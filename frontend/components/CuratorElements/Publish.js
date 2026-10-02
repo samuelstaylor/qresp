@@ -1,10 +1,10 @@
 import { useContext, Fragment } from "react";
 import axios from "axios";
-import { Box } from "@mui/material";
+import { Box, Button, Paper, Typography } from "@mui/material";
 
 import Ajv from "ajv";
 
-import StyledButton, { RegularStyledButton } from "../button";
+import { RegularStyledButton } from "../button";
 import { convertStatetoReqSchema } from "../../Utils/model";
 import { getServer } from "../../Utils/utils";
 import { deleteServerDraft } from "../../Utils/serverDrafts";
@@ -65,7 +65,7 @@ const validate = (editing, metadata) => {
       str += "You ";
     }
     str +=
-      "need atleast one item in each of the sections below to publish on Qresp:";
+      "need at least one item in each of the sections below to publish on Qresp:";
     errors.push(
       <Fragment>
         <strong>{str}</strong>
@@ -224,7 +224,7 @@ const Publish = () => {
     const isValid = validate(editing, paper);
     if (!isValid.valid) {
       setAlert(
-        "Something's Missing",
+        "Something's missing",
         <Fragment>
           {isValid.errors.map((el, i) => (
             <div key={i}>{el}</div>
@@ -242,13 +242,51 @@ const Publish = () => {
   };
 
   return (
-    <Fragment>
-      <Box sx={{ my: 3 }}>
-        <StyledButton fullWidth onClick={onClick}>
-          Publish
-        </StyledButton>
+    <Box sx={{ mt: 5, mb: 4 }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+        <Box sx={{ flex: 1, height: "1px", bgcolor: "divider" }} />
+        <Typography
+          variant="overline"
+          sx={{ color: "text.secondary", letterSpacing: "0.12em", whiteSpace: "nowrap" }}
+        >
+          Ready to publish?
+        </Typography>
+        <Box sx={{ flex: 1, height: "1px", bgcolor: "divider" }} />
       </Box>
-    </Fragment>
+
+      <Paper
+        variant="outlined"
+        sx={{
+          p: 3,
+          borderRadius: 2,
+          borderColor: "rgba(128,0,0,0.25)",
+          bgcolor: "rgba(128,0,0,0.02)",
+        }}
+      >
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+          All required sections must be saved before publishing. After submitting,
+          your paper will be queued for verification and you&rsquo;ll receive a
+          confirmation email with a verification link.
+        </Typography>
+        <Button
+          fullWidth
+          variant="contained"
+          size="large"
+          onClick={onClick}
+          sx={{
+            bgcolor: "#800000",
+            "&:hover": { bgcolor: "#9a0000" },
+            py: 1.5,
+            fontSize: "1rem",
+            fontWeight: 700,
+            letterSpacing: "0.04em",
+            borderRadius: 2,
+          }}
+        >
+          Publish Paper
+        </Button>
+      </Paper>
+    </Box>
   );
 };
 

@@ -2,12 +2,19 @@ import { Fragment, useCallback, useContext, useEffect, useRef, useState } from "
 import {
   Container,
   Box,
+  Button,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
+  Paper,
   TextField,
+  Typography,
 } from "@mui/material";
+import { ArrowBack, Edit as EditIcon } from "@mui/icons-material";
+import Link from "next/link";
 import { useRouter } from "next/router";
 
 import CuratorState from "../Context/Curator/CuratorState";
@@ -320,7 +327,7 @@ const CuratorDraftNavigationGuard = ({ editMode }) => {
 
 const curator = () => {
   const curatorDescription =
-    "The curator guides the user in creating metadata from the data associated to a scientific paper. The metadata after being published becomes availabe in a ";
+    "The curator guides the user in creating metadata from the data associated to a scientific paper.";
 
   // Edit mode (?edit=<paperId>&server=<origin>): same forms and state, but
   // the record is loaded from the backend and saved back with PUT instead of
@@ -347,17 +354,58 @@ const curator = () => {
         <SourceTreeState>
           <SEO title={"Qresp | Curator"} description={curatorDescription} />
           <FileTree />
-          <Container>
+          <Container maxWidth="md">
             <EditModeController editId={editId} server={returnServer}>
               {(editMode) => (
                 <Fragment>
                   <CuratorDraftNavigationGuard editMode={editMode} />
                   {editMode && <CuratorEditNavigationGuard />}
                   {!editMode && <ServerDraftLoader draftId={draftId} />}
+
+                  {/* ── Page header ──────────────────────────────────── */}
+                  <Box sx={{ mt: 4, mb: 1 }}>
+                    {editMode ? (
+                      <>
+                        <Button
+                          component={Link}
+                          href="/account/records"
+                          startIcon={<ArrowBack />}
+                          size="small"
+                          sx={{ color: "text.secondary", mb: 1, pl: 0 }}
+                        >
+                          My Records
+                        </Button>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                          <EditIcon sx={{ color: "#800000", fontSize: 28 }} />
+                          <Typography variant="h5" fontWeight={700}>
+                            Edit Record
+                          </Typography>
+                          <Chip label="Edit mode" size="small" sx={{ bgcolor: "rgba(128,0,0,0.1)", color: "#800000", fontWeight: 600 }} />
+                        </Box>
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                          Changes are saved directly to the published record.
+                        </Typography>
+                      </>
+                    ) : (
+                      <>
+                        <Typography variant="h5" fontWeight={700}>
+                          New Paper Submission
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                          Complete each section below, then publish when ready.
+                        </Typography>
+                      </>
+                    )}
+                    <Divider sx={{ mt: 2, mb: 3 }} />
+                  </Box>
+
                   {!editMode && (
-                    <Box sx={{ mt: 4, mb: 4 }}>
+                    <Paper
+                      variant="outlined"
+                      sx={{ mb: 3, p: 2, borderRadius: 2, bgcolor: "rgba(0,0,0,0.01)" }}
+                    >
                       <TopActions />
-                    </Box>
+                    </Paper>
                   )}
                   <CuratorFormsRemounter>
                     <CuratorElement />
