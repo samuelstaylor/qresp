@@ -3,6 +3,7 @@ import PropTypes from "prop-types";
 
 import { useRouter } from "next/router";
 import { Container, Box, Typography } from "@mui/material";
+import FavoriteButton from "../../components/FavoriteButton";
 
 import SEO from "../../components/seo";
 import AlertContext from "../../Context/Alert/alertContext";
@@ -114,6 +115,11 @@ const PaperDetails = ({ paper, error, preview = false, query }) => {
         <Box sx={{ mb: 7, mt: 1 }}>
           {preview ? null : (
             <PermissionNotice paperId={query.id} server={query.server} />
+          )}
+          {!preview && (
+            <Box sx={{ display: "flex", justifyContent: "flex-end", mb: -1 }}>
+              <FavoriteButton paperId={query.id} size="medium" />
+            </Box>
           )}
           <ReferenceInfo referenceData={referenceData} />
           {/* yet-another-react-lightbox needs no provider wrapper. */}

@@ -10,7 +10,7 @@ from mongoengine import Q as MongoQ
 
 from project.auth import (can_edit_paper, can_manage_paper, csrf_protect,
                           get_current_user, is_admin, paper_role, stamp_owner)
-from project.models import CuratorDraft
+from project.models import CuratorDraft, Favorite
 from project.paperdao import *
 from project.util import Dtree
 from project.workflow import WorkflowError, validate_workflow
@@ -831,3 +831,75 @@ def paper_permissions(id):
     if manage_allowed:
         response["editor_emails"] = list(paper.editor_emails or [])
     return response, 200
+
+
+def account_favorites():
+    """
+    List paper IDs favorited by the current session user
+    Handler for GET: /api/account/favorites
+    """
+    user = get_current_user()
+    if not user:
+        return {"error": "authentication required"}, 401
+
+    email = _session_email(user)
+    favs = Favorite.objects(owner_email=email).order_by("-created_at")
+    paper_ids = [f.paper_id for f in favs]
+
+    papers = []
+    for pid in paper_ids:
+        try:
+            paper = Paper.objects.get(id=pid)
+            papers.append(_paper_summary(paper))
+        except Exception:
+            pass
+
+    return {"favorites": papers, "count": len(papers)}, 200
+
+
+def add_favorite(body):
+    """
+    Favorite a paper
+    Handler for POST: /api/account/favorites
+    """
+    csrf_protect()
+    user = get_current_user()
+    if not user:
+        return {"error": "authentication required"}, 401
+
+    paper_id = (body or {}).get("paper_id", "")
+    if not paper_id:
+        return {"error": "paper_id is required"}, 400
+
+    try:
+        Paper.objects.get(id=str(paper_id))
+    except Exception:
+        return {"error": "Paper not found"}, 404
+
+    email = _session_email(user)
+    try:
+        fav = Favorite(
+            owner_email=email,
+            paper_id=str(paper_id),
+            created_at=datetime.utcnow(),
+        )
+        fav.save()
+    except Exception:
+        pass  # already favorited — idempotent
+
+    return {"paper_id": str(paper_id), "favorited": True}, 200
+
+
+def remove_favorite(paper_id):
+    """
+    Unfavorite a paper
+    Handler for DELETE: /api/account/favorites/{paper_id}
+    """
+    csrf_protect()
+    user = get_current_user()
+    if not user:
+        return {"error": "authentication required"}, 401
+
+    email = _session_email(user)
+    Favorite.objects(owner_email=email, paper_id=str(paper_id)).delete()
+    return {"paper_id": str(paper_id), "favorited": False}, 200

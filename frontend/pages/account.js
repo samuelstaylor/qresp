@@ -1,6 +1,7 @@
 import { Fragment, useContext, useEffect, useState } from "react";
 
 import axios from "axios";
+import Link from "next/link";
 import {
   Box,
   Button,
@@ -13,7 +14,6 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import Link from "next/link";
 
 import SEO from "../components/seo";
 import Drawer from "../components/drawer";
@@ -21,6 +21,7 @@ import { RegularStyledButton } from "../components/button";
 import OwnerlessRecords from "../components/Account/OwnerlessRecords";
 import AllRecords from "../components/Account/AllRecords";
 import AuthContext from "../Context/Auth/authContext";
+import FavoritesContext from "../Context/Favorites/favoritesContext";
 import {
   clearBrowserDraft,
   summarizeBrowserDraft,
@@ -41,6 +42,8 @@ const formatDate = (value) => {
 
 const AccountPage = () => {
   const { loading, authenticated, user, logout } = useContext(AuthContext);
+  const { favorites, loading: favLoading, toggleFavorite } = useContext(FavoritesContext);
+  const [favoritePapers, setFavoritePapers] = useState(null);
   const [papers, setPapers] = useState(null);
   const [drafts, setDrafts] = useState(null);
   const [draftError, setDraftError] = useState("");
@@ -59,6 +62,7 @@ const AccountPage = () => {
     let cancelled = false;
     setPapers(null);
     setDrafts(null);
+    setFavoritePapers(null);
     setDraftError("");
 
     axios
@@ -68,6 +72,15 @@ const AccountPage = () => {
       })
       .catch(() => {
         if (!cancelled) setPapers([]);
+      });
+
+    axios
+      .get("/api/account/favorites")
+      .then((res) => {
+        if (!cancelled) setFavoritePapers(res.data.favorites || []);
+      })
+      .catch(() => {
+        if (!cancelled) setFavoritePapers([]);
       });
 
     listServerDrafts()
@@ -385,6 +398,60 @@ const AccountPage = () => {
                 </Box>
               );
             })
+          )}
+        </Drawer>
+
+        <Drawer heading="My favorites" defaultOpen={true}>
+          {favoritePapers === null ? (
+            <Typography color="secondary">Loading...</Typography>
+          ) : favoritePapers.length === 0 ? (
+            <Typography color="secondary">
+              No favorites yet. Click the heart icon on any paper to save it here.
+            </Typography>
+          ) : (
+            favoritePapers.map((paper) => (
+              <Box
+                key={paper.id}
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1,
+                  mb: 1,
+                  flexWrap: "wrap",
+                }}
+              >
+                <Box sx={{ flexGrow: 1 }}>
+                  <Typography color="secondary">
+                    {paper.title}
+                    {paper.year ? ` (${paper.year})` : ""}
+                  </Typography>
+                  <Typography variant="body2" color="secondary">
+                    {paper.authors}
+                  </Typography>
+                </Box>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  component={Link}
+                  href={`/paperdetails/${encodeURIComponent(paper.id)}?server=${encodeURIComponent(origin)}`}
+                >
+                  View
+                </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="error"
+                  onClick={() => {
+                    toggleFavorite(paper.id);
+                    setFavoritePapers((items) =>
+                      (items || []).filter((p) => p.id !== paper.id)
+                    );
+                  }}
+                >
+                  Remove
+                </Button>
+              </Box>
+            ))
           )}
         </Drawer>
 

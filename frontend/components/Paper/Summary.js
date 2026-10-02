@@ -6,6 +6,7 @@ import { Chip, Typography, Grid, Box, Paper } from "@mui/material";
 import { styled } from "@mui/material/styles";
 
 import Tag from "../tag";
+import FavoriteButton from "../FavoriteButton";
 
 import { TableSearchContext } from "../Table/TableSearch";
 
@@ -41,18 +42,21 @@ const Summary = ({ rowdata }) => {
             <Grid size={12}>
               {/* Next 13+ <Link> renders the anchor itself (no child <a>);
                   the resolved pathname+query go straight into href. */}
-              <span className="title-link">
-                <Link
-                  href={{
-                    pathname: "/paperdetails/" + _Search__id,
-                    query: { server: _Search__server },
-                  }}
-                >
-                  <Typography variant="h6" component="div" gutterBottom>
-                    <Box sx={{ fontWeight: "bold" }}>{_Search__title}</Box>
-                  </Typography>
-                </Link>
-              </span>
+              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
+                <span className="title-link" style={{ flex: 1 }}>
+                  <Link
+                    href={{
+                      pathname: "/paperdetails/" + _Search__id,
+                      query: { server: _Search__server },
+                    }}
+                  >
+                    <Typography variant="h6" component="div" gutterBottom>
+                      <Box sx={{ fontWeight: "bold" }}>{_Search__title}</Box>
+                    </Typography>
+                  </Link>
+                </span>
+                <FavoriteButton paperId={_Search__id} />
+              </Box>
             </Grid>
             <Grid size={12}>
               {/* The author line and, when a curator entered one, the

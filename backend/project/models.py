@@ -495,3 +495,23 @@ class CuratorDraft(Document):
         'collection': 'curator_drafts',
         'indexes': ['owner_email'],
     }
+
+
+class Favorite(Document):
+    """One user's bookmark of one published paper.
+
+    Favorites are private to their owner. The paper_id is the MongoDB ObjectId
+    string of the Paper document — never a DOI or external id, since we need
+    a stable key for toggle operations. No paper data is duplicated here;
+    the account page fetches basic metadata for each favorited id separately.
+    """
+    owner_email = StringField(required=True, max_length=254)
+    paper_id = StringField(required=True, max_length=24)
+    created_at = DateTimeField()
+    meta = {
+        'collection': 'favorites',
+        'indexes': [
+            {'fields': ['owner_email', 'paper_id'], 'unique': True},
+            'owner_email',
+        ],
+    }

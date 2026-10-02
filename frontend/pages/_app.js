@@ -16,6 +16,7 @@ import "react-checkbox-tree/lib/react-checkbox-tree.css";
 
 import AlertState from "../Context/Alert/AlertState";
 import AuthState from "../Context/Auth/AuthState";
+import FavoritesState from "../Context/Favorites/FavoritesState";
 import LoadingState from "../Context/Loading/LoadingState";
 import ServerState from "../Context/Servers/ServerState";
 
@@ -27,15 +28,17 @@ export default function App(props) {
       <ThemeProvider theme={Theme}>
         <CssBaseline />
         <AuthState>
-          <LoadingState>
-            <AlertState>
-              <ServerState>
-                <Layout>
-                  <Component {...pageProps} />
-                </Layout>
-              </ServerState>
-            </AlertState>
-          </LoadingState>
+          <FavoritesState>
+            <LoadingState>
+              <AlertState>
+                <ServerState>
+                  <Layout>
+                    <Component {...pageProps} />
+                  </Layout>
+                </ServerState>
+              </AlertState>
+            </LoadingState>
+          </FavoritesState>
         </AuthState>
       </ThemeProvider>
     </AppCacheProvider>

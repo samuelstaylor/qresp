@@ -547,6 +547,59 @@ paths:
           description: Authentication required
         404:
           description: No such draft for this user
+  /account/favorites:
+    get:
+      operationId: "project.api.account_favorites"
+      tags:
+        - "Account"
+      summary: "Lists papers favorited by the current session user"
+      responses:
+        200:
+          description: List of favorited papers with basic metadata
+        401:
+          description: Authentication required
+    post:
+      operationId: "project.api.add_favorite"
+      tags:
+        - "Account"
+      summary: "Favorites a paper (idempotent)"
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+              - paper_id
+            properties:
+              paper_id:
+                type: string
+      responses:
+        200:
+          description: Paper favorited
+        400:
+          description: paper_id is required
+        401:
+          description: Authentication required
+        404:
+          description: Paper not found
+  /account/favorites/{paper_id}:
+    delete:
+      operationId: "project.api.remove_favorite"
+      tags:
+        - "Account"
+      summary: "Removes a paper from favorites"
+      parameters:
+        - in: path
+          name: paper_id
+          type: string
+          required: true
+          description: Paper Id to unfavorite
+      responses:
+        200:
+          description: Paper unfavorited
+        401:
+          description: Authentication required
   /admin/papers:
     get:
       operationId: "project.api.admin_papers"
