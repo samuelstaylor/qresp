@@ -1,5 +1,5 @@
-import { Fragment, useContext, useRef, useState } from "react";
-import { Button, Divider, ListItemIcon, Menu, MenuItem, Typography } from "@mui/material";
+import { useContext, useRef, useState } from "react";
+import { Box, Button, Divider, ListItemIcon, Menu, MenuItem, Typography } from "@mui/material";
 import {
   AccountCircle,
   AdminPanelSettings,
@@ -31,21 +31,21 @@ const pillSx = {
 const AuthControls = () => {
   const { loading, authenticated, user, logout } = useContext(AuthContext);
   const router = useRouter();
-  const [menuAnchor, setMenuAnchor] = useState(null);
-  const closeTimerRef = useRef(null);
+  const [open, setOpen] = useState(false);
+  const anchorRef = useRef(null);
+  const closeTimer = useRef(null);
 
-  const scheduleClose = () => {
-    closeTimerRef.current = setTimeout(() => setMenuAnchor(null), 150);
+  const handleOpen = () => {
+    clearTimeout(closeTimer.current);
+    setOpen(true);
   };
-  const cancelClose = () => {
-    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+  const handleClose = () => {
+    closeTimer.current = setTimeout(() => setOpen(false), 300);
   };
-
-  const openMenu = (e) => {
-    cancelClose();
-    setMenuAnchor(e.currentTarget);
+  const closeNow = () => {
+    clearTimeout(closeTimer.current);
+    setOpen(false);
   };
-  const closeMenu = () => setMenuAnchor(null);
 
   if (loading) return null;
 
@@ -54,13 +54,18 @@ const AuthControls = () => {
       (user.name || user.email) + (user.is_admin ? " (admin)" : "");
 
     return (
-      <Fragment>
+      // Wrapping Box owns the hover region — button + menu are in the same
+      // DOM subtree so onMouseLeave fires only when leaving the whole unit.
+      <Box
+        sx={{ display: "inline-block" }}
+        onMouseEnter={handleOpen}
+        onMouseLeave={handleClose}
+      >
         <Button
-          onMouseEnter={openMenu}
-          onMouseLeave={scheduleClose}
-          onClick={openMenu}
+          ref={anchorRef}
+          onClick={() => setOpen((v) => !v)}
           aria-haspopup="true"
-          aria-expanded={Boolean(menuAnchor) ? "true" : undefined}
+          aria-expanded={open ? "true" : undefined}
           sx={{
             ...pillSx,
             maxWidth: { xs: 130, sm: 210 },
@@ -72,18 +77,14 @@ const AuthControls = () => {
           {displayName}
         </Button>
         <Menu
-          anchorEl={menuAnchor}
-          open={Boolean(menuAnchor)}
-          onClose={closeMenu}
+          anchorEl={anchorRef.current}
+          open={open}
+          onClose={closeNow}
+          disablePortal
           anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
           transformOrigin={{ vertical: "top", horizontal: "right" }}
           slotProps={{
-            paper: {
-              elevation: 4,
-              sx: { mt: 0.5, minWidth: 200, borderRadius: 2 },
-              onMouseEnter: cancelClose,
-              onMouseLeave: scheduleClose,
-            },
+            paper: { elevation: 4, sx: { mt: 0.5, minWidth: 200, borderRadius: 2 } },
           }}
         >
           <MenuItem disabled sx={{ opacity: "1 !important", py: 0.5 }}>
@@ -92,38 +93,38 @@ const AuthControls = () => {
             </Typography>
           </MenuItem>
           <Divider />
-          <MenuItem component={Link} href="/account" onClick={closeMenu}>
+          <MenuItem component={Link} href="/account" onClick={closeNow}>
             <ListItemIcon><AccountCircle fontSize="small" /></ListItemIcon>
             My Profile
           </MenuItem>
-          <MenuItem component={Link} href="/account/records" onClick={closeMenu}>
+          <MenuItem component={Link} href="/account/records" onClick={closeNow}>
             <ListItemIcon><Article fontSize="small" /></ListItemIcon>
             My Records
           </MenuItem>
-          <MenuItem component={Link} href="/account/favorites" onClick={closeMenu}>
+          <MenuItem component={Link} href="/account/favorites" onClick={closeNow}>
             <ListItemIcon><FavoriteIcon fontSize="small" /></ListItemIcon>
             My Favorites
           </MenuItem>
-          <MenuItem component={Link} href="/account/drafts" onClick={closeMenu}>
+          <MenuItem component={Link} href="/account/drafts" onClick={closeNow}>
             <ListItemIcon><EditNote fontSize="small" /></ListItemIcon>
             My Drafts
           </MenuItem>
           {user.is_admin && (
-            <MenuItem component={Link} href="/account/admin" onClick={closeMenu}>
+            <MenuItem component={Link} href="/account/admin" onClick={closeNow}>
               <ListItemIcon><AdminPanelSettings fontSize="small" /></ListItemIcon>
               Admin
             </MenuItem>
           )}
           <Divider />
           <MenuItem
-            onClick={() => { closeMenu(); logout(); }}
+            onClick={() => { closeNow(); logout(); }}
             sx={{ color: "error.main" }}
           >
             <ListItemIcon><Logout fontSize="small" sx={{ color: "error.main" }} /></ListItemIcon>
             Sign out
           </MenuItem>
         </Menu>
-      </Fragment>
+      </Box>
     );
   }
 
