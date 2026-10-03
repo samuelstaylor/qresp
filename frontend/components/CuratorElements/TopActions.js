@@ -1,19 +1,27 @@
 import { useState, useContext, Fragment } from "react";
 
 import {
+  Alert,
   Box,
   Button,
+  CircularProgress,
   Divider,
   Dialog,
   DialogActions,
   DialogTitle,
   DialogContent,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
   TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
 
 import {
+  Description,
+  FolderOpen,
   GetApp,
   RestartAlt,
   SaveOutlined,
@@ -34,6 +42,20 @@ import CuratorContext from "../../Context/Curator/curatorContext";
 import AlertContext from "../../Context/Alert/alertContext";
 import ServerContext from "../../Context/Servers/serverContext";
 import AuthContext from "../../Context/Auth/authContext";
+import { fetchServerDraft, listServerDrafts } from "../../Utils/serverDrafts";
+
+const formatDraftDate = (iso) => {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
 
 const preview = (metadata, setAlert, router) => {
   axios
@@ -63,6 +85,8 @@ const TopActions = () => {
     hasMeaningfulDraft,
     getDraftTitle,
     saveDraftToServer,
+    applyServerDraft,
+    activeDraftId,
   } = useContext(CuratorContext);
   const { setAlert, unsetAlert } = useContext(AlertContext);
   const { setSelectedHttp, selectedHttp } = useContext(ServerContext);
@@ -73,6 +97,15 @@ const TopActions = () => {
     open: false,
     mode: "save",
     title: "",
+  });
+
+  // Load Draft dialog: the account's drafts, newest first.
+  const [loadDialog, setLoadDialog] = useState({
+    open: false,
+    loading: false,
+    error: "",
+    drafts: [],
+    loadingId: null,
   });
 
   const router = useRouter();
@@ -135,6 +168,28 @@ const TopActions = () => {
     resume: () => {
       setResumeDialogOpen(true);
     },
+    loadDraft: () => {
+      if (!authenticated) {
+        setAlert(
+          "Sign in required",
+          "Sign in to load drafts saved to your account.",
+          null
+        );
+        return;
+      }
+      setLoadDialog({ open: true, loading: true, error: "", drafts: [], loadingId: null });
+      listServerDrafts()
+        .then((drafts) =>
+          setLoadDialog((current) => ({ ...current, loading: false, drafts }))
+        )
+        .catch(() =>
+          setLoadDialog((current) => ({
+            ...current,
+            loading: false,
+            error: "Your drafts could not be loaded. Please check that you are still signed in and try again.",
+          }))
+        );
+    },
     scratch: () => {
       const hasCurrentWork = hasMeaningfulDraft ? hasMeaningfulDraft() : false;
       const discardAndReset = () => {
@@ -177,6 +232,25 @@ const TopActions = () => {
     },
   };
 
+
+  const closeLoadDialog = () =>
+    setLoadDialog((current) => ({ ...current, open: false }));
+
+  const loadDraft = (id) => {
+    setLoadDialog((current) => ({ ...current, loadingId: id, error: "" }));
+    fetchServerDraft(id)
+      .then((draft) => {
+        applyServerDraft(draft);
+        setLoadDialog((current) => ({ ...current, open: false, loadingId: null }));
+      })
+      .catch(() =>
+        setLoadDialog((current) => ({
+          ...current,
+          loadingId: null,
+          error: "This draft could not be loaded. It may have been deleted.",
+        }))
+      );
+  };
 
   const onFileUpload = async (e) => {
     e.preventDefault();
@@ -233,6 +307,18 @@ const TopActions = () => {
             sx={{ borderColor: "#800000", color: "#800000", "&:hover": { borderColor: "#800000", bgcolor: "rgba(128,0,0,0.06)" } }}
           >
             Save Draft
+          </Button>
+        </Tooltip>
+
+        <Tooltip title="Open a draft saved to your account">
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<FolderOpen />}
+            onClick={onClicks.loadDraft}
+            sx={{ borderColor: "#800000", color: "#800000", "&:hover": { borderColor: "#800000", bgcolor: "rgba(128,0,0,0.06)" } }}
+          >
+            Load Draft
           </Button>
         </Tooltip>
 
@@ -338,6 +424,78 @@ const TopActions = () => {
           <RegularStyledButton onClick={() => setResumeDialogOpen(false)}>
             Cancel
           </RegularStyledButton>
+        </DialogActions>
+      </Dialog>
+      <Dialog open={loadDialog.open} onClose={closeLoadDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Load draft</DialogTitle>
+        <DialogContent dividers sx={{ p: 0 }}>
+          {hasMeaningfulDraft && hasMeaningfulDraft() ? (
+            <Alert severity="warning" sx={{ m: 2, mb: 0 }}>
+              Loading a draft replaces what is currently in the form. Save
+              your current work first if you want to keep it.
+            </Alert>
+          ) : null}
+          {loadDialog.error ? (
+            <Alert severity="error" sx={{ m: 2, mb: 0 }}>
+              {loadDialog.error}
+            </Alert>
+          ) : null}
+          {loadDialog.loading ? (
+            <Box sx={{ display: "flex", justifyContent: "center", py: 5 }}>
+              <CircularProgress size={28} aria-label="Loading drafts" />
+            </Box>
+          ) : !loadDialog.error && loadDialog.drafts.length === 0 ? (
+            <Typography color="text.secondary" sx={{ p: 3, textAlign: "center" }}>
+              You have no saved drafts yet. Use Save Draft to keep work in
+              progress in your account.
+            </Typography>
+          ) : (
+            <List sx={{ py: 1 }}>
+              {loadDialog.drafts.map((draft) => {
+                const current = draft.id === activeDraftId;
+                const updated = formatDraftDate(draft.updated_at);
+                return (
+                  <ListItemButton
+                    key={draft.id}
+                    onClick={() => loadDraft(draft.id)}
+                    disabled={Boolean(loadDialog.loadingId)}
+                    selected={current}
+                    sx={{ px: 3 }}
+                  >
+                    <ListItemIcon sx={{ minWidth: 36, color: "#800000" }}>
+                      {loadDialog.loadingId === draft.id ? (
+                        <CircularProgress size={18} />
+                      ) : (
+                        <Description fontSize="small" />
+                      )}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={draft.title || "Untitled draft"}
+                      secondary={
+                        [updated && `Last saved ${updated}`, current && "currently open"]
+                          .filter(Boolean)
+                          .join(" · ") || null
+                      }
+                      slotProps={{ primary: { sx: { fontWeight: 600 }, noWrap: true } }}
+                    />
+                  </ListItemButton>
+                );
+              })}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            size="small"
+            onClick={() => {
+              closeLoadDialog();
+              router.push("/account/drafts");
+            }}
+            sx={{ textTransform: "none", mr: "auto" }}
+          >
+            Manage drafts
+          </Button>
+          <RegularStyledButton onClick={closeLoadDialog}>Cancel</RegularStyledButton>
         </DialogActions>
       </Dialog>
       <Dialog

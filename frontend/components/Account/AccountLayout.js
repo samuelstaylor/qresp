@@ -130,9 +130,10 @@ const AccountLayout = ({ children, pageTitle }) => {
                     </ListItemIcon>
                     <ListItemText
                       primary={label}
-                      primaryTypographyProps={{
-                        fontWeight: active ? 700 : 400,
-                        fontSize: "0.875rem",
+                      slotProps={{
+                        primary: {
+                          sx: { fontWeight: active ? 700 : 400, fontSize: "0.875rem" },
+                        },
                       }}
                     />
                   </ListItemButton>

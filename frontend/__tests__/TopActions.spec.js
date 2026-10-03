@@ -11,6 +11,12 @@ jest.mock("next/router", () => ({
   useRouter: () => ({ push: jest.fn() }),
 }));
 
+jest.mock("../Utils/serverDrafts", () => ({
+  listServerDrafts: jest.fn(),
+  fetchServerDraft: jest.fn(),
+}));
+import { fetchServerDraft, listServerDrafts } from "../Utils/serverDrafts";
+
 // A user for tests that TYPE.
 //
 // Every keystroke re-renders the surrounding Curator form, so userEvent's
@@ -39,6 +45,7 @@ const renderTopActions = ({ hasDraft = true, authenticated = true } = {}) => {
   const hasMeaningfulDraft = jest.fn(() => hasDraft);
   const saveDraftToServer = jest.fn(() => Promise.resolve("draft123"));
   const getDraftTitle = jest.fn(() => "Draft title");
+  const applyServerDraft = jest.fn();
   render(
     <CuratorContext.Provider
       value={{
@@ -50,6 +57,8 @@ const renderTopActions = ({ hasDraft = true, authenticated = true } = {}) => {
         hasMeaningfulDraft,
         getDraftTitle,
         saveDraftToServer,
+        applyServerDraft,
+        activeDraftId: null,
       }}
     >
       <AuthContext.Provider value={{ authenticated }}>
@@ -66,7 +75,7 @@ const renderTopActions = ({ hasDraft = true, authenticated = true } = {}) => {
       </AuthContext.Provider>
     </CuratorContext.Provider>
   );
-  return { setAlert, unsetAlert, resetAll, saveDraftToServer };
+  return { setAlert, unsetAlert, resetAll, saveDraftToServer, applyServerDraft };
 };
 
 describe("TopActions toolbar contents", () => {
@@ -205,5 +214,53 @@ describe("TopActions draft controls", () => {
 
     expect(resetAll).not.toHaveBeenCalled();
     expect(unsetAlert).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("TopActions Load Draft", () => {
+  afterEach(() => jest.resetAllMocks());
+
+  it("lists the account's drafts and loads the chosen one into the form", async () => {
+    const user = userEvent.setup();
+    listServerDrafts.mockResolvedValue([
+      { id: "d1", title: "Water paper", updated_at: "2026-10-01T12:00:00" },
+      { id: "d2", title: "Ice paper", updated_at: "2026-09-30T08:00:00" },
+    ]);
+    const draft = { id: "d2", title: "Ice paper", state: { license: "cc_by" } };
+    fetchServerDraft.mockResolvedValue(draft);
+    const { applyServerDraft } = renderTopActions();
+
+    await user.click(screen.getByRole("button", { name: /open a draft saved to your account/i }));
+    const dialog = await screen.findByRole("dialog", { name: /load draft/i });
+    // The current form has work in it, so the dialog warns before replacing.
+    expect(dialog).toHaveTextContent(/replaces what is currently in the form/i);
+
+    await user.click(await screen.findByRole("button", { name: /ice paper/i }));
+
+    expect(fetchServerDraft).toHaveBeenCalledWith("d2");
+    await waitFor(() => expect(applyServerDraft).toHaveBeenCalledWith(draft));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: /load draft/i })).not.toBeInTheDocument()
+    );
+  });
+
+  it("asks anonymous users to sign in instead of listing drafts", async () => {
+    const user = userEvent.setup();
+    const { setAlert } = renderTopActions({ authenticated: false });
+    await user.click(screen.getByRole("button", { name: /open a draft saved to your account/i }));
+    expect(setAlert).toHaveBeenCalledWith(
+      "Sign in required",
+      expect.stringMatching(/sign in/i),
+      null
+    );
+    expect(listServerDrafts).not.toHaveBeenCalled();
+  });
+
+  it("says so when there are no saved drafts", async () => {
+    const user = userEvent.setup();
+    listServerDrafts.mockResolvedValue([]);
+    renderTopActions({ hasDraft: false });
+    await user.click(screen.getByRole("button", { name: /open a draft saved to your account/i }));
+    expect(await screen.findByText(/no saved drafts yet/i)).toBeInTheDocument();
   });
 });
