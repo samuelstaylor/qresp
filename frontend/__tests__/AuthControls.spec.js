@@ -47,7 +47,7 @@ describe("AuthControls", () => {
     expect(screen.queryByText(/cilogon/i)).toBeNull();
   });
 
-  it("shows the user and admin label in a badge button when authenticated", async () => {
+  it("shows a compact avatar badge with the first name, full identity in its label", async () => {
     axios.get.mockResolvedValue({
       data: {
         authenticated: true,
@@ -61,10 +61,14 @@ describe("AuthControls", () => {
     });
     renderControls();
 
-    // Name and (admin) label appear in the badge button.
-    const badge = await screen.findByRole("button", { name: /Owner Example/i });
-    expect(badge).toBeInTheDocument();
-    expect(badge).toHaveTextContent(/\(admin\)/);
+    // Only the first name and initials are shown; the full name and admin
+    // role stay in the accessible label.
+    const badge = await screen.findByRole("button", {
+      name: /account menu for owner example \(admin\)/i,
+    });
+    expect(badge).toHaveTextContent("Owner");
+    expect(badge).toHaveTextContent("OE");
+    expect(badge).not.toHaveTextContent("Owner Example");
 
     // The sign-in entry point is gone while signed in.
     expect(screen.queryByRole("link", { name: /^sign in$/i })).toBeNull();
@@ -89,7 +93,7 @@ describe("AuthControls", () => {
 
     // Menu opens — sign-out and account link are accessible.
     expect(await screen.findByRole("menuitem", { name: /sign out/i })).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: /my account/i })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /my profile/i })).toBeInTheDocument();
   });
 
   it("links to /account from the account menu item", async () => {
@@ -108,7 +112,7 @@ describe("AuthControls", () => {
     renderControls();
 
     await user.click(await screen.findByRole("button", { name: /Owner Example/i }));
-    const accountLink = await screen.findByRole("menuitem", { name: /my account/i });
+    const accountLink = await screen.findByRole("menuitem", { name: /my profile/i });
     expect(accountLink.closest("a")).toHaveAttribute("href", "/account");
   });
 

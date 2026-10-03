@@ -1,10 +1,22 @@
 import { useContext, useRef, useState } from "react";
-import { Box, Button, Divider, ListItemIcon, Menu, MenuItem, Typography } from "@mui/material";
+import {
+  Avatar,
+  Box,
+  Button,
+  ButtonBase,
+  Chip,
+  Divider,
+  ListItemIcon,
+  Menu,
+  MenuItem,
+  Typography,
+} from "@mui/material";
 import {
   AccountCircle,
   AdminPanelSettings,
   Article,
   EditNote,
+  ExpandMore,
   Favorite as FavoriteIcon,
   Logout,
 } from "@mui/icons-material";
@@ -13,6 +25,7 @@ import { useRouter } from "next/router";
 
 import AuthContext from "../Context/Auth/authContext";
 import { loginHref } from "../Utils/safeNext";
+import { initialsOf } from "./Profile/ProfileLinks";
 
 const pillSx = {
   color: "#800000",
@@ -50,8 +63,13 @@ const AuthControls = () => {
   if (loading) return null;
 
   if (authenticated) {
-    const displayName =
-      (user.name || user.email) + (user.is_admin ? " (admin)" : "");
+    const fullName = (user.name || "").trim() || user.email;
+    const firstName = (user.name || "").trim().split(/\s+/)[0] || user.email.split("@")[0];
+    const avatarSrc =
+      typeof user.avatar_b64 === "string" && user.avatar_b64.startsWith("data:image/")
+        ? user.avatar_b64
+        : undefined;
+    const initials = initialsOf(user.name, user.email);
 
     return (
       // Wrapping Box owns the hover region — button + menu are in the same
@@ -61,21 +79,67 @@ const AuthControls = () => {
         onMouseEnter={handleOpen}
         onMouseLeave={handleClose}
       >
-        <Button
+        <ButtonBase
           ref={anchorRef}
           onClick={() => setOpen((v) => !v)}
           aria-haspopup="true"
           aria-expanded={open ? "true" : undefined}
+          aria-label={`Account menu for ${fullName}${user.is_admin ? " (admin)" : ""}`}
           sx={{
-            ...pillSx,
-            maxWidth: { xs: 130, sm: 210 },
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            display: "block",
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            pl: 0.5,
+            pr: { xs: 0.5, sm: 1 },
+            py: 0.5,
+            borderRadius: "999px",
+            color: "#fff",
+            border: "1px solid rgba(255,255,255,0.35)",
+            backgroundColor: open ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.06)",
+            transition: "background-color 0.15s, border-color 0.15s",
+            "&:hover": {
+              backgroundColor: "rgba(255,255,255,0.16)",
+              borderColor: "rgba(255,255,255,0.6)",
+            },
           }}
         >
-          {displayName}
-        </Button>
+          <Avatar
+            src={avatarSrc}
+            alt=""
+            sx={{
+              width: 32,
+              height: 32,
+              fontSize: "0.85rem",
+              fontWeight: 700,
+              bgcolor: "#fff",
+              color: "#800000",
+            }}
+          >
+            {initials}
+          </Avatar>
+          <Typography
+            component="span"
+            sx={{
+              display: { xs: "none", sm: "block" },
+              fontWeight: 600,
+              fontSize: "0.9rem",
+              maxWidth: 110,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {firstName}
+          </Typography>
+          <ExpandMore
+            fontSize="small"
+            sx={{
+              display: { xs: "none", sm: "block" },
+              transition: "transform 0.2s",
+              transform: open ? "rotate(180deg)" : "none",
+            }}
+          />
+        </ButtonBase>
         <Menu
           anchorEl={anchorRef.current}
           open={open}
@@ -84,14 +148,31 @@ const AuthControls = () => {
           anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
           transformOrigin={{ vertical: "top", horizontal: "right" }}
           slotProps={{
-            paper: { elevation: 4, sx: { mt: 0.5, minWidth: 200, borderRadius: 2 } },
+            paper: { elevation: 4, sx: { mt: 0.75, minWidth: 240, borderRadius: 2 } },
           }}
         >
-          <MenuItem disabled sx={{ opacity: "1 !important", py: 0.5 }}>
-            <Typography variant="caption" color="text.secondary" noWrap>
-              {user.email}
-            </Typography>
-          </MenuItem>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, px: 2, pt: 1, pb: 1.5 }}>
+            <Avatar
+              src={avatarSrc}
+              alt=""
+              sx={{ width: 40, height: 40, bgcolor: "#800000", fontWeight: 700, fontSize: "1rem" }}
+            >
+              {initials}
+            </Avatar>
+            <Box sx={{ minWidth: 0 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                <Typography variant="subtitle2" fontWeight={700} noWrap sx={{ maxWidth: 170 }}>
+                  {fullName}
+                </Typography>
+                {user.is_admin && (
+                  <Chip label="Admin" size="small" color="primary" sx={{ height: 18, fontSize: "0.65rem" }} />
+                )}
+              </Box>
+              <Typography variant="caption" color="text.secondary" noWrap display="block" sx={{ maxWidth: 190 }}>
+                {user.email}
+              </Typography>
+            </Box>
+          </Box>
           <Divider />
           <MenuItem component={Link} href="/account" onClick={closeNow}>
             <ListItemIcon><AccountCircle fontSize="small" /></ListItemIcon>
