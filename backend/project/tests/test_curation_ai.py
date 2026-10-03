@@ -128,6 +128,7 @@ class TestSuggestLinks(AiTestBase):
             {"from": "c0", "to": "s0", "reason": "Wrong direction.", "confidence": "high"},
             {"from": "s7", "to": "c0", "reason": "Unknown script.", "confidence": "high"},
             {"from": "d0", "to": "s0", "reason": "Reads its data.", "confidence": "bogus"},
+            {"from": "d0", "to": "c0", "reason": "Same system.", "confidence": "High"},
         ]})
         with mock.patch("project.curation_ai._fetch_text_sized",
                         return_value=(SCRIPT_TEXT, False)) as fetch, \
@@ -135,7 +136,8 @@ class TestSuggestLinks(AiTestBase):
             response = self.post("/api/curation/suggest-links", self.body())
         self.assertEqual(200, response.status_code, response.text)
         self.assertEqual(
-            [("s0", "c1", "generates", "medium"), ("d0", "s0", "consumes", "low")],
+            [("s0", "c1", "generates", "medium"), ("d0", "s0", "consumes", "low"),
+             ("d0", "c0", "consumes", "high")],
             [(l["from"], l["to"], l["type"], l["confidence"]) for l in response.json()["links"]])
         fetch.assert_called_once_with(FOLDER + "/Scripts/ccd_qeff.py")
         sent = json.dumps(gemini.call_args[0][1])
@@ -156,6 +158,30 @@ class TestSuggestLinks(AiTestBase):
                                  self.body(path="https://evil.example/files/x"))
         self.assertEqual(400, response.status_code)
         gemini.assert_not_called()
+
+
+class TestSchemas(unittest.TestCase):
+    def test_only_schema_features_gemini_accepts(self):
+        # Gemini's responseSchema rejects a bare "enum" (HTTP 400); the
+        # working keyword schema uses only these keys.
+        allowed = {"type", "properties", "items", "required", "maxItems", "maxLength"}
+
+        def walk(node):
+            if isinstance(node, dict):
+                keys = set(node) - {"properties"}
+                self.assertTrue(keys <= allowed | {"properties"}, keys - allowed)
+                for key, value in node.items():
+                    if key == "properties":
+                        for child in value.values():
+                            walk(child)
+                    elif isinstance(value, (dict, list)):
+                        walk(value)
+            elif isinstance(node, list):
+                for item in node:
+                    walk(item)
+
+        walk(cai.LINK_SCHEMA)
+        walk(cai.FIGURE_KEYWORD_SCHEMA)
 
 
 class TestScriptExcerpt(unittest.TestCase):

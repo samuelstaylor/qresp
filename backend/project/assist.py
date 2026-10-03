@@ -304,7 +304,13 @@ def call_gemini(cfg, payload, system_prompt, schema, max_output_tokens=None):
             "The AI provider is temporarily unavailable. Try again shortly.",
             ERROR_UNAVAILABLE)
     if response.status_code != 200:
-        print("AI assist provider error: HTTP %s" % response.status_code)
+        # The provider's own status label (e.g. INVALID_ARGUMENT) says which
+        # request was malformed. Its message is not logged: it can quote input.
+        try:
+            label = str(((response.json() or {}).get("error") or {}).get("status") or "")[:40]
+        except Exception:
+            label = ""
+        print("AI assist provider error: HTTP %s %s" % (response.status_code, label))
         return None, ProviderError("The AI provider returned an error.",
                                    ERROR_OTHER)
     try:

@@ -241,7 +241,9 @@ LINK_SCHEMA = {
                     "from": {"type": "string"},
                     "to": {"type": "string"},
                     "reason": {"type": "string", "maxLength": MAX_REASON_CHARS},
-                    "confidence": {"type": "string", "enum": list(CONFIDENCE)},
+                    # No "enum": Gemini's schema subset rejects it without a
+                    # matching "format"; the value is checked on our side.
+                    "confidence": {"type": "string", "maxLength": 10},
                 },
                 "required": ["from", "to", "reason", "confidence"],
             },
@@ -262,7 +264,7 @@ LINK_PROMPT = (
     "`d..` -> figure `c..` or dataset -> script `s..` when the data is what "
     "the figure or script uses. Skip anything in `existing_links`. Each link "
     "needs a `reason` of ONE sentence (at most 25 words) citing the specific "
-    "evidence, and a `confidence`: high only when the code or names make it "
+    "evidence, and a `confidence` that is exactly one of high, medium or low: high only when the code or names make it "
     "explicit, medium when the content clearly corresponds, low otherwise. "
     "Do not guess: an empty list is a good answer. Respond with ONLY JSON of "
     'the form {"links": [{"from": "...", "to": "...", "reason": "...", '
@@ -355,7 +357,8 @@ def suggest_links(body):
         if not kind or (source, target) in seen:
             continue
         seen.add((source, target))
-        confidence = link.get("confidence") if link.get("confidence") in CONFIDENCE else "low"
+        confidence = str(link.get("confidence") or "").strip().lower()
+        confidence = confidence if confidence in CONFIDENCE else "low"
         out.append({"from": source, "to": target, "type": kind, "confidence": confidence,
                     "reason": _clip(link.get("reason"), MAX_REASON_CHARS)})
     print("AI links: figures=%d scripts=%d datasets=%d suggested=%d"
