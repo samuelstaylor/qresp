@@ -50,8 +50,11 @@ const Drawer = (props) => {
         {status === "complete" && (
           <CheckCircle sx={{ fontSize: 18, color: "#2e7d32", flexShrink: 0 }} />
         )}
+        {/* A span, not subtitle1's default <h6>: the Accordion already wraps
+            the summary in an <h3>, and a heading inside a button is invalid. */}
         <Typography
           variant="subtitle1"
+          component="span"
           fontWeight={600}
           sx={{ color: open ? "#800000" : "#333333", flex: 1, transition: "color 0.2s" }}
         >

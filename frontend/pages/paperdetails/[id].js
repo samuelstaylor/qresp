@@ -16,6 +16,7 @@ import ScriptsInfo from "../../components/Paper/Scripts";
 import Documentation from "../../components/Paper/Documentation";
 import Workflow from "../../components/Paper/Workflow";
 import AboutRecord from "../../components/Paper/AboutRecord";
+import SectionHeading from "../../components/Paper/SectionHeading";
 import PermissionNotice from "../../components/Paper/PermissionNotice";
 import RelatedResearch from "../../components/Paper/RelatedResearch";
 
@@ -24,19 +25,6 @@ import axios from "axios";
 import { resolveServerSideApiBase } from "../../Utils/serverSideApi";
 
 import CuratorHelperState from "../../Context/CuratorHelpers/curatorHelperState";
-
-const SectionHeading = ({ children }) => (
-  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mt: 5, mb: 1.5 }}>
-    <Typography
-      variant="h6"
-      component="h2"
-      sx={{ fontWeight: 700, color: "#222", whiteSpace: "nowrap" }}
-    >
-      {children}
-    </Typography>
-    <Box sx={{ flex: 1, height: "1px", bgcolor: "divider" }} />
-  </Box>
-);
 
 const PaperDetails = ({ paper, error, preview = false, query }) => {
   const {

@@ -6,13 +6,13 @@ import Link from "next/link";
 import {
   Box,
   Chip,
-  Divider,
   LinearProgress,
   Pagination,
   Typography,
 } from "@mui/material";
 
 import Drawer from "../drawer";
+import SectionHeading from "./SectionHeading";
 import { SmallStyledButton } from "../button";
 import RecommendationFeedback from "./RecommendationFeedback";
 
@@ -326,17 +326,6 @@ const Result = ({ result, server }) => (
   </Box>
 );
 
-const Section = ({ title, children }) => (
-  <Box sx={{ mb: 2, minWidth: 0 }}>
-    <Typography variant="h6" component="h3" sx={{ wordBreak: "break-word" }}>
-      <Box component="span" sx={{ fontWeight: "bold" }}>
-        {title}
-      </Box>
-    </Typography>
-    {children}
-  </Box>
-);
-
 const ResultList = ({ results, server }) => (
   <Box component="ul" sx={{ m: 0, p: 0, minWidth: 0 }}>
     {results.map((result) => (
@@ -400,6 +389,22 @@ const externalNotice = (external) => {
     EXTERNAL_EMPTY_BY_REASON[external.reason] || EXTERNAL_EMPTY_FALLBACK
   );
 };
+
+// The section title and disclaimer frame every state (loading, failure,
+// results) so a reader always knows what the lists below are.
+const Frame = ({ children }) => (
+  <Box component="section" sx={{ minWidth: 0 }}>
+    <SectionHeading>{HEADING}</SectionHeading>
+    <Typography
+      variant="body2"
+      color="secondary"
+      sx={{ mb: 1.5, wordBreak: "break-word" }}
+    >
+      {DISCLAIMER}
+    </Typography>
+    {children}
+  </Box>
+);
 
 const RelatedResearch = ({ paperId, server }) => {
   const [loading, setLoading] = useState(true);
@@ -478,21 +483,14 @@ const RelatedResearch = ({ paperId, server }) => {
 
   if (loading) {
     return (
-      <Drawer heading={HEADING} defaultOpen>
+      <Frame>
         <Box sx={{ py: 1 }}>
-          <Typography
-            variant="body2"
-            color="secondary"
-            sx={{ mb: 2, wordBreak: "break-word" }}
-          >
-            {DISCLAIMER}
-          </Typography>
           <Typography variant="body2" color="secondary" gutterBottom>
             Looking for related research…
           </Typography>
           <LinearProgress aria-label="Loading related research" />
         </Box>
-      </Drawer>
+      </Frame>
     );
   }
 
@@ -506,7 +504,7 @@ const RelatedResearch = ({ paperId, server }) => {
   // section, not its absence.
   if (failed || !data) {
     return (
-      <Drawer heading={HEADING} defaultOpen>
+      <Frame>
         <Box sx={{ py: 1 }}>
           <Note color="error">{UNAVAILABLE_MESSAGE}</Note>
           <Box sx={{ mt: 1.5 }}>
@@ -517,7 +515,7 @@ const RelatedResearch = ({ paperId, server }) => {
             </SmallStyledButton>
           </Box>
         </Box>
-      </Drawer>
+      </Frame>
     );
   }
 
@@ -553,24 +551,16 @@ const RelatedResearch = ({ paperId, server }) => {
   const showExternal = external.status !== "disabled";
 
   return (
-    <Drawer heading={HEADING} defaultOpen>
-      <Typography
-        variant="body2"
-        color="secondary"
-        sx={{ mb: 2, wordBreak: "break-word" }}
-      >
-        {DISCLAIMER}
-      </Typography>
-      <Section title="Related Qresp Records">
+    <Frame>
+      <Drawer heading="Related Qresp Records" defaultOpen>
         {internalResults.length ? (
           <ResultList results={internalResults} server={server} />
         ) : (
           <Note>{EMPTY_MESSAGE}</Note>
         )}
-      </Section>
+      </Drawer>
       {showExternal ? (
         <Fragment>
-          <Divider />
           {/* "Related External Papers", not "Recommended".
               
               The list has two possible sources and only one of them
@@ -579,7 +569,7 @@ const RelatedResearch = ({ paperId, server }) => {
               "Recommended" is false for half the cases it has to cover, so
               the heading states the relationship both sources share and each
               RESULT carries its own precise provenance badge. */}
-          <Section title="Related External Papers">
+          <Drawer heading="Related External Papers" defaultOpen>
             {/* Shown ONCE, above the results -- this is the disclaimer that
                 matters most for this list: it is Semantic Scholar's
                 candidates, merely ordered by Qresp, not a Qresp-verified
@@ -678,10 +668,10 @@ const RelatedResearch = ({ paperId, server }) => {
                 </SmallStyledButton>
               </Box>
             ) : null}
-          </Section>
+          </Drawer>
         </Fragment>
       ) : null}
-    </Drawer>
+    </Frame>
   );
 };
 
