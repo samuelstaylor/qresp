@@ -1329,6 +1329,20 @@ def analyze_folder(body):
                              "path is correct and reachable."}, 502
 
         if not files and not dirs:
+            # An unlistable root is skipped by the walk, which used to read
+            # as an empty folder. Ask once more to say what actually failed.
+            try:
+                _list_directory(root_url)
+            except requests.exceptions.SSLError:
+                print("Folder analysis: TLS verification failed for %s"
+                      % urlparse(root_url).hostname)
+                return {"error": "The file server's security certificate could "
+                                 "not be verified, so the folder could not be "
+                                 "read. An administrator can allow this server "
+                                 "with QRESP_FILESERVER_INSECURE_TLS_HOSTS."}, 502
+            except Exception:
+                return {"error": "The folder could not be read. Check that the "
+                                 "path is correct and reachable."}, 502
             return {"error": "No files were found in that folder."}, 404
 
         # Bounded evidence reads, planned PER CANDIDATE and spent round robin

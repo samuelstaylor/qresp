@@ -38,6 +38,11 @@ services:
       - QRESP_MONGODB_HOST=db
       - QRESP_MONGODB_PORT=27017
       - QRESP_MONGODB_DB_NAME=explorer
+      # Same as staging-full: RCC's TLS certificate expired 2024-08-14 and its
+      # server omits the intermediate, so folder analysis cannot verify it.
+      # This exempts ONLY that host; every other host still verifies.
+      - QRESP_FILESERVER_ROOTS=https://notebook.rcc.uchicago.edu/files
+      - QRESP_FILESERVER_INSECURE_TLS_HOSTS=notebook.rcc.uchicago.edu
     volumes:
       - ./backend:/home/flask/app/web/
     networks:

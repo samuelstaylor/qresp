@@ -112,3 +112,26 @@ class TestAnalyzeSuggestions(CurationTestBase):
                   for c in response.json()["candidates"]["charts"]]
         self.assertTrue(any(image.endswith("Figure3.pdf") for image in images),
                         images)
+
+
+class TestUnreadableRoot(CurationTestBase):
+    def post(self, side_effect):
+        from project.tests.test_curation import FOLDER
+        with mock.patch("project.curation._list_directory", side_effect=side_effect):
+            return self.client.post(
+                "/api/curation/analyze-folder", json={"path": FOLDER},
+                headers={"X-CSRF-Token": self.csrf})
+
+    def test_a_certificate_failure_is_reported_as_one(self):
+        import requests
+        self.login()
+        response = self.post(requests.exceptions.SSLError("certificate verify failed"))
+        self.assertEqual(502, response.status_code)
+        self.assertIn("certificate", response.json()["error"])
+        self.assertNotIn("verify failed", response.json()["error"])
+
+    def test_an_unreachable_root_is_not_called_empty(self):
+        self.login()
+        response = self.post(RuntimeError("connection refused"))
+        self.assertEqual(502, response.status_code)
+        self.assertNotIn("No files were found", response.json()["error"])
