@@ -19,12 +19,15 @@ import {
   StepLabel,
   Stepper,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Tooltip,
   Typography,
 } from "@mui/material";
 import {
   AutoAwesome,
   CheckCircle,
+  Description,
   ExpandMore,
   FolderOpen,
   InsertPhoto,
@@ -521,7 +524,104 @@ const GuidedSetup = () => {
     setReviewOpen(false);
   };
 
-  // 5. Finish ----------------------------------------------------------------
+  // 5. Captions from the paper's LaTeX ------------------------------------------
+  const [srcMode, setSrcMode] = useState("arxiv");
+  const [arxivInput, setArxivInput] = useState("");
+  const [latexBusy, setLatexBusy] = useState(false);
+  const [latexError, setLatexError] = useState("");
+  const [latexResult, setLatexResult] = useState(null);
+  const [captionSkip, setCaptionSkip] = useState({});
+  const [captionsApplied, setCaptionsApplied] = useState(null);
+  const arxivSearchedFor = useRef("");
+
+  // Look the paper up on arXiv once its title is known, and offer the id.
+  useEffect(() => {
+    const title = (referenceInfo.title || "").trim();
+    if (!title || !authenticated || arxivSearchedFor.current === title) return;
+    arxivSearchedFor.current = title;
+    axios
+      .post("/api/curation/find-arxiv", { title })
+      .then((res) => {
+        const data = res.data || {};
+        if (data.found && data.arxiv) setArxivInput((current) => current || data.arxiv);
+      })
+      .catch(() => {});
+  }, [referenceInfo.title, authenticated]);
+
+  const runLatex = (payload) => {
+    setLatexBusy(true);
+    setLatexError("");
+    setLatexResult(null);
+    setCaptionsApplied(null);
+    axios
+      .post("/api/curation/latex-captions", {
+        ...payload,
+        charts: charts.map(({ id, imageFile, number }) => ({ id, imageFile, number })),
+      })
+      .then((res) => {
+        const data = res.data || {};
+        setLatexResult(data);
+        const skip = {};
+        (data.matches || []).forEach((match) => {
+          const record = charts.find((chart) => chart.id === match.id);
+          // A caption the curator already wrote is only replaced on request.
+          if (record && String(record.caption || "").trim()) skip[match.id] = true;
+        });
+        setCaptionSkip(skip);
+      })
+      .catch((err) =>
+        setLatexError(
+          (err && err.response && err.response.data && err.response.data.error) ||
+            "The LaTeX source could not be read."
+        )
+      )
+      .finally(() => setLatexBusy(false));
+  };
+
+  const onLatexFile = (event) => {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = "";
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setLatexError("That file is larger than 10 MB. Upload just the .tex files, or a .zip without the images.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      runLatex({ filename: file.name, content_b64: result.slice(result.indexOf(",") + 1) });
+    };
+    reader.onerror = () => setLatexError("The file could not be read.");
+    reader.readAsDataURL(file);
+  };
+
+  const captionMatches = ((latexResult && latexResult.matches) || []).filter((match) => {
+    const record = charts.find((chart) => chart.id === match.id);
+    return record && String(record.caption || "").trim() !== match.caption;
+  });
+  const captionChosen = captionMatches.filter((match) => !captionSkip[match.id]);
+
+  const applyCaptions = () => {
+    captionChosen.forEach((match) => {
+      const record = charts.find((chart) => chart.id === match.id);
+      if (!record) return;
+      edit("chart", {
+        ...record,
+        caption: match.caption,
+        number: String(record.number || "").trim() ? record.number : match.number,
+      });
+    });
+    setCaptionsApplied(captionChosen.length);
+    setLatexResult(null);
+  };
+
+  const chartFileName = (id) => {
+    const record = charts.find((chart) => chart.id === id);
+    return String((record && record.imageFile) || id).split("/").filter(Boolean).pop();
+  };
+  const uncaptioned = charts.filter((chart) => !String(chart.caption || "").trim()).length;
+
+  // 6. Finish ----------------------------------------------------------------
   const needing = recordsNeedingDetails(metadata);
   const paperMissing = [
     !(paperInfo.PIs && String(paperInfo.PIs).trim() && (!Array.isArray(paperInfo.PIs) || paperInfo.PIs.length)) && "principal investigators",
@@ -535,10 +635,12 @@ const GuidedSetup = () => {
     paper: Boolean(referenceInfo.title),
     folder: Boolean(fileServerPath),
     import: artifactCount > 0,
+    captions: charts.length > 0 && uncaptioned === 0,
     finish: artifactCount > 0 && needing.length === 0 && paperMissing.length === 0,
   };
   const done = Object.values(steps).filter(Boolean).length;
-  const firstOpen = ["you", "paper", "folder", "import", "finish"].findIndex((k) => !steps[k]);
+  const STEP_KEYS = ["you", "paper", "folder", "import", "captions", "finish"];
+  const firstOpen = STEP_KEYS.findIndex((k) => !steps[k]);
 
   const stepLabel = (key, title, subtitle) => (
     <StepLabel
@@ -558,7 +660,7 @@ const GuidedSetup = () => {
             Guided setup
           </Typography>
           <Box sx={{ flex: 1 }} />
-          <Typography variant="caption" color="text.secondary">{`${done} of 5 done`}</Typography>
+          <Typography variant="caption" color="text.secondary">{`${done} of ${STEP_KEYS.length} done`}</Typography>
         </Box>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
           Qresp fills in what it can from your profile, the paper's DOI and its
@@ -566,13 +668,13 @@ const GuidedSetup = () => {
         </Typography>
         <LinearProgress
           variant="determinate"
-          value={(done / 5) * 100}
+          value={(done / STEP_KEYS.length) * 100}
           sx={{ mt: 1.5, height: 6, borderRadius: 3, bgcolor: "rgba(128,0,0,0.08)" }}
         />
       </Box>
 
       <Box sx={{ p: { xs: 2, sm: 2.5 } }}>
-        <Stepper orientation="vertical" nonLinear activeStep={firstOpen === -1 ? 5 : firstOpen}>
+        <Stepper orientation="vertical" nonLinear activeStep={firstOpen === -1 ? STEP_KEYS.length : firstOpen}>
           {/* 1. You */}
           <Step completed={steps.you} expanded>
             {stepLabel("you", "Who is curating", "From your Qresp profile")}
@@ -990,7 +1092,192 @@ const GuidedSetup = () => {
             </StepContent>
           </Step>
 
-          {/* 5. Finish */}
+          {/* 5. Captions */}
+          <Step completed={steps.captions} expanded>
+            {stepLabel("captions", "Figure captions", "Copied from the paper's LaTeX source")}
+            <StepContent>
+              {!charts.length ? (
+                <Typography variant="body2" color="text.secondary">
+                  Available once figures are in the record.
+                </Typography>
+              ) : !authenticated ? (
+                <Typography variant="body2" color="text.secondary">
+                  Sign in to read captions from the paper's source.
+                </Typography>
+              ) : (
+                <Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                    Your paper's LaTeX already contains every figure's caption.
+                    Point Qresp at the source and it copies each{" "}
+                    <Box component="code" sx={{ fontSize: "0.85em" }}>\caption{"{…}"}</Box>{" "}
+                    onto the matching figure: the paper's exact words, no AI,
+                    and nothing is stored.
+                  </Typography>
+
+                  <ToggleButtonGroup
+                    exclusive
+                    size="small"
+                    value={srcMode}
+                    onChange={(_event, value) => value && setSrcMode(value)}
+                    sx={{ mb: 1.5, flexWrap: "wrap" }}
+                  >
+                    <ToggleButton value="arxiv" sx={{ textTransform: "none" }}>arXiv</ToggleButton>
+                    <ToggleButton value="upload" sx={{ textTransform: "none" }}>Upload .tex / .zip</ToggleButton>
+                    <ToggleButton value="overleaf" sx={{ textTransform: "none" }}>Overleaf</ToggleButton>
+                  </ToggleButtonGroup>
+
+                  {srcMode === "arxiv" && (
+                    <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start", flexWrap: "wrap" }}>
+                      <TextField
+                        size="small"
+                        label="arXiv ID or link"
+                        placeholder="2409.00246 or https://arxiv.org/abs/2409.00246"
+                        value={arxivInput}
+                        onChange={(e) => setArxivInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && arxivInput.trim()) {
+                            e.preventDefault();
+                            runLatex({ arxiv: arxivInput.trim() });
+                          }
+                        }}
+                        sx={{ flex: "1 1 280px" }}
+                        disabled={latexBusy}
+                      />
+                      <Button
+                        variant="contained"
+                        disableElevation
+                        onClick={() => runLatex({ arxiv: arxivInput.trim() })}
+                        disabled={latexBusy || !arxivInput.trim()}
+                        startIcon={latexBusy ? <CircularProgress size={16} color="inherit" /> : <Description />}
+                        sx={{ textTransform: "none", minHeight: 40 }}
+                      >
+                        Get captions
+                      </Button>
+                    </Box>
+                  )}
+
+                  {(srcMode === "upload" || srcMode === "overleaf") && (
+                    <Box>
+                      {srcMode === "overleaf" && (
+                        <Box component="ol" sx={{ m: 0, mb: 1.5, pl: 2.5, color: "text.secondary", typography: "body2" }}>
+                          <li>Open the project in Overleaf.</li>
+                          <li>Choose <strong>Menu → Download → Source</strong> to get a .zip.</li>
+                          <li>Upload that .zip below.</li>
+                        </Box>
+                      )}
+                      <Button
+                        variant="contained"
+                        disableElevation
+                        component="label"
+                        disabled={latexBusy}
+                        startIcon={latexBusy ? <CircularProgress size={16} color="inherit" /> : <Description />}
+                        sx={{ textTransform: "none" }}
+                      >
+                        {srcMode === "overleaf" ? "Upload the Overleaf .zip" : "Choose a file…"}
+                        <input
+                          hidden
+                          type="file"
+                          accept=".tex,.ltx,.zip,.tar,.gz,.tgz"
+                          onChange={onLatexFile}
+                          data-testid="latex-file"
+                        />
+                      </Button>
+                      <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.75 }}>
+                        {srcMode === "overleaf"
+                          ? "Overleaf projects are private, so Qresp cannot read them from a link."
+                          : "A single .tex file, or a .zip / .tar.gz of the whole project (up to 10 MB; the images are not needed)."}
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {latexError && <Alert severity="warning" sx={{ mt: 1.5 }}>{latexError}</Alert>}
+
+                  {captionsApplied !== null && !latexResult && (
+                    <Alert severity="success" sx={{ mt: 1.5 }}>
+                      {captionsApplied
+                        ? `Added ${plural(captionsApplied, "caption", "captions")}.`
+                        : "No captions were changed."}
+                      {uncaptioned ? ` ${plural(uncaptioned, "figure still needs", "figures still need")} a caption.` : ""}
+                    </Alert>
+                  )}
+
+                  {latexResult && (
+                    <Box sx={{ mt: 1.5 }}>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        {`Read ${latexResult.source} · ${plural((latexResult.figures || []).length, "figure or table", "figures and tables")} found · `}
+                        <strong>{`${plural((latexResult.matches || []).length, "matches a figure", "match figures")} in this record`}</strong>
+                      </Typography>
+                      {captionMatches.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">
+                          {(latexResult.matches || []).length
+                            ? "Those captions are already on their figures."
+                            : "None of them could be matched to this record's figures by file name or figure number."}
+                        </Typography>
+                      ) : (
+                        <Box>
+                          <Box sx={{ maxHeight: 340, overflowY: "auto", border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
+                            {captionMatches.map((match) => {
+                              const record = charts.find((chart) => chart.id === match.id);
+                              const replaces = record && String(record.caption || "").trim();
+                              return (
+                                <Box
+                                  key={match.id}
+                                  sx={{ display: "flex", gap: 0.5, alignItems: "flex-start", px: 1, py: 0.75, borderBottom: "1px solid", borderColor: "divider", "&:last-child": { borderBottom: 0 } }}
+                                >
+                                  <Checkbox
+                                    size="small"
+                                    checked={!captionSkip[match.id]}
+                                    onChange={(e) => setCaptionSkip((x) => ({ ...x, [match.id]: !e.target.checked }))}
+                                    slotProps={{ input: { "aria-label": `Caption for ${chartFileName(match.id)}` } }}
+                                  />
+                                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                                    <Typography variant="body2" fontWeight={600} sx={{ overflowWrap: "anywhere" }}>
+                                      {`${chartFileName(match.id)} · ${/^Table/.test(match.number) ? match.number : `Figure ${match.number}`}`}
+                                      <Typography component="span" variant="caption" color="text.secondary">
+                                        {match.how === "file" ? "  · matched by file name" : "  · matched by number"}
+                                      </Typography>
+                                    </Typography>
+                                    <Typography
+                                      variant="caption"
+                                      color="text.secondary"
+                                      sx={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}
+                                    >
+                                      {match.caption}
+                                    </Typography>
+                                    {replaces && (
+                                      <Typography variant="caption" color="warning.main" component="div">
+                                        Replaces the caption already on this figure.
+                                      </Typography>
+                                    )}
+                                  </Box>
+                                </Box>
+                              );
+                            })}
+                          </Box>
+                          <Box sx={{ display: "flex", gap: 1, mt: 1.5 }}>
+                            <Button
+                              variant="contained"
+                              disableElevation
+                              onClick={applyCaptions}
+                              disabled={!captionChosen.length}
+                              sx={{ textTransform: "none", fontWeight: 600 }}
+                            >
+                              {`Apply ${plural(captionChosen.length, "caption", "captions")}`}
+                            </Button>
+                            <Button onClick={() => setLatexResult(null)} sx={{ textTransform: "none" }}>
+                              Cancel
+                            </Button>
+                          </Box>
+                        </Box>
+                      )}
+                    </Box>
+                  )}
+                </Box>
+              )}
+            </StepContent>
+          </Step>
+
+          {/* 6. Finish */}
           <Step completed={steps.finish} expanded>
             {stepLabel("finish", "Finish the details", "Captions and anything only you know")}
             <StepContent>

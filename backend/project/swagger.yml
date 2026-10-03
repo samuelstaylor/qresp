@@ -1153,6 +1153,64 @@ paths:
           description: AI provider failed or answered unreadably
         503:
           description: AI keyword suggestions are not configured on this server
+  /curation/latex-captions:
+    post:
+      operationId: "project.latex.latex_captions"
+      tags:
+        - "Curation"
+      summary: "Figure captions from the paper's LaTeX source (upload or arXiv)"
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            properties:
+              arxiv:
+                type: string
+                maxLength: 300
+              filename:
+                type: string
+                maxLength: 300
+              content_b64:
+                type: string
+              charts:
+                type: array
+                maxItems: 500
+                items:
+                  type: object
+      responses:
+        200:
+          description: Figures found in the source and their matches
+        400:
+          description: The source could not be read
+        401:
+          description: Not authenticated
+  /curation/find-arxiv:
+    post:
+      operationId: "project.latex.find_arxiv"
+      tags:
+        - "Curation"
+      summary: "Find a paper's arXiv preprint by its exact title"
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+              - title
+            properties:
+              title:
+                type: string
+                maxLength: 500
+      responses:
+        200:
+          description: Search result (found or not)
+        400:
+          description: Missing title
+        401:
+          description: Not authenticated
   /curation/locate-folder:
     post:
       operationId: "project.curation.locate_folder"

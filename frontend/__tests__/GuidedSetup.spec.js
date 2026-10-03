@@ -227,3 +227,80 @@ describe("GuidedSetup file server", () => {
     expect(screen.queryByRole("button", { name: /find it from the doi/i })).toBeNull();
   });
 });
+
+describe("GuidedSetup captions from LaTeX", () => {
+  afterEach(() => jest.resetAllMocks());
+
+  const withFigures = {
+    ...blankState,
+    curatorInfo: { firstName: "Ada", middleName: "", lastName: "Lovelace", emailId: "ada@example.edu", affiliation: "" },
+    referenceInfo: { doi: "10.1038/x.1", title: "An NV- center in MgO" },
+    fileServerPath: "https://notebook.rcc.uchicago.edu/files/10.1038.x.1",
+    charts: [
+      { id: "c0", imageFile: "/Figures_Tables/Figure1.pdf", number: "1", caption: "", properties: ["DFT"] },
+      { id: "c1", imageFile: "/Figures_Tables/Figure2.pdf", number: "", caption: "", properties: ["DFT"] },
+    ],
+  };
+
+  it("finds the arXiv id, reads the captions and applies them to the figures", async () => {
+    const user = userEvent.setup();
+    axios.post.mockImplementation((url, body) => {
+      if (url === "/api/curation/find-arxiv") {
+        return Promise.resolve({ data: { found: true, arxiv: "2409.00246" } });
+      }
+      if (url === "/api/curation/latex-captions") {
+        return Promise.resolve({
+          data: {
+            source: "arXiv:2409.00246",
+            figures: [{}, {}],
+            matches: [
+              { id: "c0", caption: "Screening of spin defects.", number: "1", how: "file" },
+              { id: "c1", caption: "Ground state properties.", number: "2", how: "file" },
+            ],
+          },
+        });
+      }
+      return Promise.resolve({ data: {} });
+    });
+    const curator = renderSetup({
+      state: withFigures,
+      auth: { authenticated: true, user: { name: "Ada Lovelace", email: "ada@example.edu" } },
+    });
+
+    const field = await screen.findByLabelText(/arxiv id or link/i);
+    await screen.findByDisplayValue("2409.00246");
+    expect(field).toHaveValue("2409.00246");
+
+    await user.click(screen.getByRole("button", { name: /get captions/i }));
+    expect(axios.post).toHaveBeenCalledWith("/api/curation/latex-captions", {
+      arxiv: "2409.00246",
+      charts: [
+        { id: "c0", imageFile: "/Figures_Tables/Figure1.pdf", number: "1" },
+        { id: "c1", imageFile: "/Figures_Tables/Figure2.pdf", number: "" },
+      ],
+    });
+
+    await user.click(await screen.findByRole("button", { name: /apply 2 captions/i }));
+    expect(curator.edit).toHaveBeenCalledWith(
+      "chart",
+      expect.objectContaining({ id: "c0", caption: "Screening of spin defects.", number: "1" })
+    );
+    // A missing figure number is filled from LaTeX too.
+    expect(curator.edit).toHaveBeenCalledWith(
+      "chart",
+      expect.objectContaining({ id: "c1", caption: "Ground state properties.", number: "2" })
+    );
+  });
+
+  it("explains how to get an Overleaf project's source", async () => {
+    const user = userEvent.setup();
+    axios.post.mockResolvedValue({ data: { found: false } });
+    renderSetup({
+      state: withFigures,
+      auth: { authenticated: true, user: { name: "Ada Lovelace", email: "ada@example.edu" } },
+    });
+    await user.click(screen.getByRole("button", { name: /overleaf/i }));
+    expect(screen.getByText(/download → source/i)).toBeInTheDocument();
+    expect(screen.getByText(/upload the overleaf \.zip/i)).toBeInTheDocument();
+  });
+});
