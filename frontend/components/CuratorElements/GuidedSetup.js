@@ -257,6 +257,7 @@ const GuidedSetup = () => {
     importBundle,
     cacheRccAnalysis,
     edit,
+    resetVersion,
   } = ctx;
   const { loading: authLoading, authenticated, user } = useContext(AuthContext);
 
@@ -274,10 +275,10 @@ const GuidedSetup = () => {
       const info = curatorFromProfile(user);
       if (info && (info.emailId || info.firstName)) prefillCuratorInfo(info);
     }
-    // Only when the signed-in identity changes; a curator who clears the
-    // form afterwards is not overridden.
+    // On sign-in and after every reset (Start Fresh, a new form), never on
+    // ordinary edits: a curator who clears a field is not overridden.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, authenticated, user && user.email]);
+  }, [authLoading, authenticated, user && user.email, resetVersion]);
 
   // 2. Paper -----------------------------------------------------------------
   const [doi, setDoi] = useState(referenceInfo.doi || "");

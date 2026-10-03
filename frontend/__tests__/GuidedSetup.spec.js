@@ -20,9 +20,10 @@ const blankState = {
   workflow: { nodes: [], edges: [] },
 };
 
-const renderSetup = ({ state = blankState, auth = {} } = {}) => {
+const renderSetup = ({ state = blankState, auth = {}, resetVersion = 0 } = {}) => {
   const curator = {
     ...state,
+    resetVersion,
     metadata: state,
     prefillCuratorInfo: jest.fn(),
     collectDraftState: jest.fn(() => state),
@@ -32,13 +33,15 @@ const renderSetup = ({ state = blankState, auth = {} } = {}) => {
     cacheRccAnalysis: jest.fn(),
     edit: jest.fn(),
   };
-  render(
+  const tree = (value) => (
     <AuthContext.Provider value={{ loading: false, authenticated: false, user: null, ...auth }}>
-      <CuratorContext.Provider value={curator}>
+      <CuratorContext.Provider value={value}>
         <GuidedSetup />
       </CuratorContext.Provider>
     </AuthContext.Provider>
   );
+  const { rerender } = render(tree(curator));
+  curator.rerenderWith = (changes) => rerender(tree({ ...curator, ...changes }));
   return curator;
 };
 
@@ -59,6 +62,20 @@ describe("GuidedSetup", () => {
       emailId: "ada@example.edu",
       affiliation: "Analytical Engines",
     });
+  });
+
+  it("fills the curator again after Start Fresh clears the form", () => {
+    const profile = { name: "Ada Lovelace", email: "ada@example.edu" };
+    const filled = { firstName: "Ada", middleName: "", lastName: "Lovelace", emailId: "ada@example.edu", affiliation: "" };
+    const curator = renderSetup({
+      state: { ...blankState, curatorInfo: filled },
+      auth: { authenticated: true, user: profile },
+    });
+    expect(curator.prefillCuratorInfo).not.toHaveBeenCalled();
+
+    // Start Fresh: the form is blank again and resetVersion moves on.
+    curator.rerenderWith({ curatorInfo: blankState.curatorInfo, resetVersion: 1 });
+    expect(curator.prefillCuratorInfo).toHaveBeenCalledWith(filled);
   });
 
   it("never overwrites curator details that are already there", () => {
