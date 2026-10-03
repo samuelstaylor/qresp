@@ -10,6 +10,7 @@ import {
   ADD,
   ADD_MANY,
   ADD_AND_LINK,
+  IMPORT_BUNDLE,
   EDIT,
   DELETE,
   ADD_EDGE,
@@ -149,6 +150,37 @@ export default (state, action) => {
           })),
         workflow: { ...state.workflow, edges: newEdges },
       };
+
+    // A whole folder import as ONE change: records of several kinds plus the
+    // links between them. Callers name records with their own keys; ids are
+    // minted here and the links translated. A link that fails the same checks
+    // every other link goes through is skipped -- the records still land.
+    case IMPORT_BUNDLE: {
+      const { records = [], links = [] } = action.payload || {};
+      const next = { ...state };
+      const idByKey = {};
+      ["charts", "datasets", "scripts", "tools"].forEach((list) => {
+        const items = records.filter((record) => record.list === list);
+        if (!items.length) return;
+        const minted = mintIds(next[list] || [], list, items.map((i) => i.value));
+        minted.forEach((record, index) => {
+          idByKey[items[index].key] = record.id;
+        });
+        next[list] = [...(next[list] || []), ...minted];
+      });
+      const knownIds = ARTIFACT_LISTS.flatMap((list) =>
+        (next[list] || []).map((el) => el.id)
+      );
+      const edges = ((next.workflow || {}).edges || []).slice();
+      links.forEach((link) => {
+        const edge = { from: idByKey[link.from], to: idByKey[link.to], type: link.type };
+        if (!edge.from || !edge.to) return;
+        if (edgeProblem(edge, knownIds, edges) || closesLoop(edges, edge)) return;
+        edges.push(edge);
+      });
+      next.workflow = { ...(next.workflow || {}), edges };
+      return next;
+    }
 
     case EDIT:
       return {

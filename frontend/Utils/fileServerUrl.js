@@ -95,4 +95,8 @@ export const buildDirectoryUrl = (base, relative) => {
   return buildFileUrl(base, cut === -1 ? "" : path.slice(0, cut));
 };
 
+// Browsers cannot draw a PDF in an <img>; PDF figures need the PDF viewer.
+export const isPdfFile = (path) =>
+  /\.pdf$/i.test(String(path || "").split(/[?#]/)[0]);
+
 export default buildFileUrl;

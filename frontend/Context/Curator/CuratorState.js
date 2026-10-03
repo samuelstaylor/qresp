@@ -19,6 +19,7 @@ import {
   ADD,
   ADD_MANY,
   ADD_AND_LINK,
+  IMPORT_BUNDLE,
   EDIT,
   DELETE,
   ADD_EDGE,
@@ -378,6 +379,18 @@ const CuratorState = (props) => {
   const setCuratorInfo = (info) =>
     dispatch({ type: SET_CURATORINFO, payload: info });
 
+  // Profile-derived curator details applied automatically: not a user edit,
+  // so the leave-page guard does not treat it as unsaved work.
+  const prefillCuratorInfo = (info) => {
+    skipNextDirty.current = true;
+    dispatch({ type: SET_CURATORINFO, payload: { ...initialState.curatorInfo, ...info } });
+  };
+
+  // records: [{ key, list: "charts"|"datasets"|"scripts"|"tools", value }]
+  // links:   [{ from: key, to: key, type }]
+  const importBundle = (records, links) =>
+    dispatch({ type: IMPORT_BUNDLE, payload: { records, links } });
+
   const setFileServerPath = (path) => {
     if (path !== state.fileServerPath) clearRccAnalysis();
     dispatch({ type: SET_FILESERVERPATH, payload: path });
@@ -474,6 +487,8 @@ const CuratorState = (props) => {
         applyLoadedRecord,
         clearActiveDraft,
         setCuratorInfo,
+        prefillCuratorInfo,
+        importBundle,
         setFileServerPath,
         setPaperInfo,
         setReferenceAuthors,

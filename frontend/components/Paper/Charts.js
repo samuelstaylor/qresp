@@ -17,6 +17,7 @@ import {
   buildDirectoryUrl,
   buildFileUrl,
   isMixedContent,
+  isPdfFile,
 } from "../../Utils/fileServerUrl";
 import Slider from "../HorizontalSlider";
 import StyledTooltip from "../tooltip";
@@ -28,10 +29,9 @@ import LoadingContext from "../../Context/Loading/loadingContext";
 import AlertContext from "../../Context/Alert/alertContext";
 import axios from "axios";
 
-// Browsers cannot draw a PDF in an <img>, so PDF figures get the browser's
-// own PDF viewer instead (the RCC file server sends no frame restrictions).
-export const isPdfFile = (path) =>
-  /\.pdf$/i.test(String(path || "").split(/[?#]/)[0]);
+// PDF figures get the browser's own PDF viewer (the RCC file server sends no
+// frame restrictions). Re-exported for existing importers.
+export { isPdfFile };
 
 const PropsView = ({ rowdata }) => {
   return (

@@ -29,6 +29,7 @@ import FileServerElement from "../components/CuratorElements/FileServerElement";
 import PaperInfoElement from "../components/CuratorElements/PaperInfoElement";
 import ReferenceInfoElement from "../components/CuratorElements/ReferenceElement";
 import FigureWorkspace from "../components/CuratorElements/FigureWorkspace";
+import GuidedSetup from "../components/CuratorElements/GuidedSetup";
 import DocumentationInfoElement from "../components/CuratorElements/DocumentationElement";
 import WorkflowInfoElement from "../components/CuratorElements/WorkflowElement";
 import LicenseInfoElement from "../components/CuratorElements/LicenseElement";
@@ -392,7 +393,8 @@ const curator = () => {
                           New Paper Submission
                         </Typography>
                         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                          Complete each section below, then publish when ready.
+                          Start with the guided setup; the full record below
+                          fills in as you go.
                         </Typography>
                       </>
                     )}
@@ -407,34 +409,36 @@ const curator = () => {
                       <TopActions />
                     </Paper>
                   )}
+                  {/* Outside the remounter: its scan results and lookups must
+                      survive the form remounts its own auto-fills trigger. */}
+                  {!editMode && <GuidedSetup />}
                   <CuratorFormsRemounter>
-                    <CuratorElement />
-                    <PaperInfoElement />
-                    <ReferenceInfoElement />
-                    <FileServerElement />
-                    {/* ONE section, replacing four. Add Charts / Tools /
-                        Datasets / Scripts asked a curator to think in Qresp's
-                        storage categories and then connect them separately;
-                        nobody curating a paper thinks that way. The figure is
-                        the root and the rest hangs off it. Same models, same
-                        forms, same validation -- only the way in changed.
-
-                        WHERE IT SITS. After the required metadata, because a
-                        record needs its title and reference whatever else is
-                        done to it. Immediately after the file server path,
-                        because that path is what "Import from RCC" reads and
-                        a curator should be able to see both at once. And
-                        before the optional README, because curating the
-                        record is the work and a README is an extra. */}
-                    <FigureWorkspace />
-                    {/* A picture of what the section above produced, and
-                        nothing to press. It sits between them because the
-                        result of the work belongs next to the work, and
-                        ahead of a README that is optional. */}
+                    {!editMode && (
+                      <Typography
+                        variant="overline"
+                        component="h2"
+                        sx={{ display: "block", color: "text.secondary", letterSpacing: "0.1em", fontWeight: 700, mb: 0.5 }}
+                      >
+                        Full record
+                      </Typography>
+                    )}
+                    {/* Order follows the guided setup: who, the paper, where
+                        its files are, then what is in them. Each section has
+                        an anchor the setup's Edit / Change links scroll to. */}
+                    <Box id="curate-curator" sx={{ scrollMarginTop: 96 }}><CuratorElement /></Box>
+                    <Box id="curate-reference" sx={{ scrollMarginTop: 96 }}><ReferenceInfoElement /></Box>
+                    <Box id="curate-fileserver" sx={{ scrollMarginTop: 96 }}><FileServerElement /></Box>
+                    {/* ONE section, replacing four: the figure is the root and
+                        the datasets, scripts and tools hang off it. Directly
+                        after the file server path, because that path is what
+                        "Import from RCC" reads. */}
+                    <Box id="curate-figures" sx={{ scrollMarginTop: 96 }}><FigureWorkspace /></Box>
+                    <Box id="curate-paperinfo" sx={{ scrollMarginTop: 96 }}><PaperInfoElement /></Box>
+                    {/* A picture of what the figures section produced. */}
                     <WorkflowInfoElement />
                     <DocumentationInfoElement />
                     <LicenseInfoElement />
-                    {!editMode && <Publish />}
+                    {!editMode && <Box id="curate-publish" sx={{ scrollMarginTop: 96 }}><Publish /></Box>}
                   </CuratorFormsRemounter>
                 </Fragment>
               )}
