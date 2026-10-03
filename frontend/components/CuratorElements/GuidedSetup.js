@@ -3,6 +3,7 @@ import Link from "next/link";
 import axios from "axios";
 import {
   Alert,
+  Autocomplete,
   Avatar,
   Box,
   Button,
@@ -359,7 +360,24 @@ const GuidedSetup = () => {
   const [pendingFolder, setPendingFolder] = useState(null);
   const [browsing, setBrowsing] = useState(false);
 
+  // The file server to browse, chosen from the configured list (RCC by
+  // default) or typed in. Defaults to the server the saved folder is on.
+  const serverOptions = (httpServers || []).filter((server) => server && server.value);
+  const serverFor = (path) =>
+    serverOptions
+      .map((server) => server.value)
+      .filter((value) => String(path || "").startsWith(value))
+      .sort((a, b) => b.length - a.length)[0] ||
+    (serverOptions[0] && serverOptions[0].value) ||
+    "";
+  const [serverRoot, setServerRoot] = useState("");
+  useEffect(() => {
+    if (!serverRoot) setServerRoot(serverFor(fileServerPath));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverOptions.length, fileServerPath]);
+
   const startEditingFolder = () => {
+    setServerRoot(serverFor(fileServerPath));
     setFolderInput(fileServerPath || "");
     setFolderError("");
     setPendingFolder(null);
@@ -387,13 +405,13 @@ const GuidedSetup = () => {
   };
 
   const browseFolders = () => {
-    const roots = (httpServers || []).map((server) => server.value).filter(Boolean);
-    const from = folderInput || fileServerPath || "";
-    const root =
-      roots.filter((value) => from.startsWith(value)).sort((a, b) => b.length - a.length)[0] ||
-      roots[0];
-    if (!root || !getList || !openSelector) {
-      setFolderError("No file server is configured to browse. Paste the folder address instead.");
+    const root = String(serverRoot || "").trim().replace(/\/+$/, "");
+    if (!/^https?:\/\/[^\s]+$/i.test(root)) {
+      setFolderError("Choose a file server to browse, or enter its address starting with https://");
+      return;
+    }
+    if (!openSelector || !setTree || !setSaveMethod) {
+      setFolderError("Browsing is not available here. Paste the folder address instead.");
       return;
     }
     setSaveMethod((picked) => {
@@ -411,14 +429,9 @@ const GuidedSetup = () => {
         openSelector();
       })
       .catch(() =>
-        setFolderError("The file server could not be listed right now. Paste the folder address instead.")
+        setFolderError("That file server could not be listed. Check the address, or paste the folder address instead.")
       )
       .finally(() => setBrowsing(false));
-  };
-
-  const retryLocate = () => {
-    locatedFor.current = "";
-    locate(referenceInfo.doi);
   };
 
   const showFolderEditor = editingFolder || (!fileServerPath && !locating);
@@ -710,10 +723,39 @@ const GuidedSetup = () => {
                     </Typography>
                   )}
                   <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start", flexWrap: "wrap" }}>
+                    <Autocomplete
+                      freeSolo
+                      size="small"
+                      options={serverOptions}
+                      getOptionLabel={(option) => (typeof option === "string" ? option : option.label || option.value)}
+                      value={serverOptions.find((server) => server.value === serverRoot) || serverRoot || null}
+                      onChange={(_event, value) =>
+                        setServerRoot(typeof value === "string" ? value : value ? value.value : "")
+                      }
+                      onInputChange={(_event, value, reason) => {
+                        if (reason === "input") setServerRoot(value);
+                      }}
+                      renderInput={(params) => (
+                        <TextField {...params} label="File server" placeholder="https://notebook.rcc.uchicago.edu/files" />
+                      )}
+                      sx={{ flex: "1 1 320px" }}
+                    />
+                    <Button
+                      variant="contained"
+                      disableElevation
+                      onClick={browseFolders}
+                      disabled={browsing || !String(serverRoot || "").trim()}
+                      startIcon={browsing ? <CircularProgress size={16} color="inherit" /> : <FolderOpen />}
+                      sx={{ textTransform: "none", minHeight: 40 }}
+                    >
+                      Browse…
+                    </Button>
+                  </Box>
+                  <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start", flexWrap: "wrap", mt: 1.5 }}>
                     <TextField
                       size="small"
-                      label="Folder address"
-                      placeholder="https://notebook.rcc.uchicago.edu/files/10.1038.s41524-025-01558-w"
+                      label="Or paste the folder address"
+                      placeholder={`${(serverRoot || "https://notebook.rcc.uchicago.edu/files").replace(/\/+$/, "")}/your-paper-folder`}
                       value={folderInput}
                       onChange={(e) => {
                         setFolderInput(e.target.value);
@@ -728,22 +770,12 @@ const GuidedSetup = () => {
                       sx={{ flex: "1 1 320px" }}
                     />
                     <Button
-                      variant="contained"
-                      disableElevation
+                      variant="outlined"
                       onClick={() => commitFolder(folderInput)}
                       disabled={!folderInput.trim()}
                       sx={{ textTransform: "none", minHeight: 40 }}
                     >
                       Use this folder
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      onClick={browseFolders}
-                      disabled={browsing}
-                      startIcon={browsing ? <CircularProgress size={16} /> : <FolderOpen />}
-                      sx={{ textTransform: "none", minHeight: 40 }}
-                    >
-                      Browse…
                     </Button>
                     {editingFolder && (
                       <Button
@@ -759,20 +791,6 @@ const GuidedSetup = () => {
                     )}
                   </Box>
                   {folderError && <Alert severity="warning" sx={{ mt: 1 }}>{folderError}</Alert>}
-                  {locateResult && locateResult.found && locateResult.path &&
-                    locateResult.path !== fileServerPath && locateResult.path !== folderInput && (
-                    <Alert
-                      severity="info"
-                      sx={{ mt: 1, overflowWrap: "anywhere" }}
-                      action={
-                        <Button size="small" onClick={() => commitFolder(locateResult.path)}>
-                          Use
-                        </Button>
-                      }
-                    >
-                      {`Found from the DOI: ${locateResult.path}`}
-                    </Alert>
-                  )}
                   {pendingFolder && (
                     <Alert
                       severity="warning"
@@ -796,14 +814,6 @@ const GuidedSetup = () => {
                     </Alert>
                   )}
                   <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.75 }}>
-                    {referenceInfo.doi && authenticated ? (
-                      <>
-                        <Button size="small" onClick={retryLocate} sx={{ textTransform: "none", p: 0, minWidth: 0, verticalAlign: "baseline" }}>
-                          Find it from the DOI
-                        </Button>
-                        {" · "}
-                      </>
-                    ) : null}
                     Zenodo record?{" "}
                     <SectionLink target="curate-fileserver">Use the full form</SectionLink>
                   </Typography>

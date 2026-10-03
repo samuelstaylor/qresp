@@ -4,6 +4,11 @@ import userEvent from "@testing-library/user-event";
 jest.mock("axios");
 import axios from "axios";
 
+jest.mock("../Utils/Scraper", () => ({ getList: jest.fn() }));
+import { getList } from "../Utils/Scraper";
+import ServerContext from "../Context/Servers/serverContext";
+import SourceTreeContext from "../Context/SourceTree/SourceTreeContext";
+
 import GuidedSetup from "../components/CuratorElements/GuidedSetup";
 import AuthContext from "../Context/Auth/authContext";
 import CuratorContext from "../Context/Curator/curatorContext";
@@ -159,5 +164,66 @@ describe("GuidedSetup project folder", () => {
       "https://notebook.rcc.uchicago.edu/files/a"
     );
     expect(screen.getByRole("button", { name: /browse/i })).toBeInTheDocument();
+  });
+});
+
+describe("GuidedSetup file server", () => {
+  afterEach(() => jest.resetAllMocks());
+
+  const RCC = "https://notebook.rcc.uchicago.edu/files";
+
+  it("browses the chosen file server and uses the picked folder", async () => {
+    const user = userEvent.setup();
+    getList.mockResolvedValue({ details: { root: RCC }, files: [{ id: "x" }] });
+    const tree = {
+      setTree: jest.fn(),
+      openSelector: jest.fn(),
+      setSaveMethod: jest.fn(),
+      setConfirmLabel: jest.fn(),
+      setMultiple: jest.fn(),
+    };
+    const curator = {
+      ...blankState,
+      metadata: blankState,
+      resetVersion: 0,
+      prefillCuratorInfo: jest.fn(),
+      collectDraftState: jest.fn(() => blankState),
+      setAll: jest.fn(),
+      remountForms: jest.fn(),
+      importBundle: jest.fn(),
+      cacheRccAnalysis: jest.fn(),
+      edit: jest.fn(),
+    };
+    render(
+      <AuthContext.Provider value={{ loading: false, authenticated: false, user: null }}>
+        <ServerContext.Provider
+          value={{ httpServers: [{ value: RCC, label: "RCC (" + RCC + ")" }], setSelectedHttp: jest.fn() }}
+        >
+          <SourceTreeContext.Provider value={tree}>
+            <CuratorContext.Provider value={curator}>
+              <GuidedSetup />
+            </CuratorContext.Provider>
+          </SourceTreeContext.Provider>
+        </ServerContext.Provider>
+      </AuthContext.Provider>
+    );
+
+    // RCC is the default server.
+    expect(screen.getByLabelText(/file server/i)).toHaveValue("RCC (" + RCC + ")");
+    await user.click(screen.getByRole("button", { name: /browse/i }));
+    expect(getList).toHaveBeenCalledWith(RCC, "http", true, null);
+    expect(tree.openSelector).toHaveBeenCalled();
+
+    // The picker hands back a folder; it is applied straight away.
+    const save = tree.setSaveMethod.mock.calls[0][0];
+    save(RCC + "/10.1038.x.1");
+    expect(curator.setAll).toHaveBeenCalledWith(
+      expect.objectContaining({ fileServerPath: RCC + "/10.1038.x.1" })
+    );
+  });
+
+  it("has no Find-from-DOI button", () => {
+    renderSetup({ state: { ...blankState, referenceInfo: { doi: "10.1/x", title: "T" } } });
+    expect(screen.queryByRole("button", { name: /find it from the doi/i })).toBeNull();
   });
 });
