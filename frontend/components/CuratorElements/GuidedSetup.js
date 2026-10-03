@@ -569,12 +569,15 @@ const GuidedSetup = () => {
         });
         setCaptionSkip(skip);
       })
-      .catch((err) =>
+      .catch((err) => {
+        const response = err && err.response;
         setLatexError(
-          (err && err.response && err.response.data && err.response.data.error) ||
-            "The LaTeX source could not be read."
-        )
-      )
+          (response && response.data && response.data.error) ||
+            (response && response.status === 404
+              ? "This Qresp server cannot read LaTeX yet. If it was just updated, the backend needs a restart."
+              : "The LaTeX source could not be read.")
+        );
+      })
       .finally(() => setLatexBusy(false));
   };
 
