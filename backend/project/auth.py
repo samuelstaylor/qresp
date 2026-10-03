@@ -834,6 +834,11 @@ def local_login(body):
         "email": email,
         "name": account.name or email,
         "affiliation": account.affiliation or "",
+        "bio": account.bio or "",
+        "orcid_id": account.orcid_id or "",
+        "google_scholar_url": account.google_scholar_url or "",
+        "website_url": account.website_url or "",
+        "avatar_b64": account.avatar_b64 or "",
         "is_admin": email in _admin_emails(),
         "provider": "local",
     }
@@ -841,13 +846,23 @@ def local_login(body):
     return {"authenticated": True, "user": user}, 200
 
 
+def _validate_url(value, label):
+    """Return an error string if value looks like a non-empty invalid URL."""
+    if not value:
+        return None
+    if not (value.startswith("http://") or value.startswith("https://")):
+        return "%s must start with http:// or https://" % label
+    if len(value) > 500:
+        return "%s is too long (max 500 characters)." % label
+    return None
+
+
 @csrf_protect
 def update_profile(body):
-    """PATCH /api/auth/profile — update display name and/or affiliation.
+    """PATCH /api/auth/profile — update profile fields for the signed-in user.
 
-    Updates the session immediately. For local-password accounts both fields are
-    also persisted to MongoDB; for OAuth/dev accounts only the session is updated.
-    Name is required; affiliation is optional (omit the key to leave it unchanged).
+    All fields except name are optional. For local-password accounts every field
+    is persisted to MongoDB; for OAuth/dev accounts only the session is updated.
     """
     user = get_current_user()
     if not user:
@@ -863,15 +878,53 @@ def update_profile(body):
     if len(affiliation) > 300:
         return {"error": "Affiliation is too long (max 300 characters)."}, 400
 
+    bio = (body.get("bio") or "").strip()
+    if len(bio) > 500:
+        return {"error": "Bio is too long (max 500 characters)."}, 400
+
+    orcid_id = (body.get("orcid_id") or "").strip()
+    if len(orcid_id) > 40:
+        return {"error": "ORCID iD is too long."}, 400
+
+    google_scholar_url = (body.get("google_scholar_url") or "").strip()
+    err = _validate_url(google_scholar_url, "Google Scholar URL")
+    if err:
+        return {"error": err}, 400
+
+    website_url = (body.get("website_url") or "").strip()
+    err = _validate_url(website_url, "Website URL")
+    if err:
+        return {"error": err}, 400
+
+    avatar_b64 = (body.get("avatar_b64") or "").strip()
+    if len(avatar_b64) > 700000:
+        return {"error": "Profile photo is too large (max ~500 KB)."}, 400
+
     if user.get("provider") == "local":
         from project.models import LocalAccount
         account = LocalAccount.objects(email=user["email"]).first()
         if account:
             account.name = name
             account.affiliation = affiliation
+            account.bio = bio
+            account.orcid_id = orcid_id
+            account.google_scholar_url = google_scholar_url
+            account.website_url = website_url
+            if avatar_b64 or "avatar_b64" in body:
+                account.avatar_b64 = avatar_b64
             account.save()
 
-    user = {**user, "name": name, "affiliation": affiliation}
+    updates = {
+        "name": name,
+        "affiliation": affiliation,
+        "bio": bio,
+        "orcid_id": orcid_id,
+        "google_scholar_url": google_scholar_url,
+        "website_url": website_url,
+    }
+    if avatar_b64 or "avatar_b64" in body:
+        updates["avatar_b64"] = avatar_b64
+    user = {**user, **updates}
     session[AUTH_SESSION_KEY] = user
     return {"authenticated": True, "user": user}, 200
 

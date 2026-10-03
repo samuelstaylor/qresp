@@ -292,6 +292,11 @@ class LocalAccount(Document):
     password_hash = StringField(required=True)
     name = StringField(max_length=200, default="")
     affiliation = StringField(max_length=300, default="")
+    bio = StringField(max_length=500, default="")
+    orcid_id = StringField(max_length=40, default="")
+    google_scholar_url = StringField(max_length=500, default="")
+    website_url = StringField(max_length=500, default="")
+    avatar_b64 = StringField(default="")
     created_at = DateTimeField()
     last_login_at = DateTimeField()
     meta = {

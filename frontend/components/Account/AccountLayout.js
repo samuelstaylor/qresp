@@ -74,6 +74,7 @@ const AccountLayout = ({ children, pageTitle }) => {
             sx={{ p: 2.5, mb: 2, borderRadius: 3 }}
           >
             <Avatar
+              src={user?.avatar_b64 || undefined}
               sx={{
                 width: 52,
                 height: 52,

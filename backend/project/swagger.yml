@@ -1527,7 +1527,7 @@ paths:
       operationId: "project.auth.update_profile"
       tags:
         - "Authentication"
-      summary: "Update the display name of the signed-in user"
+      summary: "Update profile fields for the signed-in user"
       parameters:
         - in: body
           name: body
@@ -1543,6 +1543,20 @@ paths:
               affiliation:
                 type: string
                 maxLength: 300
+              bio:
+                type: string
+                maxLength: 500
+              orcid_id:
+                type: string
+                maxLength: 40
+              google_scholar_url:
+                type: string
+                maxLength: 500
+              website_url:
+                type: string
+                maxLength: 500
+              avatar_b64:
+                type: string
       responses:
         200:
           description: Profile updated
