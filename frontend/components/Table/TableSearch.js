@@ -73,7 +73,7 @@ const TableSearch = ({ rows, setFiltered, columns }) => {
   }, [query]);
 
   return (
-    <Box sx={{ m: 1, mt: 2 }}>
+    <Box sx={{ my: 1 }}>
       <form noValidate onSubmit={onSubmit}>
         <TextField
           value={query}
@@ -103,6 +103,10 @@ const TableSearch = ({ rows, setFiltered, columns }) => {
           size="small"
           variant="outlined"
           fullWidth
+          inputProps={{ "aria-label": "Search records by keyword" }}
+          sx={{
+            "& .MuiOutlinedInput-root": { borderRadius: 2, bgcolor: "#fff", minHeight: 44 },
+          }}
         />
       </form>
     </Box>

@@ -11,8 +11,14 @@ import { styled } from "@mui/material/styles";
 import { visuallyHidden } from "@mui/utils";
 
 const StyledTableCell = styled(TableCell)({
-  borderBottomColor: "#000",
-  padding: "8px",
+  padding: "10px 12px",
+  backgroundColor: "#fafafa",
+  borderBottomColor: "rgba(0,0,0,0.12)",
+  color: "#555",
+  fontSize: "0.75rem",
+  fontWeight: 700,
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
 });
 
 const EnhancedTableHeader = (props) => {

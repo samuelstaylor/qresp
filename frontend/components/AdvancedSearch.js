@@ -4,6 +4,8 @@ import PropTypes from "prop-types";
 import {
   Collapse,
   Button,
+  Chip,
+  Divider,
   Grid,
   Typography,
   TextField,
@@ -11,7 +13,7 @@ import {
   IconButton,
   Box,
 } from "@mui/material";
-import { Search, ExpandMore, Clear, Close } from "@mui/icons-material";
+import { Search, ExpandMore, Close, Tune } from "@mui/icons-material";
 import Autocomplete from "@mui/material/Autocomplete";
 
 import LoadingContext from "../Context/Loading/loadingContext";
@@ -20,41 +22,50 @@ import ServerContext from "../Context/Servers/serverContext";
 import { useRouter } from "next/router";
 import axios from "axios";
 
-const TextSearchField = ({ title, placeholder, value, onChange, name }) => {
-  return (
-    <Grid container direction="column" alignItems="stretch" justifyContent="center">
-      <Grid size={12}>
-        <Typography variant="h6" color="secondary" align="center">
-          <Box sx={{ fontWeight: "bold" }}>{title}</Box>
-        </Typography>
-      </Grid>
-      <Grid size={12}>
-        <TextField
-          variant="outlined"
-          value={value}
-          placeholder={placeholder}
-          onChange={(e) => onChange(name, e.target.value)}
-          size="small"
-          fullWidth
-          slotProps={{
-            input: {
-              endAdornment: (
-                <InputAdornment
-                  position="end"
-                  sx={{ visibility: value ? "visible" : "hidden" }}
-                >
-                  <IconButton size="small" onClick={() => onChange(name, "")}>
-                    <Close sx={{ color: "text.secondary", fontSize: 18 }} />
-                  </IconButton>
-                </InputAdornment>
-              ),
-            },
-          }}
-        />
-      </Grid>
-    </Grid>
-  );
-};
+const FieldLabel = ({ children }) => (
+  <Typography
+    variant="caption"
+    component="div"
+    sx={{
+      fontWeight: 700,
+      color: "text.secondary",
+      textTransform: "uppercase",
+      letterSpacing: "0.06em",
+      mb: 0.5,
+    }}
+  >
+    {children}
+  </Typography>
+);
+
+const TextSearchField = ({ title, placeholder, value, onChange, name }) => (
+  <Box>
+    <FieldLabel>{title}</FieldLabel>
+    <TextField
+      variant="outlined"
+      value={value}
+      placeholder={placeholder}
+      onChange={(e) => onChange(name, e.target.value)}
+      size="small"
+      fullWidth
+      slotProps={{
+        htmlInput: { "aria-label": title },
+        input: {
+          endAdornment: (
+            <InputAdornment
+              position="end"
+              sx={{ visibility: value ? "visible" : "hidden" }}
+            >
+              <IconButton size="small" onClick={() => onChange(name, "")} aria-label={`Clear ${title}`}>
+                <Close sx={{ color: "text.secondary", fontSize: 18 }} />
+              </IconButton>
+            </InputAdornment>
+          ),
+        },
+      }}
+    />
+  </Box>
+);
 
 const ChipSearchField = ({
   title,
@@ -63,37 +74,29 @@ const ChipSearchField = ({
   name,
   placeholder,
   value,
-}) => {
-  return (
-    <Grid container direction="column" alignItems="stretch" justifyContent="center">
-      <Grid size={12}>
-        <Typography variant="h6" color="secondary" align="center">
-          <Box sx={{ fontWeight: "bold" }}>{title}</Box>
-        </Typography>
-      </Grid>
-      <Grid size={12}>
-        <Autocomplete
-          value={value}
-          multiple
-          options={Array.from(options)}
-          filterSelectedOptions
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              variant="outlined"
-              placeholder={placeholder}
-            />
-          )}
-          ChipProps={{ color: "primary", variant: "outlined" }}
-          onChange={(event, values) => onChange(name, values)}
-          size="small"
-          fullWidth
-          limitTags={2}
+}) => (
+  <Box>
+    <FieldLabel>{title}</FieldLabel>
+    <Autocomplete
+      value={value}
+      multiple
+      options={Array.from(options)}
+      filterSelectedOptions
+      renderInput={(params) => (
+        <TextField
+          {...params}
+          variant="outlined"
+          placeholder={value.length ? "" : placeholder}
         />
-      </Grid>
-    </Grid>
-  );
-};
+      )}
+      ChipProps={{ color: "primary", variant: "outlined", size: "small" }}
+      onChange={(event, values) => onChange(name, values)}
+      size="small"
+      fullWidth
+      limitTags={2}
+    />
+  </Box>
+);
 
 // This component runs the search; it does NOT decide what the page says
 // about the outcome. It used to do both, and the second half was a global
@@ -122,6 +125,9 @@ const AdvancedSearch = ({
   };
 
   const [search, setSearch] = useState(initialState);
+  const activeFilters = Object.values(search).filter((v) =>
+    Array.isArray(v) ? v.length > 0 : String(v).trim() !== ""
+  ).length;
   // All servers pre-selected by default.
   const [selectedNodes, setSelectedNodes] = useState(() => serverOptions.map((s) => s.url));
   useEffect(() => {
@@ -222,157 +228,146 @@ const AdvancedSearch = ({
 
   return (
     <Fragment>
-      <Box sx={{ display: "flex", justifyContent: "center" }}>
-        <Button
-          onClick={handleClick}
-          fullWidth={false}
-          style={{ textTransform: "none" }}
-        >
-          Advanced Search
-          <div className="rotateIcon">
-            <ExpandMore />
-          </div>
-        </Button>
-      </Box>
-      <style jsx>
-        {`
-          .rotateIcon {
-            display: inherit;
-            align-items: inherit;
-            justify-content: inherit;
-            margin:auto;
-            transform: rotate(0deg);
-            overflow: hidden;
-            transition: all 0.3s linear;
-            transform: ${show ? `rotate(180deg)` : ""};          }
-          }
-        `}
-      </style>
-      <Collapse in={show}>
-        <Box sx={{ m: 2 }}>
-          <form onSubmit={onSubmit}>
-            <Grid container direction="column" spacing={1} alignItems="center">
-              {serverOptions.length > 1 && (
-                <Grid size={12}>
-                  <Grid container direction="column" alignItems="stretch" justifyContent="center">
-                    <Grid size={12}>
-                      <Typography variant="h6" color="secondary" align="center">
-                        <Box sx={{ fontWeight: "bold" }}>Qresp Nodes</Box>
-                      </Typography>
-                    </Grid>
-                    <Grid size={12}>
-                      <Autocomplete
-                        multiple
-                        options={serverOptions}
-                        getOptionLabel={(opt) => opt.label}
-                        isOptionEqualToValue={(opt, val) => opt.url === val.url}
-                        value={serverOptions.filter((s) => selectedNodes.includes(s.url))}
-                        onChange={(_, values) => setSelectedNodes(values.map((v) => v.url))}
-                        renderOption={(props, opt) => (
-                          <li {...props} key={opt.url}>
-                            {opt.menuLabel || opt.label}
-                          </li>
-                        )}
-                        renderInput={(params) => (
-                          <TextField
-                            {...params}
-                            variant="outlined"
-                            placeholder={selectedNodes.length === 0 ? "Select nodes…" : ""}
-                            size="small"
-                          />
-                        )}
-                        ChipProps={{ color: "primary", variant: "outlined" }}
-                        fullWidth
-                        limitTags={4}
-                        disableCloseOnSelect
-                      />
-                    </Grid>
-                  </Grid>
-                </Grid>
-              )}
-              <Grid container direction="row" spacing={1} justifyContent="center" alignItems="stretch" size={12}>
-                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                  <TextSearchField
-                    title="Title"
-                    placeholder="Enter a title"
-                    value={search.paperTitle}
-                    onChange={onChange}
-                    name="paperTitle"
-                  />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                  <TextSearchField
-                    title="DOI"
-                    placeholder="Enter a DOI"
-                    value={search.doi}
-                    onChange={onChange}
-                    name="doi"
-                  />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                  <ChipSearchField
-                    title="Tags"
-                    options={tags}
-                    onChange={onChange}
-                    name="tags"
-                    placeholder="Enter Tag(s)"
-                    value={search.tags}
-                  />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                  <ChipSearchField
-                    title="Collections"
-                    options={collections}
-                    onChange={onChange}
-                    name="collectionList"
-                    placeholder="Enter Collection(s) Name"
-                    value={search.collectionList}
-                  />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                  <ChipSearchField
-                    title="Paper Authors"
-                    options={authors}
-                    onChange={onChange}
-                    name="authorsList"
-                    placeholder="Enter Author(s) name"
-                    value={search.authorsList}
-                  />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                  <ChipSearchField
-                    title="Publication"
-                    options={publications}
-                    onChange={onChange}
-                    name="publicationList"
-                    placeholder="Enter publication(s) name"
-                    value={search.publicationList}
-                  />
-                </Grid>
+      <Button
+        onClick={handleClick}
+        variant={show ? "contained" : "outlined"}
+        disableElevation
+        startIcon={<Tune />}
+        endIcon={
+          <ExpandMore
+            sx={{ transition: "transform 0.25s", transform: show ? "rotate(180deg)" : "none" }}
+          />
+        }
+        aria-expanded={show}
+        sx={{ textTransform: "none", fontWeight: 600, minHeight: 44, borderRadius: 2, flexShrink: 0 }}
+      >
+        Advanced search
+        {activeFilters > 0 && (
+          <Chip
+            label={activeFilters}
+            size="small"
+            sx={{
+              ml: 1,
+              height: 20,
+              fontWeight: 700,
+              bgcolor: show ? "#fff" : "#800000",
+              color: show ? "#800000" : "#fff",
+            }}
+          />
+        )}
+      </Button>
+      <Collapse in={show} sx={{ flexBasis: "100%", width: "100%" }}>
+        <Divider sx={{ mt: 1.5, mb: 2 }} />
+        <form onSubmit={onSubmit}>
+          <Grid container spacing={2}>
+            {serverOptions.length > 1 && (
+              <Grid size={12}>
+                <FieldLabel>Qresp nodes</FieldLabel>
+                <Autocomplete
+                  multiple
+                  options={serverOptions}
+                  getOptionLabel={(opt) => opt.label}
+                  isOptionEqualToValue={(opt, val) => opt.url === val.url}
+                  value={serverOptions.filter((s) => selectedNodes.includes(s.url))}
+                  onChange={(_, values) => setSelectedNodes(values.map((v) => v.url))}
+                  renderOption={(props, opt) => (
+                    <li {...props} key={opt.url}>
+                      {opt.menuLabel || opt.label}
+                    </li>
+                  )}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      variant="outlined"
+                      placeholder={selectedNodes.length === 0 ? "Select nodes…" : ""}
+                      size="small"
+                    />
+                  )}
+                  ChipProps={{ color: "primary", variant: "outlined", size: "small" }}
+                  fullWidth
+                  limitTags={4}
+                  disableCloseOnSelect
+                />
               </Grid>
-              <Grid container spacing={1} justifyContent="center">
-                <Grid>
-                  <Button
-                    variant="contained"
-                    endIcon={<Search />}
-                    type="submit"
-                  >
-                    Search
-                  </Button>
-                </Grid>
-                <Grid>
-                  <Button
-                    variant="contained"
-                    endIcon={<Clear />}
-                    onClick={onClear}
-                  >
-                    Clear
-                  </Button>
-                </Grid>
-              </Grid>
+            )}
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+              <TextSearchField
+                title="Title"
+                placeholder="Enter a title"
+                value={search.paperTitle}
+                onChange={onChange}
+                name="paperTitle"
+              />
             </Grid>
-          </form>
-        </Box>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+              <TextSearchField
+                title="DOI"
+                placeholder="Enter a DOI"
+                value={search.doi}
+                onChange={onChange}
+                name="doi"
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+              <ChipSearchField
+                title="Tags"
+                options={tags}
+                onChange={onChange}
+                name="tags"
+                placeholder="Enter Tag(s)"
+                value={search.tags}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+              <ChipSearchField
+                title="Collections"
+                options={collections}
+                onChange={onChange}
+                name="collectionList"
+                placeholder="Enter Collection(s) Name"
+                value={search.collectionList}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+              <ChipSearchField
+                title="Paper Authors"
+                options={authors}
+                onChange={onChange}
+                name="authorsList"
+                placeholder="Enter Author(s) name"
+                value={search.authorsList}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+              <ChipSearchField
+                title="Publication"
+                options={publications}
+                onChange={onChange}
+                name="publicationList"
+                placeholder="Enter publication(s) name"
+                value={search.publicationList}
+              />
+            </Grid>
+          </Grid>
+          <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1, mt: 2.5 }}>
+            <Button
+              variant="text"
+              onClick={onClear}
+              sx={{ textTransform: "none", color: "text.secondary" }}
+            >
+              Clear all
+            </Button>
+            <Button
+              variant="contained"
+              disableElevation
+              startIcon={<Search />}
+              type="submit"
+              sx={{ textTransform: "none", fontWeight: 600, px: 3 }}
+            >
+              Search
+            </Button>
+          </Box>
+        </form>
       </Collapse>
     </Fragment>
   );

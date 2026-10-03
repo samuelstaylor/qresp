@@ -28,6 +28,16 @@ import SHIPPED_SERVERS from "../data/qresp_servers.js";
 const EMPTY_DATA = { papers: {}, authors: [], collections: [], publications: [] };
 const EMPTY_ERROR = { is: false, msg: "", failed: [], filters: {}, total: false };
 
+const YearCell = ({ rowdata }) => (
+  <Typography
+    variant="body2"
+    component="span"
+    sx={{ fontWeight: 600, color: "#555", fontVariantNumeric: "tabular-nums" }}
+  >
+    {rowdata || "—"}
+  </Typography>
+);
+
 const search = ({
   selectedservers,
   servernames = {},
@@ -183,7 +193,7 @@ const search = ({
     {
       label: "Year",
       name: "year",
-      view: null,
+      view: YearCell,
       options: {
         align: "right",
         sort: true,
@@ -281,11 +291,28 @@ const search = ({
         description={searchDescription}
         author={searchAuthor}
       />
-      <Container>
-        <Box sx={{ display: "flex", flexDirection: "column", m: 2 }}>
-          <Typography variant="h4" component="h1" gutterBottom>
-            Search Reproducible Research Records
-          </Typography>
+      <Container maxWidth="lg">
+        <Box sx={{ display: "flex", flexDirection: "column", mt: 4, mb: 8 }}>
+          <Box sx={{ mb: 3 }}>
+            <Typography
+              variant="overline"
+              component="div"
+              sx={{ color: "#800000", letterSpacing: "0.1em", fontWeight: 700, lineHeight: 1.8 }}
+            >
+              Explore
+            </Typography>
+            <Typography
+              variant="h4"
+              component="h1"
+              sx={{ fontWeight: 700, color: "#222", fontSize: { xs: "1.6rem", md: "2.1rem" } }}
+            >
+              Search Reproducible Research Records
+            </Typography>
+            <Typography variant="body1" sx={{ color: "#555", mt: 0.75, maxWidth: 720 }}>
+              Find curated papers across Qresp servers and trace each figure
+              back to the datasets, scripts and tools that produced it.
+            </Typography>
+          </Box>
           {/* NO banner when only some sources failed.
               
               Federation is plumbing. A visitor searching for a paper did not

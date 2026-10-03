@@ -8,12 +8,15 @@ import {
   TableContainer,
   TableRow,
   Box,
-  Button,
   CircularProgress,
+  IconButton,
+  MenuItem,
+  Paper,
+  TextField,
+  Tooltip,
   Typography,
-  ToggleButton,
-  ToggleButtonGroup,
 } from "@mui/material";
+import { ArrowDownward, ArrowUpward } from "@mui/icons-material";
 import { styled } from "@mui/material/styles";
 
 import { CSSTransition, TransitionGroup } from "react-transition-group";
@@ -25,12 +28,13 @@ import TableSearch, { TableSearchState } from "./TableSearch";
 import { getComparator, stableSort } from "./TableSort";
 
 const StyledTableCell = styled(TableCell)({
-  padding: "8px",
+  padding: "14px 12px",
+  verticalAlign: "top",
+  borderBottomColor: "rgba(0,0,0,0.08)",
 });
 
-const StyledLastTableCell = styled(TableCell)({
-  padding: "8px",
-  borderBottomColor: "#000",
+const StyledLastTableCell = styled(StyledTableCell)({
+  borderBottom: 0,
 });
 
 // React 19 removed findDOMNode, which CSSTransition falls back to when no
@@ -39,7 +43,15 @@ const FadeTableRow = ({ children, ...transitionProps }) => {
   const nodeRef = useRef(null);
   return (
     <CSSTransition {...transitionProps} nodeRef={nodeRef}>
-      <TableRow ref={nodeRef}>{children}</TableRow>
+      <TableRow
+        ref={nodeRef}
+        sx={{
+          transition: "background-color 0.15s",
+          "&:hover": { backgroundColor: "rgba(128,0,0,0.03)" },
+        }}
+      >
+        {children}
+      </TableRow>
     </CSSTransition>
   );
 };
@@ -130,31 +142,36 @@ const RecordTable = (props) => {
 
   return (
     <TableSearchState>
-      {/* Search bar */}
-      <TableSearch
-        columns={columns}
-        setFiltered={setFiltered}
-        rows={rows}
-      />
-
-      {/* Advanced Search — directly below the search bar */}
-      {advancedSearch}
-
-      {/* Dynamic record count — always visible while loading so there is no
-          jarring empty gap before the number arrives. */}
-      {(!hideCount || loading) && (
-        <Box sx={{ display: "flex", justifyContent: "center", py: 0.5 }}>
-          <Typography variant="body2" color="text.secondary" data-testid="record-count">
-            {loading
-              ? "… Records Available"
-              : filtered.length < rows.length
-              ? `Showing ${filtered.length} of ${rows.length} Records Available`
-              : `${rows.length} Records Available`}
-          </Typography>
-        </Box>
+      {/* Keyword search with the Advanced Search toggle on the same row. The
+          AdvancedSearch fragment is a toggle plus a full-width Collapse, so
+          in this wrapping flex row the panel drops onto its own line. */}
+      {advancedSearch ? (
+        <Paper
+          variant="outlined"
+          sx={{ p: { xs: 1.5, md: 2 }, borderRadius: 3, mb: 2.5 }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              columnGap: 1.5,
+              rowGap: 1,
+            }}
+          >
+            <Box sx={{ flex: "1 1 320px", minWidth: 0 }}>
+              <TableSearch columns={columns} setFiltered={setFiltered} rows={rows} />
+            </Box>
+            {advancedSearch}
+          </Box>
+        </Paper>
+      ) : (
+        <TableSearch columns={columns} setFiltered={setFiltered} rows={rows} />
       )}
 
-      {/* Sort controls + rows-per-page on the same row */}
+      {/* Results toolbar: count on the left, sort and page size on the right.
+          The count is always visible while loading so there is no jarring
+          empty gap before the number arrives. */}
       <Box
         ref={tableRef}
         sx={{
@@ -162,45 +179,68 @@ const RecordTable = (props) => {
           alignItems: "center",
           justifyContent: "space-between",
           flexWrap: "wrap",
-          gap: 1,
-          mt: 1,
+          gap: 1.5,
+          mb: 1,
         }}
       >
-        {sortBarOptions && sortBarOptions.length > 0 && (
-          <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1.5 }}>
-            <Typography variant="body2" color="text.secondary">
-              Sort by:
-            </Typography>
-            <ToggleButtonGroup
-              size="small"
-              value={orderBy}
-              exclusive
-              onChange={handleFieldChange}
-            >
-              {sortBarOptions.map((opt) => (
-                <ToggleButton key={opt.field} value={opt.field}>
-                  {opt.label}
-                </ToggleButton>
-              ))}
-            </ToggleButtonGroup>
-            <Button
-              size="small"
-              variant="outlined"
-              onClick={handleDirectionToggle}
-              title={order === "asc" ? "Ascending — click to reverse" : "Descending — click to reverse"}
-              sx={{ minWidth: 36, px: 1, fontWeight: "bold" }}
-            >
-              {order === "asc" ? "▲" : "▼"}
-            </Button>
-          </Box>
+        {(!hideCount || loading) ? (
+          <Typography
+            variant="subtitle2"
+            sx={{ fontWeight: 600, color: "#333" }}
+            data-testid="record-count"
+          >
+            {loading
+              ? "… Records Available"
+              : filtered.length < rows.length
+              ? `Showing ${filtered.length} of ${rows.length} Records Available`
+              : `${rows.length} Records Available`}
+          </Typography>
+        ) : (
+          <Box />
         )}
-        <RowsPerPageSelector
-          count={rows.length}
-          rowsPerPage={rowsPerPage}
-          onChangeRowsPerPage={handleChangeRowsPerPage}
-        />
+        <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1.5 }}>
+          {sortBarOptions && sortBarOptions.length > 0 && (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              <TextField
+                select
+                size="small"
+                label="Sort by"
+                value={orderBy}
+                onChange={(e) => handleFieldChange(e, e.target.value)}
+                sx={{ minWidth: 140 }}
+              >
+                {sortBarOptions.map((opt) => (
+                  <MenuItem key={opt.field} value={opt.field}>
+                    {opt.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <Tooltip title={order === "asc" ? "Ascending — click to reverse" : "Descending — click to reverse"}>
+                <IconButton
+                  size="small"
+                  onClick={handleDirectionToggle}
+                  aria-label={order === "asc" ? "Sort ascending, click to reverse" : "Sort descending, click to reverse"}
+                  sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1.5, p: 0.9 }}
+                >
+                  {order === "asc" ? <ArrowUpward fontSize="small" /> : <ArrowDownward fontSize="small" />}
+                </IconButton>
+              </Tooltip>
+            </Box>
+          )}
+          <RowsPerPageSelector
+            count={rows.length}
+            rowsPerPage={rowsPerPage}
+            onChangeRowsPerPage={handleChangeRowsPerPage}
+          />
+        </Box>
       </Box>
-      <TableContainer>
+      <TableContainer
+        sx={
+          advancedSearch
+            ? { border: "1px solid", borderColor: "divider", borderRadius: 3, bgcolor: "#fff" }
+            : undefined
+        }
+      >
         <Table>
           <EnhancedTableHeader
             headers={columns}
