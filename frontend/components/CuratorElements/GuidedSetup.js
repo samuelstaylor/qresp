@@ -33,6 +33,9 @@ import {
 
 import CuratorContext from "../../Context/Curator/curatorContext";
 import AuthContext from "../../Context/Auth/authContext";
+import ServerContext from "../../Context/Servers/serverContext";
+import SourceTreeContext from "../../Context/SourceTree/SourceTreeContext";
+import { getList } from "../../Utils/Scraper";
 import { doiUtil } from "../../Utils/doi";
 import { buildFileUrl, isPdfFile } from "../../Utils/fileServerUrl";
 import { initialsOf } from "../Profile/ProfileLinks";
@@ -340,6 +343,86 @@ const GuidedSetup = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [referenceInfo.doi, authenticated, fileServerPath]);
 
+  // Choosing the folder here: paste/type an address, or browse the file
+  // server with the same picker the full form uses.
+  const { httpServers, setSelectedHttp } = useContext(ServerContext) || {};
+  const {
+    setTree,
+    openSelector,
+    setSaveMethod,
+    setConfirmLabel,
+    setMultiple,
+  } = useContext(SourceTreeContext) || {};
+  const [editingFolder, setEditingFolder] = useState(false);
+  const [folderInput, setFolderInput] = useState("");
+  const [folderError, setFolderError] = useState("");
+  const [pendingFolder, setPendingFolder] = useState(null);
+  const [browsing, setBrowsing] = useState(false);
+
+  const startEditingFolder = () => {
+    setFolderInput(fileServerPath || "");
+    setFolderError("");
+    setPendingFolder(null);
+    setEditingFolder(true);
+  };
+
+  const commitFolder = (raw, { force = false } = {}) => {
+    const folder = String(raw || "").trim().replace(/\/+$/, "");
+    if (!/^https?:\/\/[^\s]+$/i.test(folder)) {
+      setFolderError("Enter the folder's full address, starting with https://");
+      return;
+    }
+    const current = collectDraftState();
+    // Every figure, dataset and script path is relative to this folder, so
+    // moving it re-points them all. Same warning as the full form.
+    if (!force && (current.charts || []).length && current.fileServerPath &&
+        current.fileServerPath !== folder) {
+      setPendingFolder(folder);
+      return;
+    }
+    apply({ fileServerPath: folder });
+    setFolderError("");
+    setPendingFolder(null);
+    setEditingFolder(false);
+  };
+
+  const browseFolders = () => {
+    const roots = (httpServers || []).map((server) => server.value).filter(Boolean);
+    const from = folderInput || fileServerPath || "";
+    const root =
+      roots.filter((value) => from.startsWith(value)).sort((a, b) => b.length - a.length)[0] ||
+      roots[0];
+    if (!root || !getList || !openSelector) {
+      setFolderError("No file server is configured to browse. Paste the folder address instead.");
+      return;
+    }
+    setSaveMethod((picked) => {
+      setFolderInput(picked);
+      commitFolder(picked);
+    });
+    if (setMultiple) setMultiple(false);
+    if (setConfirmLabel) setConfirmLabel("Use folder");
+    setBrowsing(true);
+    setFolderError("");
+    getList(root, "http", true, null)
+      .then((listing) => {
+        if (setSelectedHttp) setSelectedHttp(listing.details);
+        setTree(listing.files);
+        openSelector();
+      })
+      .catch(() =>
+        setFolderError("The file server could not be listed right now. Paste the folder address instead.")
+      )
+      .finally(() => setBrowsing(false));
+  };
+
+  const retryLocate = () => {
+    locatedFor.current = "";
+    locate(referenceInfo.doi);
+  };
+
+  const showFolderEditor = editingFolder || (!fileServerPath && !locating);
+
   // 4. Import ----------------------------------------------------------------
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState("");
@@ -583,7 +666,7 @@ const GuidedSetup = () => {
           <Step completed={steps.folder} expanded>
             {stepLabel("folder", "Project folder", "Where the figures, data and scripts are stored")}
             <StepContent>
-              {fileServerPath ? (
+              {fileServerPath && !editingFolder ? (
                 <Summary>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                     <FolderOpen sx={{ color: "#800000" }} fontSize="small" />
@@ -597,7 +680,9 @@ const GuidedSetup = () => {
                     >
                       {fileServerPath}
                     </Typography>
-                    <SectionLink target="curate-fileserver">Change</SectionLink>
+                    <Button size="small" onClick={startEditingFolder} sx={{ textTransform: "none" }}>
+                      Change
+                    </Button>
                   </Box>
                   {locateResult && locateResult.found && locateResult.path === fileServerPath && (
                     <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.5 }}>
@@ -608,24 +693,121 @@ const GuidedSetup = () => {
                     </Typography>
                   )}
                 </Summary>
-              ) : locating ? (
+              ) : locating && !editingFolder ? (
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <CircularProgress size={16} />
                   <Typography variant="body2" color="text.secondary">
                     Looking for the paper's folder on the research computing server…
                   </Typography>
                 </Box>
-              ) : (
-                <Typography variant="body2" color="text.secondary">
-                  {locateResult && !locateResult.found && !locateResult.error
-                    ? "No folder named after this DOI was found on the file server. "
-                    : !authenticated
-                    ? "Sign in to find the folder automatically, or "
-                    : referenceInfo.doi
-                    ? ""
-                    : "Look up the paper first and Qresp will look for its folder, or "}
-                  <SectionLink target="curate-fileserver">choose the folder</SectionLink>
-                </Typography>
+              ) : null}
+
+              {showFolderEditor && (
+                <Box>
+                  {!editingFolder && locateResult && !locateResult.found && !locateResult.error && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                      No folder named after this DOI was found. Paste its address or browse for it.
+                    </Typography>
+                  )}
+                  <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start", flexWrap: "wrap" }}>
+                    <TextField
+                      size="small"
+                      label="Folder address"
+                      placeholder="https://notebook.rcc.uchicago.edu/files/10.1038.s41524-025-01558-w"
+                      value={folderInput}
+                      onChange={(e) => {
+                        setFolderInput(e.target.value);
+                        setFolderError("");
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          commitFolder(folderInput);
+                        }
+                      }}
+                      sx={{ flex: "1 1 320px" }}
+                    />
+                    <Button
+                      variant="contained"
+                      disableElevation
+                      onClick={() => commitFolder(folderInput)}
+                      disabled={!folderInput.trim()}
+                      sx={{ textTransform: "none", minHeight: 40 }}
+                    >
+                      Use this folder
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      onClick={browseFolders}
+                      disabled={browsing}
+                      startIcon={browsing ? <CircularProgress size={16} /> : <FolderOpen />}
+                      sx={{ textTransform: "none", minHeight: 40 }}
+                    >
+                      Browse…
+                    </Button>
+                    {editingFolder && (
+                      <Button
+                        onClick={() => {
+                          setEditingFolder(false);
+                          setPendingFolder(null);
+                          setFolderError("");
+                        }}
+                        sx={{ textTransform: "none", minHeight: 40 }}
+                      >
+                        Cancel
+                      </Button>
+                    )}
+                  </Box>
+                  {folderError && <Alert severity="warning" sx={{ mt: 1 }}>{folderError}</Alert>}
+                  {locateResult && locateResult.found && locateResult.path &&
+                    locateResult.path !== fileServerPath && locateResult.path !== folderInput && (
+                    <Alert
+                      severity="info"
+                      sx={{ mt: 1, overflowWrap: "anywhere" }}
+                      action={
+                        <Button size="small" onClick={() => commitFolder(locateResult.path)}>
+                          Use
+                        </Button>
+                      }
+                    >
+                      {`Found from the DOI: ${locateResult.path}`}
+                    </Alert>
+                  )}
+                  {pendingFolder && (
+                    <Alert
+                      severity="warning"
+                      sx={{ mt: 1 }}
+                      action={
+                        <Box sx={{ display: "flex", gap: 0.5 }}>
+                          <Button size="small" onClick={() => setPendingFolder(null)}>
+                            Keep current
+                          </Button>
+                          <Button
+                            size="small"
+                            color="warning"
+                            onClick={() => commitFolder(pendingFolder, { force: true })}
+                          >
+                            Change anyway
+                          </Button>
+                        </Box>
+                      }
+                    >
+                      {`This record already has ${plural(charts.length, "figure", "figures")}. Their paths are relative to the folder, so changing it can break their images.`}
+                    </Alert>
+                  )}
+                  <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.75 }}>
+                    {referenceInfo.doi && authenticated ? (
+                      <>
+                        <Button size="small" onClick={retryLocate} sx={{ textTransform: "none", p: 0, minWidth: 0, verticalAlign: "baseline" }}>
+                          Find it from the DOI
+                        </Button>
+                        {" · "}
+                      </>
+                    ) : null}
+                    Zenodo record?{" "}
+                    <SectionLink target="curate-fileserver">Use the full form</SectionLink>
+                  </Typography>
+                </Box>
               )}
             </StepContent>
           </Step>

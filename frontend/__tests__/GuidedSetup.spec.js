@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 jest.mock("axios");
 import axios from "axios";
@@ -112,5 +113,51 @@ describe("GuidedSetup", () => {
     expect(axios.post).toHaveBeenCalledWith("/api/curation/analyze-folder", {
       path: "https://notebook.rcc.uchicago.edu/files/10.1038.x.1",
     });
+  });
+});
+
+describe("GuidedSetup project folder", () => {
+  afterEach(() => jest.resetAllMocks());
+
+  const withPaper = {
+    ...blankState,
+    referenceInfo: { doi: "10.1038/x.1", title: "A paper title" },
+  };
+
+  it("lets the folder be pasted in and used without leaving the setup", async () => {
+    const user = userEvent.setup();
+    axios.post.mockResolvedValue({ data: { found: false, tried: [] } });
+    const curator = renderSetup({
+      state: withPaper,
+      auth: { authenticated: true, user: { name: "Ada Lovelace", email: "ada@example.edu" } },
+    });
+    const field = await screen.findByLabelText(/folder address/i);
+    await user.type(field, "https://notebook.rcc.uchicago.edu/files/my.folder/");
+    await user.click(screen.getByRole("button", { name: /use this folder/i }));
+    expect(curator.setAll).toHaveBeenCalledWith(
+      expect.objectContaining({ fileServerPath: "https://notebook.rcc.uchicago.edu/files/my.folder" })
+    );
+    expect(curator.remountForms).toHaveBeenCalled();
+  });
+
+  it("refuses an address that is not a web address", async () => {
+    const user = userEvent.setup();
+    const curator = renderSetup({ state: withPaper });
+    await user.type(screen.getByLabelText(/folder address/i), "my folder");
+    await user.click(screen.getByRole("button", { name: /use this folder/i }));
+    expect(screen.getByText(/starting with https/i)).toBeInTheDocument();
+    expect(curator.setAll).not.toHaveBeenCalled();
+  });
+
+  it("opens the change editor in place instead of scrolling away", async () => {
+    const user = userEvent.setup();
+    renderSetup({
+      state: { ...withPaper, fileServerPath: "https://notebook.rcc.uchicago.edu/files/a" },
+    });
+    await user.click(screen.getByRole("button", { name: /^change$/i }));
+    expect(screen.getByLabelText(/folder address/i)).toHaveValue(
+      "https://notebook.rcc.uchicago.edu/files/a"
+    );
+    expect(screen.getByRole("button", { name: /browse/i })).toBeInTheDocument();
   });
 });
