@@ -837,6 +837,36 @@ def local_login(body):
     return {"authenticated": True, "user": user}, 200
 
 
+@csrf_protect
+def update_profile(body):
+    """PATCH /api/auth/profile — update the display name of the signed-in user.
+
+    Updates the session immediately. For local-password accounts the name is
+    also persisted to MongoDB; for OAuth/dev accounts only the session is
+    updated (the provider controls the canonical name).
+    """
+    user = get_current_user()
+    if not user:
+        return {"error": "Not authenticated."}, 401
+
+    name = (body.get("name") or "").strip()
+    if not name:
+        return {"error": "Name cannot be empty."}, 400
+    if len(name) > 200:
+        return {"error": "Name is too long (max 200 characters)."}, 400
+
+    if user.get("provider") == "local":
+        from project.models import LocalAccount
+        account = LocalAccount.objects(email=user["email"]).first()
+        if account:
+            account.name = name
+            account.save()
+
+    user = {**user, "name": name}
+    session[AUTH_SESSION_KEY] = user
+    return {"authenticated": True, "user": user}, 200
+
+
 def dev_login(credentials):
     """POST /api/auth/dev-login — dev/staging-only session login.
 

@@ -20,6 +20,15 @@ const CuratorInfoForm = ({ editor }) => {
   const { user } = useContext(AuthContext);
   const defaultEmail = curatorInfo.emailId || (user && user.email) || "";
 
+  const _nameParts = (() => {
+    if (curatorInfo.firstName || curatorInfo.lastName) return null;
+    const parts = ((user && user.name) || "").trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return null;
+    if (parts.length === 1) return { firstName: parts[0], middleName: "", lastName: "" };
+    if (parts.length === 2) return { firstName: parts[0], middleName: "", lastName: parts[1] };
+    return { firstName: parts[0], middleName: parts.slice(1, -1).join(" "), lastName: parts[parts.length - 1] };
+  })();
+
   const nameFields = {
     firstName: "firstName",
     middleName: "middleName",
@@ -36,7 +45,7 @@ const CuratorInfoForm = ({ editor }) => {
 
   const { register, handleSubmit, formState: { errors }, getValues } = useForm({
     resolver: yupResolver(schema),
-    defaultValues: { ...curatorInfo, emailId: defaultEmail },
+    defaultValues: { ...curatorInfo, ...(_nameParts || {}), emailId: defaultEmail },
   });
 
   useEffect(() => {
@@ -67,7 +76,7 @@ const CuratorInfoForm = ({ editor }) => {
               register={register}
               errors={errors}
               names={nameFields}
-              defaults={{ ...curatorInfo }}
+              defaults={{ ...curatorInfo, ...(_nameParts || {}) }}
             />
           </Grid>
           <Grid>

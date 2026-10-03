@@ -1519,6 +1519,31 @@ paths:
       responses:
         200:
           description: Authentication state returned
+  /auth/profile:
+    patch:
+      operationId: "project.auth.update_profile"
+      tags:
+        - "Authentication"
+      summary: "Update the display name of the signed-in user"
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+              - name
+            properties:
+              name:
+                type: string
+                maxLength: 200
+      responses:
+        200:
+          description: Profile updated
+        400:
+          description: Invalid request body
+        401:
+          description: Not authenticated
   /auth/logout:
     post:
       operationId: "project.auth.logout"

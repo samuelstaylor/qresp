@@ -1,5 +1,6 @@
-import { Fragment, useContext } from "react";
+import { Fragment, useContext, useState } from "react";
 import Link from "next/link";
+import axios from "axios";
 import {
   Avatar,
   Box,
@@ -9,10 +10,14 @@ import {
   Container,
   Divider,
   Grid,
+  IconButton,
+  InputAdornment,
   Paper,
+  TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
-import { AccountCircle, Article, Bookmark, EditNote, Logout } from "@mui/icons-material";
+import { AccountCircle, Article, Bookmark, Check, Close, Edit, EditNote, Logout } from "@mui/icons-material";
 
 import SEO from "../components/seo";
 import AccountLayout from "../components/Account/AccountLayout";
@@ -53,7 +58,11 @@ const StatCard = ({ icon, label, href }) => (
 );
 
 const AccountPage = () => {
-  const { loading, authenticated, user, logout } = useContext(AuthContext);
+  const { loading, authenticated, user, logout, refresh } = useContext(AuthContext);
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState("");
+  const [nameSaving, setNameSaving] = useState(false);
+  const [nameError, setNameError] = useState("");
 
   if (loading) {
     return (
@@ -91,6 +100,37 @@ const AccountPage = () => {
     .join("")
     .toUpperCase();
 
+  const startEditName = () => {
+    setNameValue(user.name || "");
+    setNameError("");
+    setEditingName(true);
+  };
+
+  const cancelEditName = () => {
+    setEditingName(false);
+    setNameError("");
+  };
+
+  const saveName = async () => {
+    const trimmed = nameValue.trim();
+    if (!trimmed) { setNameError("Name cannot be empty."); return; }
+    if (trimmed.length > 200) { setNameError("Name is too long."); return; }
+    setNameSaving(true);
+    setNameError("");
+    try {
+      await axios.patch("/api/auth/profile", { name: trimmed });
+      await refresh();
+      setEditingName(false);
+    } catch (err) {
+      setNameError(
+        (err.response && err.response.data && err.response.data.error) ||
+        "Failed to save. Please try again."
+      );
+    } finally {
+      setNameSaving(false);
+    }
+  };
+
   return (
     <Fragment>
       <SEO title="Qresp | Profile" />
@@ -109,15 +149,56 @@ const AccountPage = () => {
             >
               {initials}
             </Avatar>
-            <Box>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <Typography variant="h5" fontWeight={700}>
-                  {user.name || user.email}
-                </Typography>
-                {user.is_admin && (
-                  <Chip label="Admin" size="small" color="primary" />
-                )}
-              </Box>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              {editingName ? (
+                <TextField
+                  value={nameValue}
+                  onChange={(e) => setNameValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") saveName();
+                    if (e.key === "Escape") cancelEditName();
+                  }}
+                  size="small"
+                  autoFocus
+                  fullWidth
+                  error={Boolean(nameError)}
+                  helperText={nameError || " "}
+                  disabled={nameSaving}
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <Tooltip title="Save">
+                          <span>
+                            <IconButton size="small" onClick={saveName} disabled={nameSaving}>
+                              <Check fontSize="small" />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                        <Tooltip title="Cancel">
+                          <IconButton size="small" onClick={cancelEditName} disabled={nameSaving}>
+                            <Close fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </InputAdornment>
+                    ),
+                  }}
+                  sx={{ mb: 0.5 }}
+                />
+              ) : (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <Typography variant="h5" fontWeight={700}>
+                    {user.name || user.email}
+                  </Typography>
+                  {user.is_admin && (
+                    <Chip label="Admin" size="small" color="primary" />
+                  )}
+                  <Tooltip title="Edit name">
+                    <IconButton size="small" onClick={startEditName} sx={{ color: "text.secondary" }}>
+                      <Edit fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+              )}
               <Typography variant="body2" color="text.secondary">
                 {user.email}
               </Typography>
