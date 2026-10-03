@@ -12,10 +12,13 @@ import { SubmitAndReset, RequiredFieldLegend } from "../Form/Util";
 import Drawer from "../drawer";
 
 import CuratorContext from "../../Context/Curator/curatorContext";
+import AuthContext from "../../Context/Auth/authContext";
 
 const CuratorInfoForm = ({ editor }) => {
   const { curatorInfo, setCuratorInfo, registerDraftFlusher } =
     useContext(CuratorContext);
+  const { user } = useContext(AuthContext);
+  const defaultEmail = curatorInfo.emailId || (user && user.email) || "";
 
   const nameFields = {
     firstName: "firstName",
@@ -33,7 +36,7 @@ const CuratorInfoForm = ({ editor }) => {
 
   const { register, handleSubmit, formState: { errors }, getValues } = useForm({
     resolver: yupResolver(schema),
-    defaultValues: { ...curatorInfo },
+    defaultValues: { ...curatorInfo, emailId: defaultEmail },
   });
 
   useEffect(() => {
@@ -77,7 +80,7 @@ const CuratorInfoForm = ({ editor }) => {
               required={true}
               error={errors["emailId"]}
               register={register}
-              defaultValue={curatorInfo.emailId}
+              defaultValue={defaultEmail}
             />
           </Grid>
           <Grid>
