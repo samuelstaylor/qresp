@@ -62,7 +62,7 @@ LEGACY_ALIASES = {
 OPTIONAL_ROOT_FILES = ("main.ipynb", "readme.md", "readme", "readme.txt",
                        "readme.rst", "license", "license.txt", "license.md")
 
-CHART_PREVIEW_EXTENSIONS = (".png", ".jpeg", ".jpg", ".gif")
+CHART_PREVIEW_EXTENSIONS = (".png", ".jpeg", ".jpg", ".gif", ".svg", ".pdf")
 
 # Images that decorate a page rather than being the figure. A folder's own
 # figure is never called any of these, and picking one would put a logo in a

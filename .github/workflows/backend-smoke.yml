@@ -68,6 +68,7 @@ jobs:
             project.tests.test_artifact_fields \
             project.tests.test_assistant_scope \
             project.tests.test_auth \
+            project.tests.test_autocurate \
             project.tests.test_chart_image_options_route \
             project.tests.test_chart_plan \
             project.tests.test_curation \
@@ -81,6 +82,7 @@ jobs:
             project.tests.test_folder_ai_and_images \
             project.tests.test_google_auth \
             project.tests.test_keyword_assist \
+            project.tests.test_locate_folder \
             project.tests.test_manuscript_import \
             project.tests.test_microsoft \
             project.tests.test_ownership_rules \

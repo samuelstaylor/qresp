@@ -1153,6 +1153,31 @@ paths:
           description: AI provider failed or answered unreadably
         503:
           description: AI keyword suggestions are not configured on this server
+  /curation/locate-folder:
+    post:
+      operationId: "project.curation.locate_folder"
+      tags:
+        - "Curation"
+      summary: "Find a paper's file-server folder from its DOI"
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+              - doi
+            properties:
+              doi:
+                type: string
+                maxLength: 300
+      responses:
+        200:
+          description: Lookup result (found or not)
+        400:
+          description: Invalid DOI
+        401:
+          description: Not authenticated
   /curation/analyze-folder:
     post:
       operationId: "project.curation.analyze_folder"

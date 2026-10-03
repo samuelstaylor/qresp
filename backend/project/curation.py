@@ -34,6 +34,7 @@ from urllib.parse import unquote, urljoin, urlparse
 import requests
 from lxml import html
 
+from project import autocurate
 from project import evidence as ev
 from project import folderstandard as fs
 from project.auth import csrf_protect, get_current_user
@@ -73,7 +74,7 @@ MAX_EVIDENCE_TEXT_CHARS = 20000
 # is readable now; the total is always reported alongside.
 MAX_UNCLASSIFIED = 500
 
-CHART_EXTENSIONS = (".png", ".jpg", ".jpeg", ".gif")
+CHART_EXTENSIONS = (".png", ".jpg", ".jpeg", ".gif", ".svg", ".pdf")
 DATASET_EXTENSIONS = (
     ".csv", ".tsv", ".json", ".xyz", ".h5", ".hdf5", ".nc", ".npy", ".npz",
     ".dat", ".txt", ".cube", ".xml", ".yaml", ".yml", ".pdb", ".cif", ".log",
@@ -1399,7 +1400,83 @@ def analyze_folder(body):
         "chart_image_groups": result.get("chart_image_groups") or [],
         "applied_chart_plan": result.get("applied_chart_plan") or [],
         "candidates": result,
+        # Pre-fill hints for the guided setup: figure numbers read off file
+        # names and links between candidates, each with its reason. Applied
+        # only when the curator adds them; never needed by the review dialog.
+        "suggestions": _suggestions_for(result, files, texts),
     }, 200
+
+
+def _suggestions_for(result, files, texts):
+    try:
+        return autocurate.suggestions(result, files, texts)
+    except Exception as e:
+        # Hints are optional; a bug in them must never cost the analysis.
+        print("Suggestion pass skipped (%s)" % type(e).__name__)
+        return {"numbers": {}, "links": []}
+
+
+# ---- locate a paper's folder from its DOI -----------------------------------
+
+_DOI_RE = re.compile(r"^10\.\d{4,9}/\S+$")
+# What an RCC paper folder name may contain once "/" becomes ".".
+_FOLDER_NAME_RE = re.compile(r"^[A-Za-z0-9._;()\-]+$")
+
+
+def _bare_doi(raw):
+    value = str(raw or "").strip()
+    value = re.sub(r"^doi:\s*", "", value, flags=re.IGNORECASE)
+    value = re.sub(r"^(?:https?://)?(?:dx\.)?doi\.org/", "", value,
+                   flags=re.IGNORECASE)
+    return value.strip().rstrip(".,;")
+
+
+def doi_folder_names(raw):
+    """RCC names a paper's folder after its DOI with "/" replaced by "."."""
+    doi = _bare_doi(raw)
+    if not _DOI_RE.match(doi):
+        return doi, []
+    name = doi.replace("/", ".")
+    if ".." in name or not _FOLDER_NAME_RE.match(name):
+        return doi, []
+    names = [name]
+    if name.lower() != name:
+        names.append(name.lower())
+    return doi, names
+
+
+@csrf_protect
+def locate_folder(body):
+    """
+    Find a paper's file-server folder from its DOI
+    Handler for POST: /api/curation/locate-folder
+
+    Read-only. Only the configured file-server roots are tried.
+    """
+    if not get_current_user():
+        return {"error": "authentication required"}, 401
+    doi, names = doi_folder_names((body or {}).get("doi"))
+    if not names:
+        return {"error": "Enter a valid DOI, e.g. 10.1038/s41524-025-01558-w."}, 400
+
+    tried = []
+    for root in _allowed_roots():
+        for name in names:
+            try:
+                url = resolve_folder_url(root + "/" + name)
+            except FolderError:
+                continue
+            tried.append(url)
+            with tls_exception_scope(url):
+                try:
+                    dirs, files = _list_directory(url)
+                except Exception:
+                    continue
+            if dirs or files:
+                return {"found": True, "doi": doi, "path": url,
+                        "folders": sorted(dirs)[:20],
+                        "file_count": len(files)}, 200
+    return {"found": False, "doi": doi, "tried": tried}, 200
 
 
 # ---- optional AI enrichment --------------------------------------------------
