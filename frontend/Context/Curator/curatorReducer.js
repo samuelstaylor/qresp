@@ -172,8 +172,11 @@ export default (state, action) => {
         (next[list] || []).map((el) => el.id)
       );
       const edges = ((next.workflow || {}).edges || []).slice();
+      // A link end is a new record's key or an id already in the record.
+      const knownSet = new Set(knownIds);
+      const resolve = (key) => idByKey[key] || (knownSet.has(key) ? key : undefined);
       links.forEach((link) => {
-        const edge = { from: idByKey[link.from], to: idByKey[link.to], type: link.type };
+        const edge = { from: resolve(link.from), to: resolve(link.to), type: link.type };
         if (!edge.from || !edge.to) return;
         if (edgeProblem(edge, knownIds, edges) || closesLoop(edges, edge)) return;
         edges.push(edge);

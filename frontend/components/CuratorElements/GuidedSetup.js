@@ -12,6 +12,7 @@ import {
   CircularProgress,
   Collapse,
   Divider,
+  FormControlLabel,
   LinearProgress,
   Paper,
   Step,
@@ -28,6 +29,7 @@ import {
   AutoAwesome,
   CheckCircle,
   Description,
+  Psychology,
   ExpandMore,
   FolderOpen,
   InsertPhoto,
@@ -624,7 +626,137 @@ const GuidedSetup = () => {
   };
   const uncaptioned = charts.filter((chart) => !String(chart.caption || "").trim()).length;
 
-  // 6. Finish ----------------------------------------------------------------
+  // 6. AI assistant (optional) --------------------------------------------------
+  const [aiConsent, setAiConsent] = useState(false);
+  const [aiBusy, setAiBusy] = useState("");
+  const [aiError, setAiError] = useState("");
+  const [kwResult, setKwResult] = useState(null);
+  const [kwSkip, setKwSkip] = useState({});
+  const [linkResult, setLinkResult] = useState(null);
+  const [linkSkip, setLinkSkip] = useState({});
+  const [aiApplied, setAiApplied] = useState("");
+
+  const aiErrorFrom = (err) => {
+    const response = err && err.response;
+    if (response && response.status === 503) {
+      return "AI suggestions are not set up on this server. An administrator can turn them on with QRESP_GEMINI_ENABLED and QRESP_GEMINI_API_KEY.";
+    }
+    if (response && response.status === 404) {
+      return "This Qresp server does not have AI suggestions yet. If it was just updated, the backend needs a restart.";
+    }
+    return (response && response.data && response.data.error) || "The AI suggestions could not be loaded.";
+  };
+
+  const paperForAi = () => ({
+    title: referenceInfo.title || "",
+    abstract: referenceInfo.abstract || "",
+    keywords: (paperInfo.tags || []).filter(Boolean),
+  });
+  const sameList = (a, b) =>
+    (a || []).map((x) => String(x).toLowerCase()).join("|") ===
+    (b || []).map((x) => String(x).toLowerCase()).join("|");
+
+  const suggestKeywords = () => {
+    setAiBusy("keywords");
+    setAiError("");
+    setAiApplied("");
+    setKwResult(null);
+    axios
+      .post("/api/curation/suggest-figure-keywords", {
+        consent: aiConsent,
+        paper: paperForAi(),
+        figures: charts.map(({ id, number, caption }) => ({ id, number, caption })),
+      })
+      .then((res) => {
+        const data = res.data || {};
+        setKwResult(data);
+        const skip = {};
+        (data.figures || []).forEach(({ id }) => {
+          const record = charts.find((chart) => chart.id === id);
+          const current = (record && record.properties) || [];
+          // Keywords the curator wrote are kept unless they opt in; the
+          // paper-tag defaults from the import are replaced.
+          if (current.length && !sameList(current, paperTags)) skip[id] = true;
+        });
+        setKwSkip(skip);
+      })
+      .catch((err) => setAiError(aiErrorFrom(err)))
+      .finally(() => setAiBusy(""));
+  };
+
+  const applyKeywords = () => {
+    let count = 0;
+    ((kwResult && kwResult.figures) || []).forEach(({ id, keywords }) => {
+      if (kwSkip[id]) return;
+      const record = charts.find((chart) => chart.id === id);
+      if (!record) return;
+      edit("chart", { ...record, properties: keywords });
+      count += 1;
+    });
+    const paperKeywords = (kwResult && kwResult.paper_keywords) || [];
+    let paperNote = "";
+    if (!kwSkip.__paper && paperKeywords.length && !paperTags.length) {
+      const current = collectDraftState();
+      apply({ paperInfo: { ...current.paperInfo, tags: paperKeywords } });
+      paperNote = " and the paper's keywords";
+    }
+    setAiApplied(`Updated keywords on ${plural(count, "figure", "figures")}${paperNote}.`);
+    setKwResult(null);
+  };
+
+  const suggestLinks = () => {
+    setAiBusy("links");
+    setAiError("");
+    setAiApplied("");
+    setLinkResult(null);
+    const name = (record) =>
+      String((record.files || [])[0] || record.id).split("/").filter(Boolean).pop();
+    axios
+      .post("/api/curation/suggest-links", {
+        consent: aiConsent,
+        path: fileServerPath,
+        paper: paperForAi(),
+        figures: charts.map(({ id, number, caption }) => ({ id, number, caption })),
+        scripts: scripts.map((record) => ({ id: record.id, files: record.files || [], description: record.readme || "" })),
+        datasets: datasets.map((record) => ({ id: record.id, name: name(record), files: record.files || [] })),
+        existing_links: ((metadata.workflow || {}).edges || [])
+          .map((edge) => (Array.isArray(edge) ? { from: edge[0], to: edge[1] } : { from: edge.from, to: edge.to })),
+      })
+      .then((res) => {
+        const data = res.data || {};
+        setLinkResult(data);
+        const skip = {};
+        (data.links || []).forEach((link) => {
+          if (link.confidence === "low") skip[`${link.from}>${link.to}`] = true;
+        });
+        setLinkSkip(skip);
+      })
+      .catch((err) => setAiError(aiErrorFrom(err)))
+      .finally(() => setAiBusy(""));
+  };
+
+  const applyLinks = () => {
+    const chosen = ((linkResult && linkResult.links) || []).filter(
+      (link) => !linkSkip[`${link.from}>${link.to}`]
+    );
+    importBundle([], chosen.map(({ from, to, type }) => ({ from, to, type })));
+    setAiApplied(`Added ${plural(chosen.length, "link", "links")}.`);
+    setLinkResult(null);
+  };
+
+  const recordLabel = (id) => {
+    const lists = { c: charts, s: scripts, d: datasets, t: tools };
+    const record = (lists[id[0]] || []).find((item) => item.id === id);
+    if (!record) return id;
+    if (id[0] === "c") {
+      const file = String(record.imageFile || id).split("/").filter(Boolean).pop();
+      return record.number ? `${file} (${/^Table/.test(record.number) ? record.number : `Figure ${record.number}`})` : file;
+    }
+    return String((record.files || [])[0] || record.packageName || id).split("/").filter(Boolean).pop();
+  };
+  const figuresWithoutKeywords = charts.filter((chart) => !(chart.properties || []).length).length;
+
+  // 7. Finish ----------------------------------------------------------------
   const needing = recordsNeedingDetails(metadata);
   const paperMissing = [
     !(paperInfo.PIs && String(paperInfo.PIs).trim() && (!Array.isArray(paperInfo.PIs) || paperInfo.PIs.length)) && "principal investigators",
@@ -639,10 +771,11 @@ const GuidedSetup = () => {
     folder: Boolean(fileServerPath),
     import: artifactCount > 0,
     captions: charts.length > 0 && uncaptioned === 0,
+    ai: charts.length > 0 && figuresWithoutKeywords === 0,
     finish: artifactCount > 0 && needing.length === 0 && paperMissing.length === 0,
   };
   const done = Object.values(steps).filter(Boolean).length;
-  const STEP_KEYS = ["you", "paper", "folder", "import", "captions", "finish"];
+  const STEP_KEYS = ["you", "paper", "folder", "import", "captions", "ai", "finish"];
   const firstOpen = STEP_KEYS.findIndex((k) => !steps[k]);
 
   const stepLabel = (key, title, subtitle) => (
@@ -1280,7 +1413,174 @@ const GuidedSetup = () => {
             </StepContent>
           </Step>
 
-          {/* 6. Finish */}
+          {/* 6. AI assistant */}
+          <Step completed={steps.ai} expanded>
+            {stepLabel("ai", "AI assistant (optional)", "Keywords, and links Qresp could not find on its own")}
+            <StepContent>
+              {!charts.length ? (
+                <Typography variant="body2" color="text.secondary">
+                  Available once figures are in the record.
+                </Typography>
+              ) : !authenticated ? (
+                <Typography variant="body2" color="text.secondary">
+                  Sign in to use the AI assistant.
+                </Typography>
+              ) : (
+                <Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    Qresp has already matched everything it can from file names,
+                    folders and the paper's LaTeX. The AI assistant fills the
+                    gaps: keywords for each figure, and which scripts and data
+                    produced which figures. Every suggestion comes with a reason
+                    and nothing is applied until you choose it.
+                  </Typography>
+                  <FormControlLabel
+                    control={<Checkbox size="small" checked={aiConsent} onChange={(e) => setAiConsent(e.target.checked)} />}
+                    label={
+                      <Typography variant="body2">
+                        Send the paper's title, abstract and figure captions, and the
+                        start of each script in the project folder, to Google Gemini.
+                        Nothing is stored.
+                      </Typography>
+                    }
+                    sx={{ alignItems: "flex-start", mb: 1, "& .MuiCheckbox-root": { pt: 0.25 } }}
+                  />
+                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                    <Button
+                      variant="contained"
+                      disableElevation
+                      onClick={suggestKeywords}
+                      disabled={!aiConsent || Boolean(aiBusy) || !charts.some((chart) => String(chart.caption || "").trim())}
+                      startIcon={aiBusy === "keywords" ? <CircularProgress size={16} color="inherit" /> : <Psychology />}
+                      sx={{ textTransform: "none" }}
+                    >
+                      Suggest keywords
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      onClick={suggestLinks}
+                      disabled={!aiConsent || Boolean(aiBusy) || !(scripts.length || datasets.length)}
+                      startIcon={aiBusy === "links" ? <CircularProgress size={16} /> : <Psychology />}
+                      sx={{ textTransform: "none" }}
+                    >
+                      Suggest missing links
+                    </Button>
+                  </Box>
+                  {!charts.some((chart) => String(chart.caption || "").trim()) && (
+                    <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.75 }}>
+                      Keywords are suggested from captions, so add the captions first.
+                    </Typography>
+                  )}
+
+                  {aiError && <Alert severity="warning" sx={{ mt: 1.5 }}>{aiError}</Alert>}
+                  {aiApplied && <Alert severity="success" sx={{ mt: 1.5 }}>{aiApplied}</Alert>}
+
+                  {kwResult && (
+                    <Box sx={{ mt: 1.5 }}>
+                      <Box sx={{ maxHeight: 340, overflowY: "auto", border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
+                        {(kwResult.paper_keywords || []).length > 0 && !paperTags.length && (
+                          <Box sx={{ display: "flex", gap: 0.5, alignItems: "flex-start", px: 1, py: 0.75, borderBottom: "1px solid", borderColor: "divider" }}>
+                            <Checkbox
+                              size="small"
+                              checked={!kwSkip.__paper}
+                              onChange={(e) => setKwSkip((x) => ({ ...x, __paper: !e.target.checked }))}
+                              slotProps={{ input: { "aria-label": "Paper keywords" } }}
+                            />
+                            <Box>
+                              <Typography variant="body2" fontWeight={600}>The paper</Typography>
+                              <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", mt: 0.25 }}>
+                                {kwResult.paper_keywords.map((k) => <Chip key={k} size="small" label={k} />)}
+                              </Box>
+                            </Box>
+                          </Box>
+                        )}
+                        {(kwResult.figures || []).map(({ id, keywords }) => {
+                          const record = charts.find((chart) => chart.id === id) || {};
+                          const current = record.properties || [];
+                          return (
+                            <Box key={id} sx={{ display: "flex", gap: 0.5, alignItems: "flex-start", px: 1, py: 0.75, borderBottom: "1px solid", borderColor: "divider", "&:last-child": { borderBottom: 0 } }}>
+                              <Checkbox
+                                size="small"
+                                checked={!kwSkip[id]}
+                                onChange={(e) => setKwSkip((x) => ({ ...x, [id]: !e.target.checked }))}
+                                slotProps={{ input: { "aria-label": `Keywords for ${recordLabel(id)}` } }}
+                              />
+                              <Box sx={{ minWidth: 0 }}>
+                                <Typography variant="body2" fontWeight={600} sx={{ overflowWrap: "anywhere" }}>{recordLabel(id)}</Typography>
+                                <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", mt: 0.25 }}>
+                                  {keywords.map((k) => <Chip key={k} size="small" color="primary" variant="outlined" label={k} />)}
+                                </Box>
+                                {current.length > 0 && (
+                                  <Typography variant="caption" color="text.secondary">
+                                    {`Replaces: ${current.join(", ")}`}
+                                  </Typography>
+                                )}
+                              </Box>
+                            </Box>
+                          );
+                        })}
+                      </Box>
+                      <Box sx={{ display: "flex", gap: 1, mt: 1.5 }}>
+                        <Button variant="contained" disableElevation onClick={applyKeywords} sx={{ textTransform: "none", fontWeight: 600 }}>
+                          Apply selected keywords
+                        </Button>
+                        <Button onClick={() => setKwResult(null)} sx={{ textTransform: "none" }}>Cancel</Button>
+                      </Box>
+                    </Box>
+                  )}
+
+                  {linkResult && (
+                    <Box sx={{ mt: 1.5 }}>
+                      {(linkResult.links || []).length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">
+                          The AI found no further links it could support with evidence.
+                        </Typography>
+                      ) : (
+                        <Box>
+                          <Box sx={{ maxHeight: 340, overflowY: "auto", border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
+                            {linkResult.links.map((link) => {
+                              const key = `${link.from}>${link.to}`;
+                              return (
+                                <Box key={key} sx={{ display: "flex", gap: 0.5, alignItems: "flex-start", px: 1, py: 0.75, borderBottom: "1px solid", borderColor: "divider", "&:last-child": { borderBottom: 0 } }}>
+                                  <Checkbox
+                                    size="small"
+                                    checked={!linkSkip[key]}
+                                    onChange={(e) => setLinkSkip((x) => ({ ...x, [key]: !e.target.checked }))}
+                                    slotProps={{ input: { "aria-label": `${recordLabel(link.from)} to ${recordLabel(link.to)}` } }}
+                                  />
+                                  <Box sx={{ minWidth: 0 }}>
+                                    <Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>
+                                      {`${recordLabel(link.from)} ${link.type === "generates" ? "generates" : "supplies"} ${recordLabel(link.to)}`}
+                                      <Chip
+                                        size="small"
+                                        label={link.confidence}
+                                        color={link.confidence === "high" ? "success" : link.confidence === "medium" ? "default" : "warning"}
+                                        variant="outlined"
+                                        sx={{ ml: 1, height: 18 }}
+                                      />
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">{link.reason}</Typography>
+                                  </Box>
+                                </Box>
+                              );
+                            })}
+                          </Box>
+                          <Box sx={{ display: "flex", gap: 1, mt: 1.5 }}>
+                            <Button variant="contained" disableElevation onClick={applyLinks} sx={{ textTransform: "none", fontWeight: 600 }}>
+                              Add selected links
+                            </Button>
+                            <Button onClick={() => setLinkResult(null)} sx={{ textTransform: "none" }}>Cancel</Button>
+                          </Box>
+                        </Box>
+                      )}
+                    </Box>
+                  )}
+                </Box>
+              )}
+            </StepContent>
+          </Step>
+
+          {/* 7. Finish */}
           <Step completed={steps.finish} expanded>
             {stepLabel("finish", "Finish the details", "Captions and anything only you know")}
             <StepContent>

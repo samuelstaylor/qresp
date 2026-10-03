@@ -180,3 +180,30 @@ describe("recordsNeedingDetails", () => {
     ]);
   });
 });
+
+describe("IMPORT_BUNDLE with existing records", () => {
+  it("adds validated links between records already in the form", () => {
+    const state = {
+      ...emptyState(),
+      charts: [{ id: "c0", imageFile: "a.png" }],
+      scripts: [{ id: "s0", files: ["p.py"] }],
+      datasets: [{ id: "d0", files: ["Data/x"] }],
+    };
+    const next = reducer(state, {
+      type: IMPORT_BUNDLE,
+      payload: {
+        records: [],
+        links: [
+          { from: "s0", to: "c0", type: "generates" },
+          { from: "d0", to: "s0", type: "consumes" },
+          { from: "s9", to: "c0", type: "generates" },
+          { from: "c0", to: "s0", type: "generates" },
+        ],
+      },
+    });
+    expect(next.workflow.edges).toEqual([
+      { from: "s0", to: "c0", type: "generates" },
+      { from: "d0", to: "s0", type: "consumes" },
+    ]);
+  });
+});

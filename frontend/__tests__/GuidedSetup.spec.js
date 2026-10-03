@@ -304,3 +304,98 @@ describe("GuidedSetup captions from LaTeX", () => {
     expect(screen.getByText(/upload the overleaf \.zip/i)).toBeInTheDocument();
   });
 });
+
+describe("GuidedSetup AI assistant", () => {
+  afterEach(() => jest.resetAllMocks());
+
+  const state = {
+    ...blankState,
+    curatorInfo: { firstName: "Ada", middleName: "", lastName: "Lovelace", emailId: "ada@example.edu", affiliation: "" },
+    referenceInfo: { doi: "10.1038/x.1", title: "An NV- center in MgO", abstract: "We identify a defect." },
+    paperInfo: { tags: ["DFT"], collections: [], PIs: "" },
+    fileServerPath: "https://notebook.rcc.uchicago.edu/files/10.1038.x.1",
+    charts: [
+      { id: "c0", imageFile: "/F/Figure1.pdf", number: "1", caption: "Screening of spin defects.", properties: ["DFT"] },
+      { id: "c1", imageFile: "/F/Figure2.pdf", number: "2", caption: "Defect levels.", properties: ["hand written"] },
+    ],
+    scripts: [{ id: "s0", files: ["/Scripts/plot.py"], readme: "" }],
+    datasets: [],
+  };
+  const auth = { authenticated: true, user: { name: "Ada Lovelace", email: "ada@example.edu" } };
+
+  it("does nothing until the curator consents", () => {
+    axios.post.mockResolvedValue({ data: { found: false } });
+    renderSetup({ state, auth });
+    expect(screen.getByRole("button", { name: /suggest keywords/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /suggest missing links/i })).toBeDisabled();
+  });
+
+  it("suggests and applies keywords, keeping hand-written ones unless chosen", async () => {
+    const user = userEvent.setup();
+    axios.post.mockImplementation((url) =>
+      Promise.resolve({
+        data:
+          url === "/api/curation/suggest-figure-keywords"
+            ? {
+                figures: [
+                  { id: "c0", keywords: ["spin defects", "screening"] },
+                  { id: "c1", keywords: ["defect levels"] },
+                ],
+                paper_keywords: ["spin qubit"],
+              }
+            : { found: false },
+      })
+    );
+    const curator = renderSetup({ state, auth });
+    await user.click(screen.getByRole("checkbox", { name: /send the paper's title/i }));
+    await user.click(screen.getByRole("button", { name: /suggest keywords/i }));
+    expect(axios.post).toHaveBeenCalledWith(
+      "/api/curation/suggest-figure-keywords",
+      expect.objectContaining({ consent: true })
+    );
+    await user.click(await screen.findByRole("button", { name: /apply selected keywords/i }));
+    // c0 had only the paper-tag default, so it is replaced; c1's own keywords stay.
+    expect(curator.edit).toHaveBeenCalledWith(
+      "chart",
+      expect.objectContaining({ id: "c0", properties: ["spin defects", "screening"] })
+    );
+    expect(curator.edit).not.toHaveBeenCalledWith("chart", expect.objectContaining({ id: "c1" }));
+  });
+
+  it("suggests links with reasons and adds the chosen ones", async () => {
+    const user = userEvent.setup();
+    axios.post.mockImplementation((url) =>
+      Promise.resolve({
+        data:
+          url === "/api/curation/suggest-links"
+            ? {
+                links: [
+                  { from: "s0", to: "c0", type: "generates", confidence: "high", reason: "Plots the screening." },
+                  { from: "s0", to: "c1", type: "generates", confidence: "low", reason: "Maybe." },
+                ],
+              }
+            : { found: false },
+      })
+    );
+    const curator = renderSetup({ state, auth });
+    await user.click(screen.getByRole("checkbox", { name: /send the paper's title/i }));
+    await user.click(screen.getByRole("button", { name: /suggest missing links/i }));
+    expect(await screen.findByText("Plots the screening.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /add selected links/i }));
+    // Low-confidence suggestions start unticked.
+    expect(curator.importBundle).toHaveBeenCalledWith([], [{ from: "s0", to: "c0", type: "generates" }]);
+  });
+
+  it("says when AI is not set up on the server", async () => {
+    const user = userEvent.setup();
+    axios.post.mockImplementation((url) =>
+      url === "/api/curation/suggest-figure-keywords"
+        ? Promise.reject({ response: { status: 503, data: { error: "x" } } })
+        : Promise.resolve({ data: { found: false } })
+    );
+    renderSetup({ state, auth });
+    await user.click(screen.getByRole("checkbox", { name: /send the paper's title/i }));
+    await user.click(screen.getByRole("button", { name: /suggest keywords/i }));
+    expect(await screen.findByText(/QRESP_GEMINI_ENABLED/)).toBeInTheDocument();
+  });
+});

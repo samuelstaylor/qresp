@@ -1211,6 +1211,94 @@ paths:
           description: Missing title
         401:
           description: Not authenticated
+  /curation/suggest-figure-keywords:
+    post:
+      operationId: "project.curation_ai.suggest_figure_keywords"
+      tags:
+        - "Curation"
+      summary: "Opt-in AI keywords for each figure and the paper"
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+              - consent
+            properties:
+              consent:
+                type: boolean
+              paper:
+                type: object
+              figures:
+                type: array
+                maxItems: 200
+                items:
+                  type: object
+      responses:
+        200:
+          description: Suggestions (nothing is stored)
+        400:
+          description: No consent or nothing to suggest from
+        401:
+          description: Not authenticated
+        429:
+          description: Daily AI limit reached
+        503:
+          description: AI not configured
+  /curation/suggest-links:
+    post:
+      operationId: "project.curation_ai.suggest_links"
+      tags:
+        - "Curation"
+      summary: "Opt-in AI suggestions of which scripts/datasets produced which figures"
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+              - consent
+            properties:
+              consent:
+                type: boolean
+              path:
+                type: string
+                maxLength: 1000
+              paper:
+                type: object
+              figures:
+                type: array
+                maxItems: 200
+                items:
+                  type: object
+              scripts:
+                type: array
+                maxItems: 100
+                items:
+                  type: object
+              datasets:
+                type: array
+                maxItems: 200
+                items:
+                  type: object
+              existing_links:
+                type: array
+                maxItems: 1000
+                items:
+                  type: object
+      responses:
+        200:
+          description: Suggested links with reasons (nothing is stored)
+        400:
+          description: No consent or not enough to link
+        401:
+          description: Not authenticated
+        429:
+          description: Daily AI limit reached
+        503:
+          description: AI not configured
   /curation/locate-folder:
     post:
       operationId: "project.curation.locate_folder"

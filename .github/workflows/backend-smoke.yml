@@ -72,6 +72,7 @@ jobs:
             project.tests.test_chart_image_options_route \
             project.tests.test_chart_plan \
             project.tests.test_curation \
+            project.tests.test_curation_ai \
             project.tests.test_curation_evidence \
             project.tests.test_deactivate \
             project.tests.test_dependencies \
