@@ -116,9 +116,9 @@ const AuthState = (props) => {
     }
   };
 
-  const register = async (email, password, name) => {
+  const register = async (email, password, name, affiliation) => {
     try {
-      const res = await axios.post("/api/auth/register", { email, password, name });
+      const res = await axios.post("/api/auth/register", { email, password, name, affiliation });
       dispatch({ type: SET_AUTH, payload: res.data });
       return { ok: true };
     } catch (err) {

@@ -19,6 +19,7 @@ const CuratorInfoForm = ({ editor }) => {
     useContext(CuratorContext);
   const { user } = useContext(AuthContext);
   const defaultEmail = curatorInfo.emailId || (user && user.email) || "";
+  const defaultAffiliation = curatorInfo.affiliation || (user && user.affiliation) || "";
 
   const _nameParts = (() => {
     if (curatorInfo.firstName || curatorInfo.lastName) return null;
@@ -45,7 +46,7 @@ const CuratorInfoForm = ({ editor }) => {
 
   const { register, handleSubmit, formState: { errors }, getValues } = useForm({
     resolver: yupResolver(schema),
-    defaultValues: { ...curatorInfo, ...(_nameParts || {}), emailId: defaultEmail },
+    defaultValues: { ...curatorInfo, ...(_nameParts || {}), emailId: defaultEmail, affiliation: defaultAffiliation },
   });
 
   useEffect(() => {
@@ -101,7 +102,7 @@ const CuratorInfoForm = ({ editor }) => {
               label="Affiliation"
               register={register}
               errore={errors["affiliation"]}
-              defaultValue={curatorInfo.affiliation}
+              defaultValue={defaultAffiliation}
             />
           </Grid>
           <Grid>

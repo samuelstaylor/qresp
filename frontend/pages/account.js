@@ -10,14 +10,12 @@ import {
   Container,
   Divider,
   Grid,
-  IconButton,
-  InputAdornment,
   Paper,
   TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
-import { AccountCircle, Article, Bookmark, Check, Close, Edit, EditNote, Logout } from "@mui/icons-material";
+import { AccountCircle, Article, Bookmark, Edit, EditNote, Logout } from "@mui/icons-material";
 
 import SEO from "../components/seo";
 import AccountLayout from "../components/Account/AccountLayout";
@@ -59,10 +57,11 @@ const StatCard = ({ icon, label, href }) => (
 
 const AccountPage = () => {
   const { loading, authenticated, user, logout, refresh } = useContext(AuthContext);
-  const [editingName, setEditingName] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
   const [nameValue, setNameValue] = useState("");
-  const [nameSaving, setNameSaving] = useState(false);
-  const [nameError, setNameError] = useState("");
+  const [affiliationValue, setAffiliationValue] = useState("");
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState("");
 
   if (loading) {
     return (
@@ -100,34 +99,37 @@ const AccountPage = () => {
     .join("")
     .toUpperCase();
 
-  const startEditName = () => {
+  const startEditProfile = () => {
     setNameValue(user.name || "");
-    setNameError("");
-    setEditingName(true);
+    setAffiliationValue(user.affiliation || "");
+    setProfileError("");
+    setEditingProfile(true);
   };
 
-  const cancelEditName = () => {
-    setEditingName(false);
-    setNameError("");
+  const cancelEditProfile = () => {
+    setEditingProfile(false);
+    setProfileError("");
   };
 
-  const saveName = async () => {
-    const trimmed = nameValue.trim();
-    if (!trimmed) { setNameError("Name cannot be empty."); return; }
-    if (trimmed.length > 200) { setNameError("Name is too long."); return; }
-    setNameSaving(true);
-    setNameError("");
+  const saveProfile = async () => {
+    const trimmedName = nameValue.trim();
+    if (!trimmedName) { setProfileError("Name cannot be empty."); return; }
+    if (trimmedName.length > 200) { setProfileError("Name is too long."); return; }
+    const trimmedAffiliation = affiliationValue.trim();
+    if (trimmedAffiliation.length > 300) { setProfileError("Affiliation is too long."); return; }
+    setProfileSaving(true);
+    setProfileError("");
     try {
-      await axios.patch("/api/auth/profile", { name: trimmed });
+      await axios.patch("/api/auth/profile", { name: trimmedName, affiliation: trimmedAffiliation });
       await refresh();
-      setEditingName(false);
+      setEditingProfile(false);
     } catch (err) {
-      setNameError(
+      setProfileError(
         (err.response && err.response.data && err.response.data.error) ||
         "Failed to save. Please try again."
       );
     } finally {
-      setNameSaving(false);
+      setProfileSaving(false);
     }
   };
 
@@ -137,7 +139,7 @@ const AccountPage = () => {
       <AccountLayout pageTitle="Profile">
         {/* ── Identity card ─────────────────────────────────────── */}
         <Paper variant="outlined" sx={{ p: 3, borderRadius: 3, mb: 3 }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2.5, mb: 2.5 }}>
+          <Box sx={{ display: "flex", alignItems: "flex-start", gap: 2.5, mb: 2.5 }}>
             <Avatar
               sx={{
                 width: 80,
@@ -145,66 +147,93 @@ const AccountPage = () => {
                 bgcolor: "#800000",
                 fontSize: "1.75rem",
                 fontWeight: 700,
+                flexShrink: 0,
               }}
             >
               {initials}
             </Avatar>
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              {editingName ? (
-                <TextField
-                  value={nameValue}
-                  onChange={(e) => setNameValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") saveName();
-                    if (e.key === "Escape") cancelEditName();
-                  }}
-                  size="small"
-                  autoFocus
-                  fullWidth
-                  error={Boolean(nameError)}
-                  helperText={nameError || " "}
-                  disabled={nameSaving}
-                  InputProps={{
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <Tooltip title="Save">
-                          <span>
-                            <IconButton size="small" onClick={saveName} disabled={nameSaving}>
-                              <Check fontSize="small" />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                        <Tooltip title="Cancel">
-                          <IconButton size="small" onClick={cancelEditName} disabled={nameSaving}>
-                            <Close fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </InputAdornment>
-                    ),
-                  }}
-                  sx={{ mb: 0.5 }}
-                />
-              ) : (
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <Typography variant="h5" fontWeight={700}>
-                    {user.name || user.email}
-                  </Typography>
-                  {user.is_admin && (
-                    <Chip label="Admin" size="small" color="primary" />
+              {editingProfile ? (
+                <Box>
+                  <TextField
+                    label="Name"
+                    value={nameValue}
+                    onChange={(e) => setNameValue(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Escape") cancelEditProfile(); }}
+                    size="small"
+                    autoFocus
+                    fullWidth
+                    required
+                    disabled={profileSaving}
+                    sx={{ mb: 1.5 }}
+                  />
+                  <TextField
+                    label="Affiliation (optional)"
+                    value={affiliationValue}
+                    onChange={(e) => setAffiliationValue(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Escape") cancelEditProfile(); }}
+                    size="small"
+                    fullWidth
+                    disabled={profileSaving}
+                    placeholder="e.g. Dept. of Physics, University of Chicago"
+                    sx={{ mb: 1.5 }}
+                  />
+                  {profileError && (
+                    <Typography variant="caption" color="error" display="block" sx={{ mb: 1 }}>
+                      {profileError}
+                    </Typography>
                   )}
-                  <Tooltip title="Edit name">
-                    <IconButton size="small" onClick={startEditName} sx={{ color: "text.secondary" }}>
-                      <Edit fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
+                  <Box sx={{ display: "flex", gap: 1 }}>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      onClick={saveProfile}
+                      disabled={profileSaving}
+                      sx={{ bgcolor: "#800000", "&:hover": { bgcolor: "#600000" } }}
+                    >
+                      {profileSaving ? "Saving…" : "Save"}
+                    </Button>
+                    <Button size="small" variant="outlined" onClick={cancelEditProfile} disabled={profileSaving}>
+                      Cancel
+                    </Button>
+                  </Box>
+                </Box>
+              ) : (
+                <Box>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <Typography variant="h5" fontWeight={700}>
+                      {user.name || user.email}
+                    </Typography>
+                    {user.is_admin && (
+                      <Chip label="Admin" size="small" color="primary" />
+                    )}
+                  </Box>
+                  {user.affiliation && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                      {user.affiliation}
+                    </Typography>
+                  )}
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                    {user.email}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Signed in with {providerLabel(user.provider)}
+                  </Typography>
+                  <Box sx={{ mt: 1 }}>
+                    <Tooltip title="Edit profile">
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<Edit fontSize="small" />}
+                        onClick={startEditProfile}
+                        sx={{ textTransform: "none" }}
+                      >
+                        Edit profile
+                      </Button>
+                    </Tooltip>
+                  </Box>
                 </Box>
               )}
-              <Typography variant="body2" color="text.secondary">
-                {user.email}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Signed in with {providerLabel(user.provider)}
-              </Typography>
             </Box>
           </Box>
           <Divider sx={{ mb: 2 }} />

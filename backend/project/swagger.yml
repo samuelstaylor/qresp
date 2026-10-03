@@ -1475,6 +1475,9 @@ paths:
                 type: string
               name:
                 type: string
+              affiliation:
+                type: string
+                maxLength: 300
       responses:
         200:
           description: Account created and signed in
@@ -1537,6 +1540,9 @@ paths:
               name:
                 type: string
                 maxLength: 200
+              affiliation:
+                type: string
+                maxLength: 300
       responses:
         200:
           description: Profile updated

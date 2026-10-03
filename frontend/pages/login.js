@@ -54,6 +54,7 @@ const LoginPage = () => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
+  const [affiliation, setAffiliation] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -101,7 +102,7 @@ const LoginPage = () => {
     const result =
       mode === "signin"
         ? await localLogin(email, password)
-        : await register(email, password, name);
+        : await register(email, password, name, affiliation);
     setSubmitting(false);
 
     if (result.ok) {
@@ -214,6 +215,19 @@ const LoginPage = () => {
                   onChange={(e) => setName(e.target.value)}
                   sx={{ mb: 1.5 }}
                   autoComplete="name"
+                />
+              )}
+              {isRegister && (
+                <TextField
+                  label="Affiliation (optional)"
+                  type="text"
+                  fullWidth
+                  size="small"
+                  value={affiliation}
+                  onChange={(e) => setAffiliation(e.target.value)}
+                  placeholder="e.g. Dept. of Physics, University of Chicago"
+                  sx={{ mb: 1.5 }}
+                  autoComplete="organization"
                 />
               )}
               <TextField

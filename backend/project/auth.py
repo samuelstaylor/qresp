@@ -779,6 +779,7 @@ def local_register(body):
     email = (body.get("email") or "").strip().lower()
     password = body.get("password") or ""
     name = (body.get("name") or "").strip()
+    affiliation = (body.get("affiliation") or "").strip()
 
     if not _EMAIL_RE.match(email):
         return {"error": "A valid email address is required."}, 400
@@ -796,6 +797,7 @@ def local_register(body):
         email=email,
         password_hash=generate_password_hash(password),
         name=name or email,
+        affiliation=affiliation,
         created_at=now,
         last_login_at=now,
     )
@@ -804,6 +806,7 @@ def local_register(body):
     user = {
         "email": email,
         "name": account.name,
+        "affiliation": account.affiliation or "",
         "is_admin": email in _admin_emails(),
         "provider": "local",
     }
@@ -830,6 +833,7 @@ def local_login(body):
     user = {
         "email": email,
         "name": account.name or email,
+        "affiliation": account.affiliation or "",
         "is_admin": email in _admin_emails(),
         "provider": "local",
     }
@@ -839,11 +843,11 @@ def local_login(body):
 
 @csrf_protect
 def update_profile(body):
-    """PATCH /api/auth/profile — update the display name of the signed-in user.
+    """PATCH /api/auth/profile — update display name and/or affiliation.
 
-    Updates the session immediately. For local-password accounts the name is
-    also persisted to MongoDB; for OAuth/dev accounts only the session is
-    updated (the provider controls the canonical name).
+    Updates the session immediately. For local-password accounts both fields are
+    also persisted to MongoDB; for OAuth/dev accounts only the session is updated.
+    Name is required; affiliation is optional (omit the key to leave it unchanged).
     """
     user = get_current_user()
     if not user:
@@ -855,14 +859,19 @@ def update_profile(body):
     if len(name) > 200:
         return {"error": "Name is too long (max 200 characters)."}, 400
 
+    affiliation = (body.get("affiliation") or "").strip()
+    if len(affiliation) > 300:
+        return {"error": "Affiliation is too long (max 300 characters)."}, 400
+
     if user.get("provider") == "local":
         from project.models import LocalAccount
         account = LocalAccount.objects(email=user["email"]).first()
         if account:
             account.name = name
+            account.affiliation = affiliation
             account.save()
 
-    user = {**user, "name": name}
+    user = {**user, "name": name, "affiliation": affiliation}
     session[AUTH_SESSION_KEY] = user
     return {"authenticated": True, "user": user}, 200
 

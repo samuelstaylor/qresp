@@ -291,6 +291,7 @@ class LocalAccount(Document):
     email = StringField(required=True, unique=True, max_length=254)
     password_hash = StringField(required=True)
     name = StringField(max_length=200, default="")
+    affiliation = StringField(max_length=300, default="")
     created_at = DateTimeField()
     last_login_at = DateTimeField()
     meta = {
