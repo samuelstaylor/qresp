@@ -264,7 +264,7 @@ const AccountPage = () => {
                   </Box>
 
                   {user.affiliation && (
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25, fontStyle: "italic" }}>
                       {user.affiliation}
                     </Typography>
                   )}
@@ -276,7 +276,19 @@ const AccountPage = () => {
                   )}
 
                   <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5, mt: 0.75, alignItems: "center" }}>
-                    <Typography variant="body2" color="text.secondary">{user.email}</Typography>
+                    <Typography
+                      component="a"
+                      href={`mailto:${user.email}`}
+                      variant="body2"
+                      sx={{
+                        color: "#800000",
+                        textDecoration: "none",
+                        borderBottom: "1px dotted #800000",
+                        "&:hover": { borderBottomStyle: "solid" },
+                      }}
+                    >
+                      {user.email}
+                    </Typography>
                     {user.orcid_id && (
                       <Tooltip title="ORCID iD">
                         <Typography component="a"
