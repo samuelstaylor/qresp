@@ -10,7 +10,8 @@ from mongoengine import Q as MongoQ
 from mongoengine.errors import DoesNotExist, NotUniqueError, ValidationError as MongoValidationError
 
 from project.auth import (can_edit_paper, can_manage_paper, csrf_protect,
-                          get_current_user, is_admin, paper_role, stamp_owner)
+                          get_current_user, is_admin, paper_role,
+                          public_profile, stamp_owner)
 from project.models import CuratorDraft, Favorite
 from project.paperdao import *
 from project.util import Dtree
@@ -143,6 +144,28 @@ def paper(id):
         print(msg)
         return msg, 400
     return paperdetail, 200
+
+
+def paper_curator(id):
+    """GET /api/paper/{id}/curator — the record owner's public profile.
+
+    Matched on the verified owner_email stamped at publish time, never on the
+    curator email typed into the form, so a record cannot borrow someone
+    else's profile. Returns {"profile": null} for legacy ownerless records or
+    owners without a saved profile; the owner's email is never returned.
+    """
+    try:
+        stored = Paper.objects.get(id=str(id))
+    except Exception:
+        return {"error": "Paper not found."}, 404
+
+    if stored.is_active is False:
+        allowed, _ = can_edit_paper(stored, get_current_user())
+        if not allowed:
+            return {"error": "This record is not available."}, 404
+
+    owner = (stored.owner_email or "").strip().lower()
+    return {"profile": public_profile(owner) if owner else None}, 200
 
 
 def workflow(id):

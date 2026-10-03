@@ -965,6 +965,23 @@ paths:
           description: Administrator access required
         503:
           description: Feedback could not be read
+  /paper/{id}/curator:
+    get:
+      operationId: "project.api.paper_curator"
+      tags:
+        - "Paper details"
+      summary: "Public profile of the account that owns the record"
+      parameters:
+        - in: path
+          name: id
+          type: string
+          required: true
+          description: Paper Id
+      responses:
+        200:
+          description: Profile (or null) returned
+        404:
+          description: Paper with this id does not exist
   /paper/{id}/permissions:
     get:
       operationId: "project.api.paper_permissions"

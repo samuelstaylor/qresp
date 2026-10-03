@@ -15,11 +15,12 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { Article, Bookmark, CameraAlt, Edit, EditNote, Language, Logout, School } from "@mui/icons-material";
+import { Article, Bookmark, CameraAlt, Edit, EditNote, Logout } from "@mui/icons-material";
 
 import SEO from "../components/seo";
 import AccountLayout from "../components/Account/AccountLayout";
 import AuthContext from "../Context/Auth/authContext";
+import ProfileLinks, { ORCID_RE, initialsOf } from "../components/Profile/ProfileLinks";
 
 const providerLabel = (p) =>
   p === "google" ? "Google"
@@ -46,8 +47,6 @@ const StatCard = ({ icon, label, href }) => (
   </Link>
 );
 
-const ORCID_RE = /^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/;
-
 const AccountPage = () => {
   const { loading, authenticated, user, logout, refresh } = useContext(AuthContext);
 
@@ -59,8 +58,7 @@ const AccountPage = () => {
   const [avatarPreview, setAvatarPreview] = useState("");
   const fileRef = useRef(null);
 
-  const initials = (user?.name || user?.email || "?")
-    .split(/\s+/).map((w) => w[0] || "").slice(0, 2).join("").toUpperCase();
+  const initials = initialsOf(user?.name, user?.email);
 
   const avatarSrc = avatarPreview || user?.avatar_b64 || "";
 
@@ -275,53 +273,13 @@ const AccountPage = () => {
                     </Typography>
                   )}
 
-                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5, mt: 0.75, alignItems: "center" }}>
-                    <Typography
-                      component="a"
-                      href={`mailto:${user.email}`}
-                      variant="body2"
-                      sx={{
-                        color: "#800000",
-                        textDecoration: "none",
-                        borderBottom: "1px dotted #800000",
-                        "&:hover": { borderBottomStyle: "solid" },
-                      }}
-                    >
-                      {user.email}
-                    </Typography>
-                    {user.orcid_id && (
-                      <Tooltip title="ORCID iD">
-                        <Typography component="a"
-                          href={`https://orcid.org/${user.orcid_id}`}
-                          target="_blank" rel="noopener noreferrer"
-                          variant="caption"
-                          sx={{ color: "#a6ce39", textDecoration: "none", display: "flex", alignItems: "center", gap: 0.4, "&:hover": { textDecoration: "underline" } }}>
-                          <svg width="14" height="14" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" fill="#a6ce39">
-                            <path d="M128 0C57.4 0 0 57.4 0 128s57.4 128 128 128 128-57.4 128-128S198.6 0 128 0zm-21.8 194.3H85.5V98.4h20.7v95.9zM95.9 83.9c-6.6 0-12-5.4-12-12s5.4-12 12-12 12 5.4 12 12-5.4 12-12 12zm100.7 110.4h-20.7v-46.5c0-11.1-.2-25.3-15.4-25.3-15.4 0-17.8 12-17.8 24.5v47.3h-20.7V98.4h19.9v13.1h.3c2.8-5.2 9.5-10.7 19.5-10.7 20.9 0 24.7 13.7 24.7 31.6v61.9z"/>
-                          </svg>
-                          {user.orcid_id}
-                        </Typography>
-                      </Tooltip>
-                    )}
-                    {user.website_url && (
-                      <Tooltip title="Personal website">
-                        <Typography component="a" href={user.website_url} target="_blank" rel="noopener noreferrer"
-                          variant="caption"
-                          sx={{ color: "text.secondary", textDecoration: "none", display: "flex", alignItems: "center", gap: 0.4, "&:hover": { textDecoration: "underline" } }}>
-                          <Language sx={{ fontSize: 13 }} />{new URL(user.website_url).hostname}
-                        </Typography>
-                      </Tooltip>
-                    )}
-                    {user.google_scholar_url && (
-                      <Tooltip title="Google Scholar">
-                        <Typography component="a" href={user.google_scholar_url} target="_blank" rel="noopener noreferrer"
-                          variant="caption"
-                          sx={{ color: "text.secondary", textDecoration: "none", display: "flex", alignItems: "center", gap: 0.4, "&:hover": { textDecoration: "underline" } }}>
-                          <School sx={{ fontSize: 13 }} />Scholar
-                        </Typography>
-                      </Tooltip>
-                    )}
-                  </Box>
+                  <ProfileLinks
+                    email={user.email}
+                    orcidId={user.orcid_id}
+                    websiteUrl={user.website_url}
+                    scholarUrl={user.google_scholar_url}
+                    sx={{ mt: 0.75 }}
+                  />
 
                   <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
                     Signed in with {providerLabel(user.provider)}

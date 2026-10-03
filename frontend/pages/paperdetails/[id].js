@@ -2,7 +2,7 @@ import { Fragment, useContext, useEffect } from "react";
 import PropTypes from "prop-types";
 
 import { useRouter } from "next/router";
-import { Container, Box, Typography } from "@mui/material";
+import { Alert, Container, Box, Typography } from "@mui/material";
 import FavoriteButton from "../../components/FavoriteButton";
 
 import SEO from "../../components/seo";
@@ -14,10 +14,8 @@ import DatasetInfo from "../../components/Paper/Datasets";
 import ToolsInfo from "../../components/Paper/Tools";
 import ScriptsInfo from "../../components/Paper/Scripts";
 import Documentation from "../../components/Paper/Documentation";
-import CuratorInfo from "../../components/Paper/Curator";
-import FileServerInfo from "../../components/Paper/FileServer";
 import Workflow from "../../components/Paper/Workflow";
-import LicenseInfo from "../../components/Paper/License";
+import AboutRecord from "../../components/Paper/AboutRecord";
 import PermissionNotice from "../../components/Paper/PermissionNotice";
 import RelatedResearch from "../../components/Paper/RelatedResearch";
 
@@ -26,6 +24,19 @@ import axios from "axios";
 import { resolveServerSideApiBase } from "../../Utils/serverSideApi";
 
 import CuratorHelperState from "../../Context/CuratorHelpers/curatorHelperState";
+
+const SectionHeading = ({ children }) => (
+  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mt: 5, mb: 1.5 }}>
+    <Typography
+      variant="h6"
+      component="h2"
+      sx={{ fontWeight: 700, color: "#222", whiteSpace: "nowrap" }}
+    >
+      {children}
+    </Typography>
+    <Box sx={{ flex: 1, height: "1px", bgcolor: "divider" }} />
+  </Box>
+);
 
 const PaperDetails = ({ paper, error, preview = false, query }) => {
   const {
@@ -103,32 +114,32 @@ const PaperDetails = ({ paper, error, preview = false, query }) => {
   return !error ? (
     <Fragment>
       <SEO title={"Qresp | " + title} description={abstract} author={authors} />
-      <Container>
-        <Box sx={{ mt: 5 }}>
-          {" "}
+      <Container maxWidth="lg">
+        <Box sx={{ mt: 4, mb: 8 }}>
           {preview ? (
-            <Typography variant="subtitle2" color="error" gutterBottom>
-              <Box sx={{ fontWeight: "bold" }}>* This is unpublished content !</Box>
-            </Typography>
-          ) : null}
-        </Box>
-        <Box sx={{ mb: 7, mt: 1 }}>
-          {preview ? null : (
+            <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }}>
+              This is unpublished content — a preview of a record under curation.
+            </Alert>
+          ) : (
             <PermissionNotice paperId={query.id} server={query.server} />
           )}
-          {!preview && (
-            <Box sx={{ display: "flex", justifyContent: "flex-end", mb: -1 }}>
-              <FavoriteButton
-                paperId={query.id}
-                size="medium"
-                server={query.server || ""}
-                title={title || ""}
-                authors={typeof authors === "string" ? authors : (authors || []).join(", ")}
-                year={year ? Number(year) : null}
-              />
-            </Box>
-          )}
-          <ReferenceInfo referenceData={referenceData} />
+          <ReferenceInfo
+            referenceData={referenceData}
+            actions={
+              preview ? null : (
+                <FavoriteButton
+                  paperId={query.id}
+                  size="medium"
+                  server={query.server || ""}
+                  title={title || ""}
+                  authors={typeof authors === "string" ? authors : (authors || []).join(", ")}
+                  year={year ? Number(year) : null}
+                />
+              )
+            }
+          />
+
+          <SectionHeading>Research artifacts</SectionHeading>
           {/* yet-another-react-lightbox needs no provider wrapper. */}
           <CuratorHelperState>
             <ChartInfo
@@ -161,9 +172,16 @@ const PaperDetails = ({ paper, error, preview = false, query }) => {
           {documentation ? (
             <Documentation documentation={documentation} />
           ) : null}
-          <CuratorInfo curator={curator} />
-          <FileServerInfo fileserverpath={fileServerPath} />
-          {license ? <LicenseInfo type={license} /> : null}
+
+          <SectionHeading>About this record</SectionHeading>
+          <AboutRecord
+            paperId={query.id}
+            preview={preview}
+            curator={curator}
+            fileServerPath={fileServerPath}
+            license={license}
+          />
+
           {/* Related Research is computed at view time from the published
               record, so it has nothing to show for an unpublished preview. */}
           {preview ? null : (

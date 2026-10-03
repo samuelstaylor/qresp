@@ -342,6 +342,7 @@ def google_callback(state=None, code=None, error=None):
         email, user["name"])
     if account_id:
         user["account_id"] = account_id
+    user = _with_profile(user)
     session[AUTH_SESSION_KEY] = user
     # Return to the page the user signed in from (re-validated: session data
     # still must not produce an off-origin redirect).
@@ -639,6 +640,7 @@ def microsoft_callback(code=None, state=None, error=None):
         claims.get("iss"), claims.get("oid"), "microsoft", email, name)
     if account_id:
         user["account_id"] = account_id
+    user = _with_profile(user)
     session[AUTH_SESSION_KEY] = user
 
     target = _safe_next_path(session.pop(AUTH_NEXT_KEY, None)) or "/"
@@ -745,6 +747,7 @@ def github_callback(state=None, code=None, error=None):
         email, name)
     if account_id:
         user["account_id"] = account_id
+    user = _with_profile(user)
     session[AUTH_SESSION_KEY] = user
     target = _safe_next_path(session.pop(AUTH_NEXT_KEY, None)) or "/"
     return redirect(target, code=302)
@@ -767,6 +770,47 @@ def logout():
     return {"success": True}, 200
 
 
+PROFILE_FIELDS = ("affiliation", "bio", "orcid_id", "google_scholar_url",
+                  "website_url", "avatar_b64")
+
+
+def _load_profile(email):
+    """The stored UserProfile for an email, or None. Best-effort: a profile
+    lookup failure must never block sign-in."""
+    try:
+        from project.models import UserProfile
+        return UserProfile.objects(email=(email or "").strip().lower()).first()
+    except Exception as e:
+        print("Profile lookup failed: %s" % type(e).__name__)
+        return None
+
+
+def _with_profile(user):
+    """Merge the user's stored profile into a fresh session identity. A name
+    saved on the profile wins over the provider-asserted one."""
+    profile = _load_profile(user.get("email"))
+    if not profile:
+        return user
+    merged = dict(user)
+    for f in PROFILE_FIELDS:
+        value = getattr(profile, f, "") or ""
+        if value:
+            merged[f] = value
+    if profile.name:
+        merged["name"] = profile.name
+    return merged
+
+
+def public_profile(email):
+    """Public-facing profile fields for an email, or None (never the email)."""
+    profile = _load_profile(email)
+    if not profile:
+        return None
+    out = {f: getattr(profile, f, "") or "" for f in PROFILE_FIELDS}
+    out["name"] = profile.name or ""
+    return out
+
+
 def local_register(body):
     """POST /api/auth/register — create a new email/password account.
 
@@ -785,8 +829,10 @@ def local_register(body):
         return {"error": "A valid email address is required."}, 400
     if len(password) < 8:
         return {"error": "Password must be at least 8 characters."}, 400
+    if len(affiliation) > 300:
+        return {"error": "Affiliation is too long (max 300 characters)."}, 400
 
-    from project.models import LocalAccount
+    from project.models import LocalAccount, UserProfile
     now = datetime.utcnow()
 
     if LocalAccount.objects(email=email).first():
@@ -797,19 +843,21 @@ def local_register(body):
         email=email,
         password_hash=generate_password_hash(password),
         name=name or email,
-        affiliation=affiliation,
         created_at=now,
         last_login_at=now,
     )
     account.save()
 
-    user = {
+    if affiliation:
+        UserProfile.objects(email=email).update_one(
+            upsert=True, set__affiliation=affiliation, set__updated_at=now)
+
+    user = _with_profile({
         "email": email,
         "name": account.name,
-        "affiliation": account.affiliation or "",
         "is_admin": email in _admin_emails(),
         "provider": "local",
-    }
+    })
     session[AUTH_SESSION_KEY] = user
     return {"authenticated": True, "user": user}, 200
 
@@ -830,18 +878,12 @@ def local_login(body):
     account.last_login_at = datetime.utcnow()
     account.save()
 
-    user = {
+    user = _with_profile({
         "email": email,
         "name": account.name or email,
-        "affiliation": account.affiliation or "",
-        "bio": account.bio or "",
-        "orcid_id": account.orcid_id or "",
-        "google_scholar_url": account.google_scholar_url or "",
-        "website_url": account.website_url or "",
-        "avatar_b64": account.avatar_b64 or "",
         "is_admin": email in _admin_emails(),
         "provider": "local",
-    }
+    })
     session[AUTH_SESSION_KEY] = user
     return {"authenticated": True, "user": user}, 200
 
@@ -861,8 +903,9 @@ def _validate_url(value, label):
 def update_profile(body):
     """PATCH /api/auth/profile — update profile fields for the signed-in user.
 
-    All fields except name are optional. For local-password accounts every field
-    is persisted to MongoDB; for OAuth/dev accounts only the session is updated.
+    Persisted to UserProfile (keyed by email) for every sign-in provider, so
+    the profile survives logout and can be shown on the user's records.
+    Omitting avatar_b64 leaves the stored photo unchanged; "" removes it.
     """
     user = get_current_user()
     if not user:
@@ -899,20 +942,8 @@ def update_profile(body):
     avatar_b64 = (body.get("avatar_b64") or "").strip()
     if len(avatar_b64) > 700000:
         return {"error": "Profile photo is too large (max ~500 KB)."}, 400
-
-    if user.get("provider") == "local":
-        from project.models import LocalAccount
-        account = LocalAccount.objects(email=user["email"]).first()
-        if account:
-            account.name = name
-            account.affiliation = affiliation
-            account.bio = bio
-            account.orcid_id = orcid_id
-            account.google_scholar_url = google_scholar_url
-            account.website_url = website_url
-            if avatar_b64 or "avatar_b64" in body:
-                account.avatar_b64 = avatar_b64
-            account.save()
+    if avatar_b64 and not avatar_b64.startswith("data:image/"):
+        return {"error": "Profile photo must be an image."}, 400
 
     updates = {
         "name": name,
@@ -922,8 +953,17 @@ def update_profile(body):
         "google_scholar_url": google_scholar_url,
         "website_url": website_url,
     }
-    if avatar_b64 or "avatar_b64" in body:
+    if "avatar_b64" in body:
         updates["avatar_b64"] = avatar_b64
+
+    from project.models import LocalAccount, UserProfile
+    email = user["email"]
+    UserProfile.objects(email=email).update_one(
+        upsert=True, set__updated_at=datetime.utcnow(),
+        **{"set__" + k: v for k, v in updates.items()})
+    if user.get("provider") == "local":
+        LocalAccount.objects(email=email).update_one(set__name=name)
+
     user = {**user, **updates}
     session[AUTH_SESSION_KEY] = user
     return {"authenticated": True, "user": user}, 200
@@ -948,5 +988,6 @@ def dev_login(credentials):
         "is_admin": bool(credentials.get("is_admin", False)),
         "provider": "dev",
     }
+    user = _with_profile(user)
     session[AUTH_SESSION_KEY] = user
     return {"authenticated": True, "user": user}, 200

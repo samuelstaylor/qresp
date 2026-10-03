@@ -291,16 +291,32 @@ class LocalAccount(Document):
     email = StringField(required=True, unique=True, max_length=254)
     password_hash = StringField(required=True)
     name = StringField(max_length=200, default="")
+    created_at = DateTimeField()
+    last_login_at = DateTimeField()
+    meta = {
+        'collection': 'local_accounts',
+        'indexes': [{'fields': ['email'], 'unique': True}],
+        # Some staging documents still carry profile fields that now live on
+        # UserProfile; ignore them instead of failing to load the account.
+        'strict': False,
+    }
+
+
+class UserProfile(Document):
+    """Optional public profile for any sign-in provider, keyed by the
+    lower-cased account email (the same linking key used for ownership).
+    Shown on the user's account page and on records they own."""
+    email = StringField(required=True, unique=True, max_length=254)
+    name = StringField(max_length=200, default="")
     affiliation = StringField(max_length=300, default="")
     bio = StringField(max_length=500, default="")
     orcid_id = StringField(max_length=40, default="")
     google_scholar_url = StringField(max_length=500, default="")
     website_url = StringField(max_length=500, default="")
-    avatar_b64 = StringField(default="")
-    created_at = DateTimeField()
-    last_login_at = DateTimeField()
+    avatar_b64 = StringField(default="")  # data:image/... URI
+    updated_at = DateTimeField()
     meta = {
-        'collection': 'local_accounts',
+        'collection': 'user_profiles',
         'indexes': [{'fields': ['email'], 'unique': True}],
     }
 
