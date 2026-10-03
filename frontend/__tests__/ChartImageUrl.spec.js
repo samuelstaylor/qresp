@@ -299,3 +299,44 @@ describe("image failures are told apart", () => {
     );
   });
 });
+
+describe("PDF chart figures", () => {
+  const pdfChart = {
+    id: "c2",
+    imageFile: "/Figures_Tables/Figure1.pdf",
+    caption: "Energy levels",
+    number: "1",
+    properties: [],
+    files: [],
+    notebookFile: "",
+  };
+
+  it("embeds a PDF figure in the browser's PDF viewer instead of an <img>", () => {
+    renderCharts([pdfChart], ROOT);
+    expect(screen.queryByTestId("chart-image")).toBeNull();
+    const viewer = screen.getByTestId("chart-pdf");
+    expect(viewer.tagName).toBe("OBJECT");
+    expect(viewer).toHaveAttribute("type", "application/pdf");
+    expect(viewer.getAttribute("data")).toMatch(
+      new RegExp(`^${ROOT}/Figures_Tables/Figure1\\.pdf#`)
+    );
+    expect(screen.getByTestId("chart-pdf-open")).toHaveAttribute(
+      "href",
+      `${ROOT}/Figures_Tables/Figure1.pdf`
+    );
+  });
+
+  it("recognises PDFs case-insensitively and ignores query strings", () => {
+    const { isPdfFile } = require("../components/Paper/Charts");
+    expect(isPdfFile("a/FIG.PDF")).toBe(true);
+    expect(isPdfFile("a/fig.pdf?raw=1")).toBe(true);
+    expect(isPdfFile("a/fig.png")).toBe(false);
+    expect(isPdfFile("a/pdf.png")).toBe(false);
+  });
+
+  it("still renders image figures as images alongside PDFs", () => {
+    renderCharts([pdfChart, analyzedChart], ROOT);
+    expect(screen.getByTestId("chart-pdf")).toBeInTheDocument();
+    expect(screen.getByTestId("chart-image")).toBeInTheDocument();
+  });
+});

@@ -9,6 +9,7 @@ import "yet-another-react-lightbox/styles.css";
 import "yet-another-react-lightbox/plugins/captions.css";
 
 import { Box, Typography, Button } from "@mui/material";
+import { PictureAsPdf } from "@mui/icons-material";
 
 import RecordTable from "../Table/Table";
 import Drawer from "../drawer";
@@ -26,6 +27,11 @@ import { useRouter } from "next/router";
 import LoadingContext from "../../Context/Loading/loadingContext";
 import AlertContext from "../../Context/Alert/alertContext";
 import axios from "axios";
+
+// Browsers cannot draw a PDF in an <img>, so PDF figures get the browser's
+// own PDF viewer instead (the RCC file server sends no frame restrictions).
+export const isPdfFile = (path) =>
+  /\.pdf$/i.test(String(path || "").split(/[?#]/)[0]);
 
 const PropsView = ({ rowdata }) => {
   return (
@@ -148,8 +154,83 @@ const ChartInfo = ({
       );
     }
 
+    const pdf = isPdfFile(rowdata.imageFile);
+
     return (
       <Fragment>
+        {pdf ? (
+          <Box sx={{ width: { xs: "70vw", md: "30vw" }, maxWidth: 440, mx: "auto" }}>
+            {mixedContent ? (
+              <Typography
+                variant="caption"
+                color="error"
+                component="span"
+                data-testid="chart-image-error"
+                sx={{ display: "block", p: 1, overflowWrap: "anywhere" }}
+              >
+                Blocked: this page is HTTPS and the file server URL is HTTP.
+                Save an https:// file server path.{" "}
+                <a href={imageUrl} rel="noopener noreferrer" target="_blank">
+                  Open PDF
+                </a>
+              </Typography>
+            ) : (
+              <Box
+                component="object"
+                data={`${imageUrl}#toolbar=0&navpanes=0&view=FitH`}
+                type="application/pdf"
+                aria-label={rowdata.caption || rowdata.imageFile}
+                data-testid="chart-pdf"
+                sx={{
+                  display: "block",
+                  width: "100%",
+                  height: 280,
+                  border: "1px solid",
+                  borderColor: "divider",
+                  borderRadius: 1,
+                  bgcolor: "#fafafa",
+                }}
+              >
+                {/* Rendered only where the browser has no inline PDF viewer
+                    (e.g. some mobile browsers). */}
+                <Box
+                  sx={{
+                    height: "100%",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 1,
+                    p: 2,
+                  }}
+                >
+                  <PictureAsPdf sx={{ fontSize: 40, color: "#800000" }} />
+                  <Typography variant="body2" color="text.secondary">
+                    PDF figure
+                  </Typography>
+                </Box>
+              </Box>
+            )}
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+                flexWrap: "wrap",
+                gap: 1,
+                mt: 0.75,
+                fontSize: "0.8rem",
+              }}
+            >
+              <a href={imageUrl} rel="noopener noreferrer" target="_blank" data-testid="chart-pdf-open">
+                Open PDF
+              </a>
+              <span aria-hidden="true">·</span>
+              <a href={datatreeLink} rel="noopener noreferrer" target="_blank">
+                Check file server access
+              </a>
+            </Box>
+          </Box>
+        ) : (
         <StyledTooltip title={rowdata.caption} placement="left" arrow>
           <Button focusRipple onClick={() => setLightboxIndex(rowdata.index)}>
             <img
@@ -204,6 +285,7 @@ const ChartInfo = ({
             </Typography>
           </Button>
         </StyledTooltip>
+        )}
         {showSlider && (
           <Slider>
             <a
@@ -299,15 +381,21 @@ const ChartInfo = ({
 
   const Gallery = [];
 
-  const rows = charts.map((row, index) => {
-    row["index"] = index;
+  const rows = charts.map((row) => {
     row["server"] = fileserverpath;
     row["downloadPath"] = downloadPath;
 
-    Gallery.push({
-      src: buildFileUrl(row["server"], row["imageFile"]),
-      description: row["caption"],
-    });
+    // The lightbox only shows images, so PDF figures stay out of it and the
+    // index is the row's position among the image figures.
+    if (isPdfFile(row["imageFile"])) {
+      row["index"] = -1;
+    } else {
+      row["index"] = Gallery.length;
+      Gallery.push({
+        src: buildFileUrl(row["server"], row["imageFile"]),
+        description: row["caption"],
+      });
+    }
     return {
       figure: row,
       props: {
