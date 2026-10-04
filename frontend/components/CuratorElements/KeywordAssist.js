@@ -1,3 +1,4 @@
+import { AutoAwesome } from "@mui/icons-material";
 import { Fragment, useContext, useRef, useState } from "react";
 import PropTypes from "prop-types";
 
@@ -216,9 +217,12 @@ const KeywordAssist = ({ onApply }) => {
         <Button
           type="button"
           size="small"
+          variant="outlined"
+          startIcon={<AutoAwesome fontSize="small" />}
           ref={triggerRef}
           onClick={start}
           disabled={!eligible}
+          sx={{ textTransform: "none", fontWeight: 600, mb: 0.5 }}
         >
           Suggest Keywords with AI
         </Button>

@@ -50,7 +50,7 @@ describe("PaperInfoForm with array-backed state (edit mode)", () => {
       screen.getByPlaceholderText(/enter collection to which project belongs/i)
     ).toBeInTheDocument();
     expect(
-      screen.getByPlaceholderText(/ener tags for the project/i)
+      screen.getByPlaceholderText(/enter tags for the project/i)
     ).toBeInTheDocument();
     expect(
       screen.getByPlaceholderText(/enter main notebook filename/i)
@@ -78,7 +78,7 @@ describe("PaperInfoForm with array-backed state (edit mode)", () => {
     expect(
       screen.getByPlaceholderText(/enter collection to which project belongs/i)
     ).toHaveValue("MICCOM, PARADIM");
-    expect(screen.getByPlaceholderText(/ener tags for the project/i)).toHaveValue(
+    expect(screen.getByPlaceholderText(/enter tags for the project/i)).toHaveValue(
       "DFT"
     );
   });

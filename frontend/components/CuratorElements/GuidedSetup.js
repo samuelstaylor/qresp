@@ -766,11 +766,29 @@ const GuidedSetup = () => {
 
   // 7. Finish ----------------------------------------------------------------
   const needing = recordsNeedingDetails(metadata);
-  const paperMissing = [
-    !(paperInfo.PIs && String(paperInfo.PIs).trim() && (!Array.isArray(paperInfo.PIs) || paperInfo.PIs.length)) && "principal investigators",
+  const missingPI = !(
+    paperInfo.PIs && String(paperInfo.PIs).trim() &&
+    (!Array.isArray(paperInfo.PIs) || paperInfo.PIs.length)
+  );
+  const missingOptional = [
     !(paperInfo.collections && paperInfo.collections.length) && "collections",
     !(paperInfo.tags && paperInfo.tags.length) && "keywords",
   ].filter(Boolean);
+  // Collections and keywords may publish empty; a P.I. may not.
+  const [skipOptional, setSkipOptional] = useState(false);
+  const paperMissing = [
+    missingPI && "principal investigator",
+    ...(skipOptional ? [] : missingOptional),
+  ].filter(Boolean);
+  const lastAuthor = String(referenceInfo.authors || "")
+    .split(",")
+    .map((name) => name.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .pop();
+  const applyLastAuthorAsPI = () => {
+    const current = collectDraftState();
+    apply({ paperInfo: { ...current.paperInfo, PIs: lastAuthor } });
+  };
 
   // ---- status ----
   const steps = {
@@ -1608,9 +1626,36 @@ const GuidedSetup = () => {
                 </Typography>
               ) : (
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-                  {paperMissing.length > 0 && (
-                    <Alert severity="info" action={<SectionLink target="curate-paperinfo">Open</SectionLink>}>
-                      {`Paper details still need: ${paperMissing.join(", ")}.`}
+                  {missingPI && (
+                    <Alert
+                      severity="warning"
+                      action={
+                        <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                          {lastAuthor && (
+                            <Button size="small" onClick={applyLastAuthorAsPI} sx={{ textTransform: "none" }}>
+                              {`Use last author: ${lastAuthor}`}
+                            </Button>
+                          )}
+                          <SectionLink target="curate-paperinfo">Open</SectionLink>
+                        </Box>
+                      }
+                    >
+                      A principal investigator is required to publish.
+                    </Alert>
+                  )}
+                  {missingOptional.length > 0 && !skipOptional && (
+                    <Alert
+                      severity="info"
+                      action={
+                        <Box sx={{ display: "flex", gap: 0.5 }}>
+                          <Button size="small" onClick={() => setSkipOptional(true)} sx={{ textTransform: "none" }}>
+                            Skip, leave blank
+                          </Button>
+                          <SectionLink target="curate-paperinfo">Open</SectionLink>
+                        </Box>
+                      }
+                    >
+                      {`Optional paper details are empty: ${missingOptional.join(" and ")}. They help readers find the paper, but you can publish without them.`}
                     </Alert>
                   )}
                   {needing.length > 0 ? (

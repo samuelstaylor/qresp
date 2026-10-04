@@ -22,10 +22,7 @@ const SimpleLabelValue = ({ label, value, direction = "row" }) => {
     <div>
       <Grid
         container
-        direction={direction}
-        alignItems="center"
-        justifyContent="flex-start"
-      >
+        direction={direction} sx={{ alignItems: "center", justifyContent: "flex-start" }}>
         <Grid>
           <Typography variant="body2" color="secondary" component="span">
             <span>{label}:&nbsp;&nbsp;</span>
@@ -70,10 +67,7 @@ const LabelValue = ({
     <div>
       <Grid
         container
-        direction={direction}
-        alignItems="center"
-        justifyContent="flex-start"
-      >
+        direction={direction} sx={{ alignItems: "center", justifyContent: "flex-start" }}>
         {label && (
           <Grid>
             <BigTypography variant="body1" color="secondary" component="div">

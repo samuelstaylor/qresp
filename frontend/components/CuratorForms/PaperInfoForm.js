@@ -1,17 +1,17 @@
 import { useContext, useEffect } from "react";
 import PropTypes from "prop-types";
 
-import { Grid, Tooltip, Typography, IconButton } from "@mui/material";
+import { Box, Button, Divider, Grid, Tooltip, Typography, IconButton } from "@mui/material";
 import {
-  AddCircleOutlined,
+  Add,
   RemoveCircleOutlined,
-  DescriptionOutlined,
+  FolderOpen,
 } from "@mui/icons-material";
 
 import { namesUtil } from "../../Utils/utils";
 
 import { TextInputField } from "../Form/InputFields";
-import { SubmitAndReset, FormInputLabel, RequiredFieldLegend } from "../Form/Util";
+import { SubmitAndReset, FormInputLabel, FieldDescription, RequiredFieldLegend } from "../Form/Util";
 import NameInput from "../Form//NameInput";
 import Drawer from "../drawer";
 
@@ -22,6 +22,21 @@ import * as Yup from "yup";
 import CuratorContext from "../../Context/Curator/curatorContext";
 import SourceTreeContext from "../../Context/SourceTree/SourceTreeContext";
 import KeywordAssist from "../CuratorElements/KeywordAssist";
+
+// Defined at module level: a component declared inside the form would be a
+// new type on every render and remount (and blank) every field in it.
+const Section = ({ title, children }) => (
+  <Box sx={{ mt: 1 }}>
+    <Typography
+      variant="overline"
+      component="div"
+      sx={{ color: "text.secondary", fontWeight: 700, letterSpacing: "0.08em", lineHeight: 2 }}
+    >
+      {title}
+    </Typography>
+    {children}
+  </Box>
+);
 
 const PaperInfoForm = ({ editor }) => {
   // Qresp curation metadata ONLY (PIs, PaperStack, keywords, notebook).
@@ -44,8 +59,10 @@ const PaperInfoForm = ({ editor }) => {
       )
       .required("Required")
       .min(1, "Minimum of 1 PrincipalInvestigator"),
-    collections: Yup.string().required("Required"),
-    tags: Yup.string().required("Required"),
+    // Optional: a record publishes with no collection or keyword (the
+    // publish schema allows empty lists); they only help readers find it.
+    collections: Yup.string(),
+    tags: Yup.string(),
     notebookFile: Yup.string(),
     institution: Yup.string(),
   });
@@ -120,113 +137,90 @@ const PaperInfoForm = ({ editor }) => {
   return (
     <Drawer heading="Qresp Curation Information" defaultOpen={true}>
       <form onSubmit={handleSubmit(onSubmit)}>
-        <Grid container direction="column" spacing={1}>
-          <Grid>
-            <RequiredFieldLegend />
-          </Grid>
-          <Grid>
-            <Grid
-              container
-              justifyContent="flex-start"
-              alignItems="center"
-              spacing={1}
-            >
-              <Grid>
-                <FormInputLabel label="Principal Investigators" forId="pis" />
-              </Grid>
-              <Grid>
-                <Tooltip
-                  title={
-                    <Typography variant="subtitle2">
-                      Add a principle investigator
-                    </Typography>
-                  }
-                  placement="right"
-                  arrow
-                >
-                  <IconButton
-                    onClick={() =>
-                      append({
-                        firstName: "",
-                        middleName: "",
-                        lastName: "",
-                      })
-                    }
-                    style={{ padding: 0 }}
-                  >
-                    <AddCircleOutlined color="primary" />
-                  </IconButton>
-                </Tooltip>
-              </Grid>
-            </Grid>
-            {/* Column container restores vertical gutters between PI
-                rows (MUI v9 grids no longer pad plain nested items),
-                keeping shrunk labels clear of the row above. */}
-            <Grid container direction="column" spacing={2} sx={{ mt: 0.5 }}>
-              {fields.map((pi, index) => {
-              return (
-                <Grid key={index}>
-                  <NameInput
-                    ids={pId.get(index)}
-                    names={pId.get(index)}
-                    key={index}
-                    id={`pi${index}`}
-                    register={register}
-                    errors={errors.PIs && errors.PIs[index]}
-                    defaults={formattedNames[index]}
-                    remove={
-                      <Tooltip
-                        title={
-                          <Typography variant="subtitle2">
-                            {fields.length == 1
-                              ? "Required (minimum one P.I.)"
-                              : "Remove principle investigator"}
-                          </Typography>
-                        }
-                        placement="right"
-                        arrow
-                      >
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1, maxWidth: 720 }}>
+          How this paper is described and grouped on Qresp. Only a principal
+          investigator is required; everything else helps readers find the
+          record.
+        </Typography>
+        <RequiredFieldLegend />
+
+        <Section title="People">
+          <FormInputLabel label="Principal Investigators" forId="pis" required />
+          <FieldDescription>
+            The researcher(s) who led this work, usually the corresponding or
+            last author. Shown on the record and used when searching by PI.
+          </FieldDescription>
+          {/* Column container restores vertical gutters between PI rows
+              (MUI v9 grids no longer pad plain nested items), keeping shrunk
+              labels clear of the row above. */}
+          <Grid container direction="column" spacing={2} sx={{ mt: 0.5 }}>
+            {fields.map((pi, index) => (
+              <Grid key={index}>
+                <NameInput
+                  ids={pId.get(index)}
+                  names={pId.get(index)}
+                  key={index}
+                  id={`pi${index}`}
+                  register={register}
+                  errors={errors.PIs && errors.PIs[index]}
+                  defaults={formattedNames[index]}
+                  remove={
+                    <Tooltip
+                      title={fields.length == 1 ? "At least one P.I. is required" : "Remove this P.I."}
+                      placement="right"
+                      arrow
+                    >
+                      <span>
                         <IconButton
                           size="small"
+                          aria-label="Remove this principal investigator"
+                          disabled={fields.length == 1}
                           onClick={() => {
-                            if (fields.length > 1) {
-                              remove(index);
-                            }
+                            if (fields.length > 1) remove(index);
                           }}
-                          style={{ padding: 0 }}
                         >
-                          <RemoveCircleOutlined
-                            color={fields.length == 1 ? "disabled" : "primary"}
-                          />
+                          <RemoveCircleOutlined color={fields.length == 1 ? "disabled" : "primary"} />
                         </IconButton>
-                      </Tooltip>
-                    }
-                  />
-                </Grid>
-              );
-            })}
-            </Grid>
+                      </span>
+                    </Tooltip>
+                  }
+                />
+              </Grid>
+            ))}
           </Grid>
-          <Grid>
+          <Button
+            type="button"
+            size="small"
+            variant="outlined"
+            startIcon={<Add />}
+            onClick={() => append({ firstName: "", middleName: "", lastName: "" })}
+            sx={{ mt: 1.5, textTransform: "none" }}
+          >
+            Add another P.I.
+          </Button>
+        </Section>
+
+        <Divider sx={{ my: 2.5 }} />
+
+        <Section title="Finding this paper">
+          <Box sx={{ mb: 2.5 }}>
             <TextInputField
               id="paperstack"
-              placeholder="Enter collection to which project belongs to"
+              placeholder="Enter collection to which project belongs to, e.g. MICCoM, AFOSR"
               name="collections"
-              helperText="Enter names(s) defining group of papers (eg. according to the source of fundings)"
-              label="PaperStack"
-              required
+              label="Collections (optional)"
+              description="Qresp groups related papers into collections, usually the funding program or research center behind them (Qresp has historically called this a “PaperStack”). Readers can browse a collection to find related work. Separate several with commas."
               register={register}
               error={errors.collections}
             />
-          </Grid>
-          <Grid>
+          </Box>
+          <Box sx={{ mb: 2.5 }}>
             <TextInputField
               id="tags"
-              placeholder="Ener tags for the project"
+              placeholder="Enter tags for the project, e.g. DFT, spin defects, charge transfer"
               name="tags"
-              helperText="Enter keywords(s) (e.g. DFT, oragnic materials, charge transfer)"
-              label="Keywords"
-              required
+              label="Keywords (optional)"
+              description="Scientific terms readers would search for. Separate with commas."
               register={register}
               error={errors.tags}
             />
@@ -247,43 +241,52 @@ const PaperInfoForm = ({ editor }) => {
                 setValue("tags", [...current, ...fresh].join(", "));
               }}
             />
-          </Grid>
-          <Grid>
-            {/* Record-level, optional, and never inferred from anything else
-                on this form: not from the PIs above, not from a collection,
-                not from where this server happens to be running. A curator
-                who leaves it blank publishes a record with no institution
-                badge -- that is a valid, unremarkable answer. */}
-            <TextInputField
-              id="institution"
-              placeholder="e.g. University of Chicago"
-              name="institution"
-              helperText="The institution associated with this record. Not a claim that every listed author belongs to it."
-              label="Institution (optional)"
-              register={register}
-              error={errors.institution}
-            />
-          </Grid>
-          <Grid>
-            <TextInputField
-              id="mainNotebookFile"
-              placeholder="Enter main notebook filename"
-              name="notebookFile"
-              helperText="Enter name of a notebook file, thid file may serve as a table of contents and may contain links to all datasets, charts, scripts, tools and documentation. Use the file picker button to fill this field. "
-              label="Main Notebook File"
-              action={
-                <IconButton size="small" onClick={onOpenFileSelector}>
-                  <DescriptionOutlined color="primary" />
-                </IconButton>
-              }
-              register={register}
-              error={errors.notebookFile}
-            />
-          </Grid>
-          <Grid>
-            <SubmitAndReset submitText="Save" />
-          </Grid>
-        </Grid>
+          </Box>
+          {/* Record-level, optional, and never inferred from anything else on
+              this form: not from the PIs above, not from a collection, not
+              from where this server happens to be running. A curator who
+              leaves it blank publishes a record with no institution badge --
+              that is a valid, unremarkable answer. */}
+          <TextInputField
+            id="institution"
+            placeholder="e.g. University of Chicago"
+            name="institution"
+            label="Institution (optional)"
+            description="The institution associated with this record, shown as a badge beside the authors. It is not a claim that every author belongs to it."
+            register={register}
+            error={errors.institution}
+          />
+        </Section>
+
+        <Divider sx={{ my: 2.5 }} />
+
+        <Section title="Reproducing the paper">
+          <TextInputField
+            id="mainNotebookFile"
+            placeholder="Enter main notebook filename, e.g. main.ipynb"
+            name="notebookFile"
+            label="Main notebook file (optional)"
+            description="A Jupyter notebook in the project folder that works as a table of contents for the paper, linking its figures, data and scripts. Readers get a one-click “Open notebook” link. Leave blank if there isn't one."
+            action={
+              <Button
+                type="button"
+                size="small"
+                variant="outlined"
+                startIcon={<FolderOpen fontSize="small" />}
+                onClick={onOpenFileSelector}
+                sx={{ textTransform: "none", py: 0.25 }}
+              >
+                Browse…
+              </Button>
+            }
+            register={register}
+            error={errors.notebookFile}
+          />
+        </Section>
+
+        <Box sx={{ mt: 3 }}>
+          <SubmitAndReset submitText="Save" />
+        </Box>
       </form>
     </Drawer>
   );

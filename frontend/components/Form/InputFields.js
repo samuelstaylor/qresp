@@ -1,20 +1,25 @@
 import { Fragment } from "react";
 import PropTypes from "prop-types";
-import { FormInputLabel } from "./Util";
+import { FormInputLabel, FieldDescription } from "./Util";
 import { Grid } from "@mui/material";
 
 import TextInput from "./TextInput";
 
 const TextInputField = (props) => {
-  const { id, label, required = false, action, ...rest } = props;
+  const { id, label, required = false, action, description, ...rest } = props;
   return (
       <Grid container spacing={0}>
-        <Grid container direction="row" spacing={1} alignItems="center" alignContent="center" size={12}>
+        <Grid container direction="row" spacing={1} size={12} sx={{ alignItems: "center" }}>
           <Grid>
             <FormInputLabel forId={id} label={label} required={required} />
           </Grid>
           <Grid>{action}</Grid>
         </Grid>
+        {description ? (
+          <Grid size={12}>
+            <FieldDescription>{description}</FieldDescription>
+          </Grid>
+        ) : null}
         <Grid size={12}>
           {/* `required` reaches the INPUT as well as the label: the visible
               marker sits on the label, and the input itself carries
@@ -35,6 +40,7 @@ TextInputField.propTypes = {
   helperText: PropTypes.string,
   required: PropTypes.bool,
   action: PropTypes.object,
+  description: PropTypes.node,
 };
 
 import NameInput from "./NameInput";

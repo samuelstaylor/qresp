@@ -412,3 +412,29 @@ describe("GuidedSetup AI assistant", () => {
     expect(await screen.findByText("You have reached the AI usage limit.")).toBeInTheDocument();
   });
 });
+
+describe("GuidedSetup finish step", () => {
+  afterEach(() => jest.resetAllMocks());
+
+  const done = {
+    ...blankState,
+    curatorInfo: { firstName: "Ada", middleName: "", lastName: "Lovelace", emailId: "ada@example.edu", affiliation: "" },
+    referenceInfo: { doi: "10.1/x", title: "T", authors: "Vrindaa  Somjit, Giulia  Galli" },
+    fileServerPath: "https://notebook.rcc.uchicago.edu/files/x",
+    charts: [{ id: "c0", imageFile: "a.png", number: "1", caption: "C", properties: ["k"] }],
+    paperInfo: { PIs: "", collections: [], tags: [] },
+  };
+
+  it("offers the last author as P.I. and lets optional details be skipped", async () => {
+    const user = userEvent.setup();
+    axios.post.mockResolvedValue({ data: { found: false } });
+    const curator = renderSetup({ state: done });
+    await user.click(screen.getByRole("button", { name: "Use last author: Giulia Galli" }));
+    expect(curator.setAll).toHaveBeenCalledWith(
+      expect.objectContaining({ paperInfo: expect.objectContaining({ PIs: "Giulia Galli" }) })
+    );
+    expect(screen.getByText(/optional paper details are empty/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /skip, leave blank/i }));
+    expect(screen.queryByText(/optional paper details are empty/i)).not.toBeInTheDocument();
+  });
+});

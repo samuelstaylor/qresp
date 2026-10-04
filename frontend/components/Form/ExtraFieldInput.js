@@ -59,7 +59,7 @@ const ExtraFieldInput = ({ control, register, errors, defaults }) => {
 
   return (
     <Fragment>
-      <Grid container justifyContent="flex-start" alignItems="center" spacing={2}>
+      <Grid container spacing={2} sx={{ alignItems: "center", justifyContent: "flex-start" }}>
         <Grid>
           <FormInputLabel label="Extra Fields" forId="pis" />
         </Grid>
@@ -80,10 +80,10 @@ const ExtraFieldInput = ({ control, register, errors, defaults }) => {
         </Grid>
       </Grid>
       {fields.map((field, index) => (
-        <Grid container spacing={4} key={field.id} alignItems="center">
+        <Grid container spacing={4} key={field.id} sx={{ alignItems: "center" }}>
           <Grid size={{ xs: 12, sm: 5 }}>
             <TextInput
-              InputLabelProps={{ shrink: true }}
+              slotProps={{ inputLabel: { shrink: true } }}
               id={`customLabel${index}`}
               placeholder="Enter custom label"
               name={`extraFields.${index}.label`}
@@ -96,7 +96,7 @@ const ExtraFieldInput = ({ control, register, errors, defaults }) => {
           </Grid>
           <Grid size={{ xs: 11, sm: 6 }}>
             <TextInput
-              InputLabelProps={{ shrink: true }}
+              slotProps={{ inputLabel: { shrink: true } }}
               id={`customValue${index}`}
               placeholder="Enter value"
               name={`extraFields.${index}.value`}

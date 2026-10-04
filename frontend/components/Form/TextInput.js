@@ -63,6 +63,19 @@ const TextInput = (props) => {
         // missing without anything failing.
         slotProps={{
           ...(slotProps || {}),
+          // `slotProps.input`, not the removed `InputProps` (it leaked onto
+          // the DOM in MUI v9).
+          input: {
+            ...((slotProps || {}).input || {}),
+            onFocus: () => setFocused(true),
+            onBlur: (e) => {
+              setFocused(false);
+              if (field) field.onBlur(e);
+            },
+            onMouseEnter: () => setHovering(true),
+            onMouseLeave: () => setHovering(false),
+            id: id,
+          },
           htmlInput: {
             ...((slotProps || {}).htmlInput || {}),
             ...(required ? { "aria-required": "true" } : {}),
@@ -75,16 +88,6 @@ const TextInput = (props) => {
         // no reason on it. It clears the moment the value becomes valid.
         error={Boolean(error)}
         helperText={error ? error.message : ""}
-        InputProps={{
-          onFocus: () => setFocused(true),
-          onBlur: (e) => {
-            setFocused(false);
-            if (field) field.onBlur(e);
-          },
-          onMouseEnter: () => setHovering(true),
-          onMouseLeave: () => setHovering(false),
-          id: id,
-        }}
         label={label}
       />
     </Tooltip>

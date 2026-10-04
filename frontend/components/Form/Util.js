@@ -44,21 +44,29 @@ const RequiredMark = () => (
 
 const FormInputLabel = ({ label, required, forId }) => {
   return (
-    <InputLabel htmlFor={forId}>
+    <InputLabel htmlFor={forId} sx={{ whiteSpace: "normal" }}>
       <Typography
-        color="secondary"
-        style={{ fontSize: "1.1rem", margin: "auto" }}
         component="div"
-        gutterBottom
+        sx={{ fontSize: "0.95rem", fontWeight: 600, color: "text.primary", mb: 0.5 }}
       >
-        <Box sx={{ fontWeight: "bold" }}>
-          {label}
-          {required ? <RequiredMark /> : null}
-        </Box>
+        {label}
+        {required ? <RequiredMark /> : null}
       </Typography>
     </InputLabel>
   );
 };
+
+// One line under a label saying what the field is for and why it matters.
+const FieldDescription = ({ children }) => (
+  <Typography
+    variant="body2"
+    color="text.secondary"
+    component="div"
+    sx={{ mb: 1, lineHeight: 1.5, maxWidth: 720 }}
+  >
+    {children}
+  </Typography>
+);
 
 FormInputLabel.propTypes = {
   label: PropTypes.string.isRequired,
@@ -173,6 +181,7 @@ EditAndRemove.propTypes = {
 };
 
 export {
+  FieldDescription,
   SubmitAndReset,
   FormInputLabel,
   RequiredFieldLegend,
