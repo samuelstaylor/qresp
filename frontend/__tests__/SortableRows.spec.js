@@ -5,7 +5,7 @@ import SortableRows from "../components/Form/SortableRows";
 
 // Order matters for authors: a row is moved by dragging its handle, or with
 // the arrow keys on the handle.
-const List = ({ initial = ["Somjit", "Davidsson", "Jin", "Galli"] }) => {
+const List = ({ initial = ["Somjit", "Davidsson", "Jin", "Galli"], withInputs = false }) => {
   const [names, setNames] = useState(initial);
   const move = (from, to) =>
     setNames((was) => {
@@ -21,7 +21,7 @@ const List = ({ initial = ["Somjit", "Davidsson", "Jin", "Galli"] }) => {
         getKey={(name) => name}
         onMove={move}
         noun="author"
-        renderRow={(name) => <span>{name}</span>}
+        renderRow={(name) => (withInputs ? <input aria-label={name} defaultValue={name} /> : <span>{name}</span>)}
       />
       <output data-testid="order">{names.join(",")}</output>
     </>
@@ -31,36 +31,71 @@ const List = ({ initial = ["Somjit", "Davidsson", "Jin", "Galli"] }) => {
 const order = () => screen.getByTestId("order").textContent;
 const dataTransfer = () => ({
   effectAllowed: "",
+  dropEffect: "",
   setData: () => {},
   setDragImage: () => {},
 });
 
-// jsdom has no layout: every row is a 0-height box at y=0, so a pointer at
-// y=1 is in the row's lower half (drop AFTER it) and y=-1 its upper half.
+// jsdom has no layout, so each row is given one: row i spans y = 50i..50i+40.
+// A pointer above a row's middle inserts before it, below inserts after.
+beforeEach(() => {
+  jest.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function () {
+    const id = this.getAttribute && this.getAttribute("data-testid");
+    const match = id && id.match(/^sortable-row-(\d+)$/);
+    const i = match ? Number(match[1]) : 0;
+    return { top: i * 50, height: 40, bottom: i * 50 + 40, left: 0, right: 0, width: 0, x: 0, y: i * 50 };
+  });
+});
+afterEach(() => jest.restoreAllMocks());
+
+const row = (i) => screen.getByTestId(`sortable-row-${i}`);
+const drag = (fromIndex, clientY, { onField = false } = {}) => {
+  const press = onField ? row(fromIndex).querySelector("input") : row(fromIndex);
+  fireEvent.mouseDown(press);
+  fireEvent.dragStart(row(fromIndex), { dataTransfer: dataTransfer() });
+  const list = row(0).parentElement.parentElement;
+  fireEvent.dragOver(list, { clientY, dataTransfer: dataTransfer() });
+  fireEvent.drop(list, { clientY, dataTransfer: dataTransfer() });
+};
+
 describe("reordering authors", () => {
   it("drags the last author to the front", () => {
     render(<List />);
-    fireEvent.dragStart(screen.getByTestId("sortable-handle-3"), { dataTransfer: dataTransfer() });
-    fireEvent.dragOver(screen.getByTestId("sortable-row-0"), { clientY: -1 });
-    expect(screen.getByTestId("sortable-drop-marker")).toBeInTheDocument();
-    fireEvent.drop(screen.getByTestId("sortable-row-0"));
+    drag(3, 5);
     expect(order()).toBe("Galli,Somjit,Davidsson,Jin");
   });
 
   it("drags the first author below the second", () => {
     render(<List />);
-    fireEvent.dragStart(screen.getByTestId("sortable-handle-0"), { dataTransfer: dataTransfer() });
-    fireEvent.dragOver(screen.getByTestId("sortable-row-1"), { clientY: 1 });
-    fireEvent.drop(screen.getByTestId("sortable-row-1"));
+    drag(0, 75); // lower half of row 1
     expect(order()).toBe("Davidsson,Somjit,Jin,Galli");
+  });
+
+  it("drags an author to the very end", () => {
+    render(<List />);
+    drag(1, 500);
+    expect(order()).toBe("Somjit,Jin,Galli,Davidsson");
   });
 
   it("drops where it started without changing anything", () => {
     render(<List />);
-    fireEvent.dragStart(screen.getByTestId("sortable-handle-1"), { dataTransfer: dataTransfer() });
-    fireEvent.dragOver(screen.getByTestId("sortable-row-1"), { clientY: -1 });
-    fireEvent.drop(screen.getByTestId("sortable-row-1"));
+    drag(1, 55);
     expect(order()).toBe("Somjit,Davidsson,Jin,Galli");
+  });
+
+  it("does not drag when the press starts in a text field", () => {
+    render(<List withInputs />);
+    drag(3, 5, { onField: true });
+    expect(order()).toBe("Somjit,Davidsson,Jin,Galli");
+  });
+
+  it("shows where the author will land", async () => {
+    render(<List />);
+    fireEvent.mouseDown(row(3));
+    fireEvent.dragStart(row(3), { dataTransfer: dataTransfer() });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fireEvent.dragOver(row(0).parentElement.parentElement, { clientY: 5, dataTransfer: dataTransfer() });
+    expect(await screen.findByTestId("sortable-drop-marker")).toBeInTheDocument();
   });
 
   it("moves with the arrow keys on the handle", () => {

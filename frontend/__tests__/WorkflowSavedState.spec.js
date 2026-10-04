@@ -82,10 +82,12 @@ describe("the workflow's saved state", () => {
     expect(first.setEditing).toHaveBeenLastCalledWith("workflowInfo", false);
     first.unmount();
 
-    // Back from the preview: still saved, and still collapsed.
+    // Mounted again (e.g. opening a record to edit): still saved, and open
+    // like every other section. Only a draft load or a return from the
+    // preview closes all sections together.
     const again = mount(WORKFLOW, { workflowInfo: false });
     expect(again.setEditing).toHaveBeenLastCalledWith("workflowInfo", false);
-    expect(header()).toHaveAttribute("aria-expanded", "false");
+    expect(header()).toHaveAttribute("aria-expanded", "true");
     // Like every other saved section: an Edit pencil, no extra decoration.
     expect(screen.getByRole("button", { name: /^edit$/i })).toBeInTheDocument();
     expect(header()).not.toHaveTextContent(/saved at/i);

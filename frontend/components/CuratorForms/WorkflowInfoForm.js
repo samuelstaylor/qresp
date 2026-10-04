@@ -1,4 +1,4 @@
-import { useEffect, useContext, useRef, useState, Fragment } from "react";
+import { useEffect, useContext, useState, Fragment } from "react";
 
 import {
   Box,
@@ -117,11 +117,10 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
   }, []);
 
   const [savedAt, setSavedAt] = useState("");
-  // The section collapses when it is saved, and starts collapsed when it
-  // comes back already saved (e.g. from the preview). Opening it again is
-  // the curator's choice; a change made elsewhere does not pop it open.
+  // Open like every other section, closed with them after a draft load or a
+  // return from the preview (sectionsCollapsing), and collapsed by its own
+  // Save. A change made elsewhere does not pop it open.
   const [drawerOpen, setDrawerOpen] = useState(() => !sectionsCollapsing());
-  const restored = useRef(false);
 
   // Unsaved only when the workflow differs from the one last saved.
   useEffect(() => {
@@ -129,10 +128,6 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
     if (saved && saved.signature === workflowSignature(workflow)) {
       setEditing("workflowInfo", false);
       setSavedAt(saved.at || "");
-      if (!restored.current) {
-        restored.current = true;
-        setDrawerOpen(false);
-      }
     } else {
       setEditing("workflowInfo", true);
     }
@@ -296,7 +291,6 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
     const at = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
     setEditing("workflowInfo", false);
     setSavedAt(at);
-    restored.current = true;
     setDrawerOpen(false);
     try {
       window.sessionStorage.setItem(
