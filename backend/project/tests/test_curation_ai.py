@@ -264,3 +264,26 @@ class TestPartialKeywords(AiTestBase):
                                  {"consent": True, "figures": figures})
         self.assertEqual(200, response.status_code, response.text)
         self.assertTrue(response.json()["incomplete"])
+
+
+class TestQuotaRefund(AiTestBase):
+    def test_a_failed_provider_call_does_not_use_up_the_daily_limit(self):
+        from project import assist
+        from project.models import AssistUsage
+        self.login()
+        busy = assist.ProviderError("busy", assist.ERROR_UNAVAILABLE)
+        with mock.patch("project.assist.call_gemini", return_value=(None, busy)):
+            response = self.post("/api/curation/suggest-figure-keywords",
+                                 {"consent": True, "figures": FIGURES})
+        self.assertEqual(503, response.status_code)
+        usage = AssistUsage.objects(email="curator@example.com").first()
+        self.assertEqual(0, usage.count if usage else 0)
+
+    def test_a_successful_call_is_counted(self):
+        from project.models import AssistUsage
+        self.login()
+        answer = json.dumps({"figures": [{"id": "c0", "keywords": ["spin defects"]}]})
+        with mock.patch("project.assist.call_gemini", return_value=(answer, None)):
+            self.post("/api/curation/suggest-figure-keywords",
+                      {"consent": True, "figures": FIGURES})
+        self.assertEqual(1, AssistUsage.objects(email="curator@example.com").first().count)

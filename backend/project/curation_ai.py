@@ -38,7 +38,10 @@ MAX_SCRIPT_EXCERPT = 2500
 MAX_REASON_CHARS = 200
 
 KEYWORD_OUTPUT_TOKENS = 1536
-LINK_OUTPUT_TOKENS = 1536
+# Up to 40 links with a one-sentence reason each; thinking shares the budget.
+LINK_OUTPUT_TOKENS = 4096
+MAX_LINKS = 40
+LINK_CAPTION_CHARS = 700
 
 CONFIDENCE = ("high", "medium", "low")
 
@@ -90,6 +93,21 @@ def _start(body, cost):
         return None, None, ({"error": "You have reached today's AI suggestion limit; "
                                       "please try again tomorrow."}, 429)
     return cfg, email, None
+
+
+def _refund(email, amount):
+    """Give back quota for provider calls that produced nothing: an overloaded
+    or failed call should not use up the curator's daily allowance."""
+    if not email or amount <= 0:
+        return
+    try:
+        from datetime import datetime
+        from project.models import AssistUsage
+        day = datetime.utcnow().strftime("%Y-%m-%d")
+        AssistUsage.objects(email=email, day=day, count__gte=amount).update_one(
+            inc__count=-amount)
+    except Exception as e:
+        print("Curation AI quota refund failed: %s" % type(e).__name__)
 
 
 def _provider_failure(error):
@@ -186,7 +204,7 @@ def suggest_figure_keywords(body):
     chunks = [figures[i:i + FIGURES_PER_CALL]
               for i in range(0, len(figures), FIGURES_PER_CALL)]
 
-    cfg, _email, refused = _start(body, len(chunks))
+    cfg, email, refused = _start(body, len(chunks))
     if refused:
         return refused
 
@@ -214,6 +232,7 @@ def suggest_figure_keywords(body):
         paper_keywords = paper_keywords or _clean_keywords(
             data.get("paper_keywords"), MAX_PAPER_KEYWORDS)
 
+    _refund(email, failures)
     if failures == len(chunks):
         return _provider_failure(last_error)
     print("Figure keywords: figures=%d suggested=%d calls=%d"
@@ -249,7 +268,7 @@ LINK_SCHEMA = {
     "properties": {
         "links": {
             "type": "array",
-            "maxItems": 80,
+            "maxItems": MAX_LINKS,
             "items": {
                 "type": "object",
                 "properties": {
@@ -278,10 +297,11 @@ LINK_PROMPT = (
     "caption describes (same quantity, axes, method or system), and a dataset "
     "`d..` -> figure `c..` or dataset -> script `s..` when the data is what "
     "the figure or script uses. Skip anything in `existing_links`. Each link "
-    "needs a `reason` of ONE sentence (at most 25 words) citing the specific "
+    "needs a `reason` of ONE sentence (at most 20 words) citing the specific "
     "evidence, and a `confidence` that is exactly one of high, medium or low: high only when the code or names make it "
     "explicit, medium when the content clearly corresponds, low otherwise. "
-    "Do not guess: an empty list is a good answer. Respond with ONLY JSON of "
+    "Give at most 40 links, best supported first. Do not guess: an empty list "
+    "is a good answer. Respond with ONLY JSON of "
     'the form {"links": [{"from": "...", "to": "...", "reason": "...", '
     '"confidence": "..."}]} using ids exactly as given.'
 )
@@ -319,7 +339,7 @@ def suggest_links(body):
     """
     body = body or {}
     figures = [{"id": ident, "number": _clip(item.get("number"), 20),
-                "caption": _clip(item.get("caption"), MAX_CAPTION_CHARS)}
+                "caption": _clip(item.get("caption"), LINK_CAPTION_CHARS)}
                for ident, item in _ids("c", body.get("figures"), MAX_FIGURES)]
     scripts = _ids("s", body.get("scripts"), MAX_SCRIPTS)
     datasets = [{"id": ident, "name": _clip(item.get("name"), 120),
@@ -333,13 +353,14 @@ def suggest_links(body):
     except FolderError as e:
         return {"error": str(e)}, 400
 
-    cfg, _email, refused = _start(body, 1)
+    cfg, email, refused = _start(body, 1)
     if refused:
         return refused
 
     try:
         script_info = _read_scripts(body.get("path"), scripts)
     except FolderError as e:
+        _refund(email, 1)
         return {"error": str(e)}, 400
 
     known = {f["id"] for f in figures} | set(script_info) | {d["id"] for d in datasets}
@@ -355,11 +376,12 @@ def suggest_links(body):
                                        max_output_tokens=LINK_OUTPUT_TOKENS)
     data = _parse(answer) if not error else None
     if not isinstance(data, dict):
+        _refund(email, 1)
         return _provider_failure(error)
 
     taken = {(l["from"], l["to"]) for l in existing}
     out, seen = [], set()
-    for link in data.get("links") or []:
+    for link in (data.get("links") or [])[:MAX_LINKS]:
         source, target = str((link or {}).get("from") or ""), str((link or {}).get("to") or "")
         if source not in known or target not in known or (source, target) in taken:
             continue
