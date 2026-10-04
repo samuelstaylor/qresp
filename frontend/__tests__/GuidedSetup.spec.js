@@ -354,12 +354,11 @@ describe("GuidedSetup AI assistant", () => {
       expect.objectContaining({ consent: true })
     );
     await user.click(await screen.findByRole("button", { name: /apply selected keywords/i }));
-    // c0 had only the paper-tag default, so it is replaced; c1's own keywords stay.
-    expect(curator.edit).toHaveBeenCalledWith(
-      "chart",
-      expect.objectContaining({ id: "c0", properties: ["spin defects", "screening"] })
-    );
-    expect(curator.edit).not.toHaveBeenCalledWith("chart", expect.objectContaining({ id: "c1" }));
+    // One change: c0 had only the paper-tag default, so it is replaced;
+    // c1's own keywords stay.
+    const written = curator.setAll.mock.calls[curator.setAll.mock.calls.length - 1][0];
+    expect(written.charts.find((c) => c.id === "c0").properties).toEqual(["spin defects", "screening"]);
+    expect(written.charts.find((c) => c.id === "c1").properties).toEqual(["hand written"]);
   });
 
   it("suggests links with reasons and adds the chosen ones", async () => {
@@ -496,5 +495,54 @@ describe("GuidedSetup AI folder curation", () => {
       { from: "n3", to: "n1", type: "generates" },
       { from: "n3", to: "c0", type: "generates" },
     ]);
+  });
+});
+
+
+describe("GuidedSetup keyword apply keeps every change", () => {
+  afterEach(() => jest.resetAllMocks());
+
+  it("writes figure keywords and paper keywords together, in one change", async () => {
+    const user = userEvent.setup();
+    const state = {
+      ...blankState,
+      curatorInfo: { firstName: "Ada", middleName: "", lastName: "Lovelace", emailId: "ada@example.edu", affiliation: "" },
+      referenceInfo: { doi: "10.1/x", title: "T", abstract: "A" },
+      paperInfo: { tags: [], collections: [], PIs: "" },
+      fileServerPath: "https://notebook.rcc.uchicago.edu/files/x",
+      charts: [
+        { id: "c0", imageFile: "a.pdf", number: "1", caption: "Cap 1", properties: [] },
+        { id: "c1", imageFile: "b.pdf", number: "2", caption: "Cap 2", properties: [] },
+      ],
+    };
+    axios.post.mockImplementation((url) =>
+      Promise.resolve({
+        data:
+          url === "/api/curation/suggest-figure-keywords"
+            ? {
+                figures: [
+                  { id: "c0", keywords: ["screening"] },
+                  { id: "c1", keywords: ["defect levels"] },
+                ],
+                paper_keywords: ["spin qubit"],
+                models: ["gemini-3.8-flash"],
+              }
+            : { found: false },
+      })
+    );
+    const curator = renderSetup({
+      state,
+      auth: { authenticated: true, user: { name: "Ada Lovelace", email: "ada@example.edu" } },
+    });
+    await user.click(screen.getByRole("checkbox", { name: /send the paper's title/i }));
+    await user.click(screen.getByRole("button", { name: /suggest keywords/i }));
+    await user.click(await screen.findByRole("button", { name: /apply selected keywords/i }));
+
+    // Nothing is written piecemeal that a later snapshot could undo.
+    expect(curator.edit).not.toHaveBeenCalled();
+    expect(curator.setAll).toHaveBeenCalledTimes(1);
+    const written = curator.setAll.mock.calls[0][0];
+    expect(written.charts.map((c) => c.properties)).toEqual([["screening"], ["defect levels"]]);
+    expect(written.paperInfo.tags).toEqual(["spin qubit"]);
   });
 });

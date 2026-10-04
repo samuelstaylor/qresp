@@ -700,22 +700,30 @@ const GuidedSetup = () => {
       .finally(() => setAiBusy(""));
   };
 
+  // ONE change for the figures and the paper. Editing each figure and then
+  // calling apply() lost every figure edit: apply() snapshots the form before
+  // those dispatches have landed and writes that stale snapshot back.
   const applyKeywords = () => {
-    let count = 0;
+    const current = collectDraftState();
+    const chosen = {};
     ((kwResult && kwResult.figures) || []).forEach(({ id, keywords }) => {
-      if (kwSkip[id]) return;
-      const record = charts.find((chart) => chart.id === id);
-      if (!record) return;
-      edit("chart", { ...record, properties: keywords });
-      count += 1;
+      if (!kwSkip[id] && keywords && keywords.length) chosen[id] = keywords;
     });
+    let count = 0;
+    const nextCharts = (current.charts || []).map((chart) => {
+      if (!chosen[chart.id]) return chart;
+      count += 1;
+      return { ...chart, properties: chosen[chart.id] };
+    });
+    const patch = { charts: nextCharts };
     const paperKeywords = (kwResult && kwResult.paper_keywords) || [];
+    const currentTags = ((current.paperInfo || {}).tags || []).filter(Boolean);
     let paperNote = "";
-    if (!kwSkip.__paper && paperKeywords.length && !paperTags.length) {
-      const current = collectDraftState();
-      apply({ paperInfo: { ...current.paperInfo, tags: paperKeywords } });
+    if (!kwSkip.__paper && paperKeywords.length && !currentTags.length) {
+      patch.paperInfo = { ...current.paperInfo, tags: paperKeywords };
       paperNote = " and the paper's keywords";
     }
+    apply(patch);
     setAiApplied(`Updated keywords on ${plural(count, "figure", "figures")}${paperNote}.`);
     setKwResult(null);
   };
