@@ -1,6 +1,6 @@
 import { useEffect, useContext } from "react";
 
-import { Grid, Tooltip, Typography, IconButton } from "@mui/material";
+import { Box, Grid, Tooltip, Typography, IconButton } from "@mui/material";
 import { AddCircleOutlined, RemoveCircleOutlined } from "@mui/icons-material";
 
 import { RegularStyledButton } from "../button";
@@ -9,6 +9,7 @@ import { SubmitAndReset, FormInputLabel, RequiredFieldLegend } from "../Form/Uti
 import { namesUtil, referenceUtil } from "../../Utils/utils";
 import { doiUtil, DOI_PATTERN } from "../../Utils/doi";
 import NameInput from "../Form//NameInput";
+import SortableRows from "../Form/SortableRows";
 import Drawer from "../drawer";
 
 import { useForm, useFieldArray } from "react-hook-form";
@@ -101,7 +102,7 @@ const ReferenceInfoForm = ({ editor }) => {
   // react-hook-form v7: errors moved onto formState.
   const { errors } = formState;
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields, append, remove, move } = useFieldArray({
     control,
     name: "authors",
   });
@@ -290,16 +291,18 @@ const ReferenceInfoForm = ({ editor }) => {
                 </Tooltip>
               </Grid>
             </Grid>
-            {/* Column container restores vertical gutters between author
-                rows (MUI v9 grids no longer pad plain nested items). */}
-            <Grid container direction="column" spacing={2} sx={{ mt: 0.5 }}>
-              {fields.map((el, index) => {
-              return (
-                <Grid key={el.id}>
+            {/* Author order is the paper's author order: drag a row by its
+                handle (or use the arrow keys on it) to move it. */}
+            <Box sx={{ mt: 1.5 }}>
+              <SortableRows
+                items={fields}
+                getKey={(el) => el.id}
+                onMove={move}
+                noun="author"
+                renderRow={(el, index) => (
                   <NameInput
                     ids={nameid.get(index)}
                     names={nameid.get(index)}
-                    key={index}
                     id={`authors${index}`}
                     register={register}
                     errors={errors.authors && errors.authors[index]}
@@ -332,10 +335,9 @@ const ReferenceInfoForm = ({ editor }) => {
                       </Tooltip>
                     }
                   />
-                </Grid>
-              );
-            })}
-            </Grid>
+                )}
+              />
+            </Box>
           </Grid>
           <Grid>
             <TextInputField

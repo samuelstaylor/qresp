@@ -13,11 +13,14 @@ export function getServerSideProps() {
 
   const destination =
     ordered.length
-      ? `/search?servers=${ordered.map(encodeURIComponent).join(",")}`
-      : "/search";
+      ? `/search?self=1&servers=${ordered.map(encodeURIComponent).join(",")}`
+      : "/search?self=1";
 
   return { redirect: { destination, permanent: false } };
 }
+
+// `self=1`: also search THIS site's own records (see withOwnOrigin in
+// search.js) -- a staging server is not on the federation list.
 
 // This component never renders — getServerSideProps always redirects.
 export default function Explorer() {

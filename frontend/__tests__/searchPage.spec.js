@@ -46,3 +46,27 @@ describe("search getServerSideProps", () => {
     expect(result.props).toBeDefined();
   });
 });
+
+describe("this site's own records", () => {
+  const { withOwnOrigin } = require("../pages/search");
+
+  it("adds this origin first when it is not on the list", () => {
+    expect(withOwnOrigin(["https://paperstack.uchicago.edu"], "https://localhost:8444")).toEqual([
+      "https://localhost:8444",
+      "https://paperstack.uchicago.edu",
+    ]);
+  });
+
+  it("adds nothing on a node that is already listed (production)", () => {
+    expect(
+      withOwnOrigin(["https://paperstack.uchicago.edu/"], "https://paperstack.uchicago.edu")
+    ).toEqual(["https://paperstack.uchicago.edu/"]);
+  });
+
+  it("is asked for by Explore", () => {
+    const { getServerSideProps: explorer } = require("../pages/explorer");
+    expect(explorer({}).redirect.destination).toMatch(/^\/search\?self=1&servers=/);
+    const { props } = getServerSideProps({ query: { self: "1", servers: "https://a.edu" } });
+    expect(props.includeSelf).toBe(true);
+  });
+});

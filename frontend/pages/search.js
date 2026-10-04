@@ -38,10 +38,37 @@ const YearCell = ({ rowdata }) => (
   </Typography>
 );
 
+// THIS SITE'S OWN RECORDS. The federation list names the public nodes, so a
+// staging or development server (https://localhost:8444) searched only
+// production and Duke -- its own newly published records never appeared.
+// Explore asks for this origin to be included; production is already on
+// the list, so nothing changes there.
+export const withOwnOrigin = (servers, origin) => {
+  const own = String(origin || "").replace(/\/+$/, "");
+  const list = (servers || []).filter(Boolean);
+  if (!own || list.some((url) => url.replace(/\/+$/, "") === own)) return list;
+  return [own, ...list];
+};
+
 const search = ({
-  selectedservers,
-  servernames = {},
+  selectedservers: requestedServers,
+  servernames: givenNames = {},
+  includeSelf = false,
 }) => {
+  // null until the browser has said which origin this page is on.
+  const [resolvedServers, setResolvedServers] = useState(null);
+  useEffect(() => {
+    setResolvedServers(
+      includeSelf ? withOwnOrigin(requestedServers, window.location.origin) : requestedServers || []
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [includeSelf, (requestedServers || []).join(",")]);
+  const selectedservers = resolvedServers || requestedServers || [];
+  const ownOrigin = typeof window !== "undefined" ? window.location.origin : "";
+  const servernames =
+    includeSelf && ownOrigin && !givenNames[ownOrigin]
+      ? { ...givenNames, [ownOrigin]: "This server" }
+      : givenNames;
   const { setAlert, unsetAlert } = useContext(AlertContext);
   const { setSelected } = useContext(ServerContext);
 
@@ -82,6 +109,7 @@ const search = ({
   const [filterAlertExpanded, setFilterAlertExpanded] = useState(false);
 
   useEffect(() => {
+    if (resolvedServers === null) return;
     if (!selectedservers?.length) {
       setError({ ...EMPTY_ERROR, is: true, total: true, msg: "No servers selected" });
       setLoading(false);
@@ -127,7 +155,7 @@ const search = ({
       setError(newError);
       setLoading(false);
     });
-  }, []);
+  }, [resolvedServers]);
 
   const [runtime, setRuntime] = useState(null);
 
@@ -251,8 +279,9 @@ const search = ({
   const rows = mergeRecordsByServer(papers, servernames, selectedservers);
 
   useEffect(() => {
-    setSelected(selectedservers);
-  }, []);
+    if (resolvedServers !== null) setSelected(resolvedServers);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolvedServers]);
 
   // Explorer sends every visitor straight here, so a navigation to /search is
   // now the front door and its latency is visible. Next keeps the PREVIOUS
@@ -461,7 +490,7 @@ export function getServerSideProps(ctx) {
   });
 
   return {
-    props: { selectedservers: servers, servernames },
+    props: { selectedservers: servers, servernames, includeSelf: query.self === "1" },
   };
 }
 
