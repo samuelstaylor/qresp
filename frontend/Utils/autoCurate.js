@@ -68,6 +68,7 @@ export const referenceFromCrossref = (record, previous = {}) => {
     ...previous,
     kind:
       previous.kind ||
+      values.kind ||
       KIND_BY_CROSSREF_TYPE[(record || {}).type] ||
       "journal",
     doi: doiUtil.normalize(values.doi || previous.doi || ""),

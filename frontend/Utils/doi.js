@@ -9,9 +9,31 @@ const DOI_PATTERN = /^10[.][0-9]{4,}(?:[.][0-9]+)*\/(?:(?!["&'<>])\S)+$/;
 // BEFORE validating, fetching and saving, so the canonical referenceInfo
 // always holds one normalized value. Anything that is not a DOI resolver URL
 // is left untouched, so non-DOI input still fails validation.
+// ARXIV PAPERS HAVE DOIs TOO: every arXiv ID is registered (with DataCite)
+// as 10.48550/arXiv.<id>. A curator who pastes the arXiv link, `arXiv:ID` or
+// the bare ID gets that DOI, version suffix dropped -- the DOI names the
+// paper, not one revision of it.
+const ARXIV_NEW = /^(\d{4}\.\d{4,5})(?:v\d+)?$/i;
+const ARXIV_OLD = /^([a-z-]+(?:\.[a-z]{2})?\/\d{7})(?:v\d+)?$/i;
+export const arxivIdOf = (raw) => {
+  let value = String(raw == null ? "" : raw).trim();
+  if (!value) return "";
+  const link = value.match(
+    /^(?:https?:\/\/)?(?:www\.|export\.)?arxiv\.org\/(?:abs|pdf|html)\/([^?#\s]+?)(?:\.pdf)?\/?(?:[?#].*)?$/i
+  );
+  if (link) value = link[1];
+  value = value.replace(/^arxiv:\s*/i, "");
+  const match = value.match(ARXIV_NEW) || value.match(ARXIV_OLD);
+  return match ? match[1] : "";
+};
+export const ARXIV_DOI_PREFIX = "10.48550/arXiv.";
+export const isArxivDoi = (doi) => /^10\.48550\/arxiv\./i.test(String(doi || ""));
+
 const normalizeDoi = (raw) => {
   let value = String(raw == null ? "" : raw).trim();
   if (!value) return "";
+  const arxiv = arxivIdOf(value);
+  if (arxiv) return `${ARXIV_DOI_PREFIX}${arxiv}`;
   value = value.replace(/^doi:\s*/i, "");
   value = value.replace(/^(?:https?:\/\/)?(?:dx\.)?doi\.org\//i, "");
   // Trailing sentence punctuation survives copy/paste from prose.
@@ -38,12 +60,24 @@ const doiUtil = {
   isValid: (doi) => DOI_PATTERN.test(normalizeDoi(doi)),
   url: (doi) => `https://dx.doi.org/${doi}`,
   headers: { Accept: "application/json; style=json" },
-  get: (doi) =>
-    axios
-      .get(doiUtil.url(doi), {
-        headers: doiUtil.headers,
-      })
-      .then((res) => res.data),
+  // CSL-JSON, which every DOI registry serves -- Crossref AND DataCite (where
+  // arXiv registers). The Crossref-only header above makes doi.org redirect a
+  // DataCite DOI to its landing page, an HTML page with no record in it.
+  cslHeaders: { Accept: "application/vnd.citationstyles.csl+json" },
+  get: (doi) => {
+    const asRecord = (res) =>
+      res && res.data && typeof res.data === "object" && res.data.title ? res.data : null;
+    const csl = () =>
+      axios.get(doiUtil.url(doi), { headers: doiUtil.cslHeaders }).then((res) => {
+        const record = asRecord(res);
+        if (!record) throw new Error("No metadata for this DOI.");
+        return record;
+      });
+    if (isArxivDoi(doi)) return csl();
+    return axios
+      .get(doiUtil.url(doi), { headers: doiUtil.headers })
+      .then((res) => asRecord(res) || csl(), () => csl());
+  },
   // The canonical, resolvable form of a DOI. Distinct from `url` above, which
   // is the dx.doi.org content-negotiation endpoint used to FETCH metadata and
   // is not what belongs in a published record.
@@ -68,7 +102,10 @@ const doiUtil = {
     };
 
     write("title", first(record.title));
-    write("journal", first(record["container-title"]));
+    // A preprint has no journal; its server (arXiv) is where it is published.
+    const arxiv = isArxivDoi(record.DOI);
+    write("journal", first(record["container-title"]) || (arxiv ? "arXiv" : ""));
+    if (arxiv) write("kind", "preprint");
     write("page", first(record.page) || first(record["article-number"]));
     write("volume", first(record.volume));
 

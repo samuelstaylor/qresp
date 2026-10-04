@@ -37,7 +37,7 @@ const ReferenceInfoForm = ({ editor }) => {
         const normalized = doiUtil.normalize(original);
         return normalized === "" ? undefined : normalized;
       })
-      .matches(DOI_PATTERN, "Please enter a valid DOI"),
+      .matches(DOI_PATTERN, "Please enter a valid DOI, or an arXiv link or ID"),
     authors: Yup.array()
       .of(
         Yup.object().shape({
@@ -116,7 +116,7 @@ const ReferenceInfoForm = ({ editor }) => {
     // the curator sees matches what will be saved.
     const normalizedDoi = doiUtil.normalize(getValues("doi"));
     if (!DOI_PATTERN.test(normalizedDoi)) {
-      setAlert("Error", "Please enter a valid doi", null);
+      setAlert("Error", "Please enter a valid DOI, or an arXiv link or ID", null);
       return;
     }
     setValue("doi", normalizedDoi);
@@ -128,7 +128,7 @@ const ReferenceInfoForm = ({ editor }) => {
         console.error(err);
         setAlert(
           "Error",
-          "There was an error getting data usig the doi, please contact the admin if problems persist",
+          "No publication was found for that DOI. Check it, or fill in the paper details by hand.",
           null
         );
       })
@@ -228,9 +228,9 @@ const ReferenceInfoForm = ({ editor }) => {
           <Grid>
             <TextInputField
               id="doi"
-              placeholder="Enter doi of the paper"
+              placeholder="Enter doi of the paper, or its arXiv link"
               name="doi"
-              helperText="Enter DOI of the paper (e.g. 10.201/jacs.23wbn) if published"
+              helperText="The paper's DOI (e.g. 10.1038/s41524-025-01558-w), or its arXiv link or ID (e.g. https://arxiv.org/abs/2409.00246), which is turned into its arXiv DOI"
               label="DOI"
               defaultValue={referenceInfo.doi}
               action={

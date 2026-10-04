@@ -48,7 +48,7 @@ import { saveThenPreview } from "./TopActions";
 import ServerContext from "../../Context/Servers/serverContext";
 import SourceTreeContext from "../../Context/SourceTree/SourceTreeContext";
 import { getList } from "../../Utils/Scraper";
-import { doiUtil } from "../../Utils/doi";
+import { arxivIdOf, doiUtil } from "../../Utils/doi";
 import { buildFileUrl, isPdfFile } from "../../Utils/fileServerUrl";
 import { initialsOf } from "../Profile/ProfileLinks";
 import { labelFor, toRecord } from "../../Utils/artifactFields";
@@ -342,7 +342,9 @@ const GuidedSetup = () => {
   const lookUpDoi = () => {
     const bare = doiUtil.normalize(doi);
     if (!doiUtil.isValid(bare)) {
-      setDoiError("That does not look like a DOI. Example: 10.1038/s41524-025-01558-w");
+      setDoiError(
+        "That does not look like a DOI or an arXiv link. Examples: 10.1038/s41524-025-01558-w, https://arxiv.org/abs/2409.00246"
+      );
       return;
     }
     setDoiBusy(true);
@@ -352,6 +354,9 @@ const GuidedSetup = () => {
       .then((record) => {
         const current = collectDraftState();
         apply({ referenceInfo: referenceFromCrossref(record, { ...current.referenceInfo, doi: bare }) });
+        // An arXiv paper's LaTeX is on arXiv: offer it for the captions step.
+        const arxiv = arxivIdOf(bare.replace(/^10\.48550\/arxiv\./i, ""));
+        if (arxiv) setArxivInput((was) => was || arxiv);
         setChangingPaper(false);
         locate(bare);
       })
