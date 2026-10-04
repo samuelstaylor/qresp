@@ -2,22 +2,15 @@ import { useState } from "react";
 
 import PropTypes from "prop-types";
 
-import useMediaQuery from "@mui/material/useMediaQuery";
-
 import Drawer from "../drawer";
 import Graph from "../Workflow/Graph";
 import Legend from "../Workflow/Legend";
 import { formatData } from "../Workflow/util";
 import WorkflowSummary from "./WorkflowSummary";
 
-import { Box, Button, Collapse, Grid, useTheme } from "@mui/material";
+import { Box, Button, Collapse } from "@mui/material";
 
 const Workflow = ({ workflow, charts, tools, scripts, datasets, external }) => {
-  const theme = useTheme();
-  const direction = useMediaQuery(theme.breakpoints.down("sm"))
-    ? "row"
-    : "column";
-
   const data = formatData(charts, tools, external, datasets, scripts);
   const [wordsOpen, setWordsOpen] = useState(false);
 
@@ -28,14 +21,8 @@ const Workflow = ({ workflow, charts, tools, scripts, datasets, external }) => {
           for screens before the graph is even reached, and the shape of the
           thing -- which is what the graph is for -- was arriving second. */}
       <Box>
-        <Grid container direction="row">
-          <Grid size={{ xs: 12, md: 10 }}>
-            <Graph workflow={workflow} data={data} />
-          </Grid>
-          <Grid size={{ xs: 12, md: 2 }}>
-            <Legend direction={direction} />
-          </Grid>
-        </Grid>
+        <Legend />
+        <Graph workflow={workflow} data={data} />
       </Box>
 
       {/* THE SAME THING IN WORDS, one tap away.

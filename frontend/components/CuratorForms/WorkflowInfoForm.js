@@ -4,8 +4,6 @@ import {
   Box,
   Button,
   Grid,
-  useTheme,
-  useMediaQuery,
   Dialog,
   Typography,
   DialogTitle,
@@ -58,6 +56,7 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
     workflow,
     addEdge,
     deleteEdge,
+    unlink,
     add,
     edit,
     del,
@@ -65,7 +64,7 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
   } = useContext(CuratorContext);
 
   const {
-    workflowHelper: { open, fit, showLabels },
+    workflowHelper: { open, fit },
     setExternalNodeFormOpen,
     setDefault,
     externalHelper,
@@ -82,10 +81,6 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
   // LINK. See ConnectionSection.
   const link = useRowLink("head", externalHelper && externalHelper.link);
 
-  const theme = useTheme();
-  const direction = useMediaQuery(theme.breakpoints.down("sm"))
-    ? "row"
-    : "column";
 
   useEffect(() => {
     setWorkflowOnClick(false);
@@ -163,7 +158,13 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
         callback(null);
       },
       deleteEdge: (data, callback) => {
-        deleteEdge(data.edges[0]);
+        // Stored edges carry no id, so the graph hands over the endpoints.
+        const endpoints = data.endpoints || [];
+        if (endpoints.length && unlink) {
+          endpoints.forEach(({ from, to }) => unlink(from, to));
+        } else {
+          deleteEdge(data.edges[0]);
+        }
         callback(null);
       },
       editEdge: false,
@@ -294,51 +295,27 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
             section cannot express. Layout is presentation only, never saved.
             The board that used to live here moved into that section -- two
             button-driven editors side by side were two ways to do one thing. */}
-        <Box sx={{ mb: 1 }}>
-          <Typography variant="caption" color="text.secondary">
-            A picture of the workflow you built above. Drag to rearrange, or
-            draw an unusual connection. Positions are not saved.
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: { xs: "flex-start", sm: "center" },
+            flexDirection: { xs: "column", sm: "row" },
+            gap: 1,
+            mb: 1.5,
+          }}
+        >
+          <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
+            The workflow you built above, read left to right: inputs, the code
+            and tools that used them, and the figures they made. Drag boxes to
+            tidy the picture (positions are not saved), or draw a connection
+            the section above cannot express.
           </Typography>
+          <RegularStyledButton onClick={() => openExternalNode()}>
+            Add external data
+          </RegularStyledButton>
         </Box>
-        <Grid container direction="row" spacing={1}>
-          <Grid size={{ xs: 12, sm: 4 }}>
-            <RegularStyledButton
-              onClick={() => openExternalNode()}
-              fullWidth
-            >
-              Add an External Node
-            </RegularStyledButton>
-          </Grid>
-          <Grid size={{ xs: 6, sm: 4 }}>
-            <RegularStyledButton
-              fullWidth
-              onClick={() => {
-                setWorkflowFit(!fit);
-              }}
-            >
-              Rearrange
-            </RegularStyledButton>{" "}
-          </Grid>
-          <Grid size={{ xs: 12, sm: 4 }}>
-            <RegularStyledButton
-              fullWidth
-              onClick={() => setShowLabels(!showLabels)}
-            >
-              {showLabels ? "Hide" : "Show"} Labels
-            </RegularStyledButton>{" "}
-          </Grid>
-        </Grid>
-
-        <Box sx={{ mt: 1 }}>
-          <Grid container direction="row">
-            <Grid size={{ xs: 12, md: 10 }}>
-              <Graph workflow={workflow} data={data} manipulate={manipulate} />
-            </Grid>
-            <Grid size={{ xs: 12, md: 2 }}>
-              <Legend direction={direction} />
-            </Grid>
-          </Grid>
-        </Box>
+        <Legend />
+        <Graph workflow={workflow} data={data} manipulate={manipulate} />
         <Box sx={{ my: 1 }}>
           <Button
             fullWidth
@@ -364,7 +341,7 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
         <form onSubmit={handleSubmit(onSubmit)}>
           <DialogTitle>
             <Typography variant="h6" component="div">
-              {editingHead ? "Edit External Data" : "Add an External Node"}
+              {editingHead ? "Edit external data" : "Add external data"}
             </Typography>
           </DialogTitle>
           <DialogContent dividers>

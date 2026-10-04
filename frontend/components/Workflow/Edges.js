@@ -1,4 +1,4 @@
-import { RELATED_TO, fromStoredEdge } from "../../Utils/workflowGraph";
+import { EDGE_VERB, RELATED_TO, fromStoredEdge } from "../../Utils/workflowGraph";
 
 // One stored edge -> one vis-network edge.
 //
@@ -26,6 +26,8 @@ const createEdge = (pair) => {
 
   const { from, to, type } = fromStoredEdge(pair);
   const edge = { ...pair, from, to };
+  // Hovering an arrow says what it means, in the product's own words.
+  if (type && EDGE_VERB[type]) edge.title = EDGE_VERB[type];
 
   if (type === RELATED_TO) {
     edge.arrows = { to: true, from: true, middle: false };

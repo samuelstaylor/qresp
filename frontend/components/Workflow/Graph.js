@@ -1,246 +1,323 @@
-import { useEffect, useState, useRef, Fragment, useContext } from "react";
+import { useEffect, useMemo, useState, useRef, Fragment, useContext } from "react";
 import PropTypes from "prop-types";
 
-import {
-  Network,
-  DataSet,
-} from "vis-network/standalone";
+import { Network, DataSet } from "vis-network/standalone";
 
-import createNode from "./Nodes";
+import { Box, Button, IconButton, Paper, Tooltip, Typography } from "@mui/material";
+import {
+  AccountTree,
+  AddLink,
+  CenterFocusStrong,
+  DeleteOutline,
+  Download,
+  ZoomIn,
+  ZoomOut,
+} from "@mui/icons-material";
+
+import createNode, { nodeLabel } from "./Nodes";
 import createEdge from "./Edges";
 import DetailsDialog from "./Details";
+import { IdTypeMap } from "./Types";
+import { layoutWorkflow, Y_GAP } from "../../Utils/workflowLayout";
 
 import CuratorHelperContext from "../../Context/CuratorHelpers/curatorHelperContext";
 import SpotlightContext from "../../Context/Spotlight/spotlightContext";
 
-// Global Edge Setting
-// Enlarge Edge of the node being hovered
-const changeChosenEdgeMiddleArrowScale = (values, id, selected, hovering) => {
-  if (hovering || selected) {
-    values.width = 3;
-    values.shadowColor = "#9ea7aa";
-    values.blurRadius = 5;
-  }
+const FONT = '"Roboto", "Helvetica Neue", Arial, sans-serif';
+const EDGE_COLOR = "#9AA7B0";
+const EDGE_ACTIVE = "#37474F";
+const EDGE_STYLE = {
+  color: { color: EDGE_COLOR, highlight: EDGE_ACTIVE, hover: EDGE_ACTIVE, inherit: false },
+  width: 1.4,
 };
 
-// Global Node Setting
-// Enlarge the node being hovered
-const changeChosenNodeSize = (values, id, selected, hovering) => {
-  if (hovering || selected) {
-    values.size = 25;
-    values.shadowColor = "#000";
-  }
-};
+// The drawing's settings. No physics: the layout is computed (see
+// workflowLayout), so nothing drifts, nothing jiggles when a node is dragged,
+// and the same record always draws the same way.
+const getOptions = (height, manipulation) => ({
+  height: `${height}px`,
+  width: "100%",
+  autoResize: true,
+  physics: false,
+  layout: { improvedLayout: false },
+  nodes: {
+    shape: "box",
+    margin: { top: 9, bottom: 9, left: 12, right: 12 },
+    borderWidth: 1.5,
+    borderWidthSelected: 2.5,
+    shapeProperties: { borderRadius: 6 },
+    widthConstraint: { minimum: 112, maximum: 176 },
+    shadow: { enabled: true, color: "rgba(15, 23, 42, 0.10)", size: 8, x: 0, y: 2 },
+    font: {
+      face: FONT,
+      size: 13,
+      color: "#263238",
+      multi: "html",
+      bold: { face: FONT, size: 10, color: "#607D8B", mod: "bold" },
+    },
+    chosen: { label: false, node: true },
+  },
+  edges: {
+    arrows: { to: { enabled: true, scaleFactor: 0.55, type: "arrow" } },
+    ...EDGE_STYLE,
+    hoverWidth: 0.8,
+    selectionWidth: 1.2,
+    // Curves computed from the two endpoints every frame, so they follow a
+    // dragged node from whichever side it now sits on.
+    smooth: { enabled: true, type: "cubicBezier", forceDirection: "horizontal", roundness: 0.45 },
+  },
+  interaction: {
+    hover: true,
+    dragNodes: true,
+    dragView: true,
+    // A page scroll must stay a page scroll; zoom is on the toolbar.
+    zoomView: false,
+    tooltipDelay: 250,
+    navigationButtons: false,
+    keyboard: false,
+  },
+  manipulation: manipulation || { enabled: false },
+});
 
-// Network Settings
-const getOptions = (manipulate = {}) => {
-  return {
-    height: "700px",
-    nodes: {
-      chosen: {
-        label: false,
-        node: changeChosenNodeSize,
-      },
-    },
-    edges: {
-      arrows: {
-        middle: true,
-      },
-      // Straight lines, recomputed from both node centres on every frame.
-      // vis's default "dynamic" smoothing bends each edge through a hidden
-      // support point that only physics moves -- with physics off (the
-      // curator's graph) that point stayed put, so an arrow kept leaving a
-      // node from the side it started on however the node was dragged.
-      smooth: false,
-      chosen: {
-        label: false,
-        edge: changeChosenEdgeMiddleArrowScale,
-      },
-    },
-    // Physics lays the graph out once and then stops, so dragging one node
-    // moves that node only. Rearrange turns it on again for one layout.
-    physics: {
-      solver: "forceAtlas2Based",
-      forceAtlas2Based: { gravitationalConstant: -60, springLength: 120, avoidOverlap: 0.6 },
-      stabilization: { iterations: 250, updateInterval: 50 },
-      minVelocity: 0.75,
-    },
-    interaction: {
-      hover: true,
-      dragNodes: true,
-      dragView: true,
-      tooltipDelay: 500,
-      navigationButtons: true,
-      zoomView: false,
-    },
-    layout: {
-      improvedLayout: true,
-      randomSeed: 1516362197, // Time at which the domain qresp.org was registered,
-    },
-    ...manipulate,
-  };
-};
+const ToolButton = ({ title, onClick, children, disabled }) => (
+  <Tooltip title={title} describeChild>
+    <span>
+      <IconButton size="small" onClick={onClick} disabled={disabled} aria-label={title}>
+        {children}
+      </IconButton>
+    </span>
+  </Tooltip>
+);
 
 const Graph = ({ workflow, data, manipulate = {} }) => {
   const [details, setDetails] = useState({});
   const [showDetails, setShowDetails] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [hasSelection, setHasSelection] = useState(false);
 
-  const [positions, setPositions] = useState(null);
-  // The live node DataSet, so the spotlight can restyle one box without
-  // rebuilding the network -- a rebuild would throw away the layout the
-  // curator is looking at.
+  const domNode = useRef(null);
+  const network = useRef(null);
   const nodeSet = useRef(null);
-  // Which box is currently lit, and how it looked before it was -- so it
-  // can be put back as it was rather than as something guessed.
+  const edgeSet = useRef(null);
+  // Where the curator has dragged nodes this session. Layout is presentation
+  // only and never saved, but a rebuild must not throw the drags away.
+  const dragged = useRef({});
   const lit = useRef("");
   const litWas = useRef(null);
 
-  const {
-    workflowHelper: { fit, showLabels, onClick },
-  } = useContext(CuratorHelperContext);
-  const { spotlight, setSpotlight } = useContext(SpotlightContext);
+  const helper = useContext(CuratorHelperContext) || {};
+  const { fit, onClick } = helper.workflowHelper || {};
+  const { spotlight, setSpotlight } = useContext(SpotlightContext) || {};
 
-  // A reference to the div rendered by this component
-  const domNode = useRef(null);
+  const editable = Boolean(manipulate && manipulate.manipulation);
 
-  // A reference to the vis network instance
-  const network = useRef(null);
-  const workflowNodes = workflow.nodes.map((id) =>
-    createNode(
-      id,
-      data,
-      showLabels,
-      positions && positions[id] ? positions[id] : {}
-    )
+  const layout = useMemo(
+    () => layoutWorkflow(workflow.nodes, workflow.edges),
+    [workflow]
   );
+  const height = Math.min(640, Math.max(340, layout.rows * Y_GAP + 150));
 
-  // A pair joined both ways gets two gentle opposite curves so the arrows
-  // do not draw on top of each other; every other edge stays straight.
-  const workflowEdges = (() => {
-    const edges = workflow.edges.map((pair) => createEdge(pair));
-    const pairs = new Set(edges.map((edge) => `${edge.from}\u0000${edge.to}`));
-    return edges.map((edge) =>
-      pairs.has(`${edge.to}\u0000${edge.from}`)
-        ? { ...edge, smooth: { enabled: true, type: "curvedCW", roundness: 0.2 } }
-        : edge
+  // What the boxes say, so a renamed caption updates without a rebuild.
+  const labelsKey = workflow.nodes
+    .map((id) => nodeLabel(IdTypeMap[id.charAt(0)], id, (data[id.charAt(0)] || {})[id]))
+    .join("\u0001");
+
+  const fitView = (animate = true) => {
+    if (!network.current) return;
+    network.current.fit({
+      maxZoomLevel: 1.15,
+      animation: animate ? { duration: 350, easingFunction: "easeInOutQuad" } : false,
+    });
+  };
+
+  const rearrange = () => {
+    const wflow = network.current;
+    if (!wflow) return;
+    dragged.current = {};
+    Object.entries(layout.positions).forEach(([id, pos]) => wflow.moveNode(id, pos.x, pos.y));
+    fitView();
+  };
+
+  const zoom = (factor) => {
+    const wflow = network.current;
+    if (!wflow) return;
+    wflow.moveTo({
+      scale: Math.min(2.5, Math.max(0.3, wflow.getScale() * factor)),
+      animation: { duration: 200, easingFunction: "easeInOutQuad" },
+    });
+  };
+
+  const downloadPng = () => {
+    const canvas = domNode.current && domNode.current.querySelector("canvas");
+    if (!canvas) return;
+    const out = document.createElement("canvas");
+    out.width = canvas.width;
+    out.height = canvas.height;
+    const ctx = out.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, out.width, out.height);
+    ctx.drawImage(canvas, 0, 0);
+    const link = document.createElement("a");
+    link.download = "workflow.png";
+    link.href = out.toDataURL("image/png");
+    link.click();
+  };
+
+  // Show a node's neighbourhood: everything not joined to it fades back.
+  const focusOn = (id) => {
+    const nodes = nodeSet.current;
+    const edges = edgeSet.current;
+    const wflow = network.current;
+    if (!nodes || !edges || !wflow) return;
+    const keep = new Set([id, ...wflow.getConnectedNodes(id)]);
+    const keepEdges = new Set(wflow.getConnectedEdges(id));
+    nodes.update(nodes.getIds().map((n) => ({ id: n, opacity: keep.has(n) ? 1 : 0.22 })));
+    edges.update(
+      edges.getIds().map((e) => ({
+        id: e,
+        color: {
+          ...EDGE_STYLE.color,
+          color: keepEdges.has(e) ? EDGE_ACTIVE : "rgba(154, 167, 176, 0.25)",
+        },
+        width: keepEdges.has(e) ? 2 : 1.4,
+      }))
     );
-  })();
-
-  const showDetailsDialog = (params) => {
-    if (params.nodes.length > 0) {
-      const id = params.nodes[0];
-      const type = id.charAt(0);
-      const nodeData = data[type][id];
-      setDetails(nodeData);
-      setShowDetails(true);
-    }
+  };
+  const clearFocus = () => {
+    const nodes = nodeSet.current;
+    const edges = edgeSet.current;
+    if (!nodes || !edges) return;
+    nodes.update(nodes.getIds().map((n) => ({ id: n, opacity: 1 })));
+    edges.update(edges.getIds().map((e) => ({ id: e, ...EDGE_STYLE })));
   };
 
   useEffect(() => {
-    // create a network
-    const data = {
-      nodes: new DataSet(workflowNodes),
-      edges: new DataSet(workflowEdges),
-    };
+    const nodes = new DataSet(
+      workflow.nodes.map((id) =>
+        createNode(id, data, true, dragged.current[id] || layout.positions[id] || {})
+      )
+    );
+    // Two nodes joined both ways get opposite curves so the arrows separate.
+    const built = workflow.edges.map((pair) => createEdge(pair));
+    const pairs = new Set(built.map((edge) => `${edge.from}\u0000${edge.to}`));
+    const edges = new DataSet(
+      built.map((edge) =>
+        pairs.has(`${edge.to}\u0000${edge.from}`)
+          ? { ...edge, smooth: { enabled: true, type: "curvedCW", roundness: 0.22 } }
+          : edge
+      )
+    );
 
-    const wflow = new Network(domNode.current, data, getOptions(manipulate));
-    network.current = wflow;
-
-    // To Show the Details Dialog Component on click on a node only if not editing
-    if (onClick) wflow.on("click", showDetailsDialog);
-
-    if (manipulate != {})
-      wflow.on("dragEnd", (params) => {
-        if (params.nodes.length > 0)
-          setPositions({
-            ...positions,
-            [params.nodes[0]]: wflow.getPosition(params.nodes[0]),
-          });
-      });
-
-    // Set positions after simulation
-    wflow.on("stabilized", function (params) {
-      // Layout done: from here a drag moves one node and nothing else.
-      wflow.setOptions({ physics: { enabled: false } });
-      const pos = {};
-      workflowNodes.forEach(
-        (node) => (pos[node.id] = network.current.getPosition(node.id))
-      );
-      setPositions(pos);
-      wflow.fit();
-    });
-
-    // Change mouse pointer to a small hand
-    wflow.on("hoverNode", function (params) {
-      wflow.canvas.body.container.style.cursor = "pointer";
-      // Tell the resource list which artifact this box is.
-      if (setSpotlight) setSpotlight(params.node);
-    });
-    // Have to set pointer to regular after exiting a node hover
-    wflow.on("blurNode", function (params) {
-      wflow.canvas.body.container.style.cursor = "default";
-      if (setSpotlight) setSpotlight("");
-    });
-    // A keyboard reaches a node by selecting it, not by hovering.
-    wflow.on("selectNode", function (params) {
-      if (setSpotlight && params.nodes.length) setSpotlight(params.nodes[0]);
-    });
-    wflow.on("deselectNode", function () {
-      if (setSpotlight) setSpotlight("");
-    });
-
-    nodeSet.current = data.nodes;
-
-    if (
-      positions == null ||
-      Object.keys(positions).length != workflowNodes.length
-    ) {
-      const pos = {};
-      workflowNodes.forEach(
-        (node) => (pos[node.id] = wflow.getPosition(node.id))
-      );
-      setPositions(pos);
+    let manipulation = null;
+    if (editable) {
+      const given = manipulate.manipulation;
+      manipulation = {
+        ...given,
+        enabled: true,
+        // The toolbar below replaces vis's own edit bar.
+        initiallyActive: false,
+        addEdge: (edgeData, callback) => {
+          setConnecting(false);
+          if (given.addEdge) given.addEdge(edgeData, callback);
+          else callback(null);
+        },
+        // Stored edges have no ids; hand the handler the endpoints too.
+        deleteEdge: (edgeData, callback) => {
+          const endpoints = (edgeData.edges || [])
+            .map((id) => edges.get(id))
+            .filter(Boolean)
+            .map(({ from, to }) => ({ from, to }));
+          if (given.deleteEdge) given.deleteEdge({ ...edgeData, endpoints }, callback);
+          else callback(null);
+        },
+      };
     }
 
-    // One network per render of this effect: the old one is torn down, not
-    // left running its simulation and listeners behind the new one.
+    const wflow = new Network(
+      domNode.current,
+      { nodes, edges },
+      getOptions(height, manipulation)
+    );
+    network.current = wflow;
+    nodeSet.current = nodes;
+    edgeSet.current = edges;
+    fitView(false);
+
+    if (onClick) {
+      wflow.on("click", (params) => {
+        if (params.nodes.length > 0) {
+          const id = params.nodes[0];
+          setDetails((data[id.charAt(0)] || {})[id] || {});
+          setShowDetails(true);
+        }
+      });
+    }
+    wflow.on("dragEnd", (params) => {
+      params.nodes.forEach((id) => {
+        dragged.current[id] = wflow.getPosition(id);
+      });
+    });
+    wflow.on("select", (params) =>
+      setHasSelection(params.nodes.length > 0 || params.edges.length > 0)
+    );
+    wflow.on("hoverNode", (params) => {
+      wflow.canvas.body.container.style.cursor = "pointer";
+      focusOn(params.node);
+      if (setSpotlight) setSpotlight(params.node);
+    });
+    wflow.on("blurNode", () => {
+      wflow.canvas.body.container.style.cursor = "default";
+      clearFocus();
+      if (setSpotlight) setSpotlight("");
+    });
+    wflow.on("selectNode", (params) => {
+      if (setSpotlight && params.nodes.length) setSpotlight(params.nodes[0]);
+    });
+    wflow.on("deselectNode", () => {
+      if (setSpotlight) setSpotlight("");
+    });
+
+    // One network at a time: the old one is torn down, listeners and all.
     return () => {
       wflow.destroy();
       if (network.current === wflow) network.current = null;
     };
-  }, [workflow, showLabels, onClick]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workflow, onClick, editable, height]);
 
-  // Rearrange: one fresh layout, then physics stops again.
+  // Renamed artifacts: relabel in place.
+  useEffect(() => {
+    const nodes = nodeSet.current;
+    if (!nodes) return;
+    nodes.update(
+      workflow.nodes
+        .filter((id) => nodes.get(id))
+        .map((id) => {
+          const fresh = createNode(id, data, true);
+          return { id, label: fresh.label, title: fresh.title };
+        })
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [labelsKey]);
+
+  // "Rearrange" from outside (e.g. after adding external data).
   const firstFit = useRef(true);
   useEffect(() => {
     if (firstFit.current) {
       firstFit.current = false;
       return;
     }
-    const wflow = network.current;
-    if (!wflow) return;
-    wflow.setOptions({ physics: { enabled: true } });
-    wflow.stabilize(250);
+    rearrange();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fit]);
 
-  // POINTED AT FROM THE LIST: light up the matching box.
-  //
-  // Only the two boxes that change are touched -- the one being let go and
-  // the one being lit. Rewriting every node on each pointer move redraws
-  // the whole canvas to move one outline.
-  //
-  // THE FILL IS LEFT ALONE and the OUTLINE is what changes: colour is how a
-  // curator tells a Chart from a Tool at a glance, so a highlight that
-  // repainted the shape would answer one question by taking away another.
-  // A kind's colour is given to vis as a single word -- `orange`, `blue` --
-  // which makes the border that colour too, so a thicker border on its own
-  // is a thicker invisible line. It is given a dark border explicitly.
+  // POINTED AT FROM THE LIST: outline the matching box. The fill is left
+  // alone -- colour is how a curator tells a Figure from a Tool at a glance.
   useEffect(() => {
     const nodes = nodeSet.current;
     if (!nodes) return;
     const changes = [];
     if (lit.current && lit.current !== spotlight && litWas.current) {
-      // Exactly what it was, not what its kind's default happens to be.
       if (nodes.get(lit.current)) changes.push(litWas.current);
       litWas.current = null;
     }
@@ -250,33 +327,155 @@ const Graph = ({ workflow, data, manipulate = {} }) => {
         litWas.current = {
           id: spotlight,
           color: node.color,
-          borderWidth: node.borderWidth === undefined ? 1 : node.borderWidth,
-          shadow: node.shadow === undefined ? false : node.shadow,
+          borderWidth: node.borderWidth === undefined ? 1.5 : node.borderWidth,
         };
         const fill =
-          typeof node.color === "string"
-            ? { background: node.color }
-            : { ...(node.color || {}) };
-        changes.push({
-          id: spotlight,
-          color: { ...fill, border: "#111111" },
-          borderWidth: 5,
-          shadow: true,
-        });
+          typeof node.color === "string" ? { background: node.color } : { ...(node.color || {}) };
+        changes.push({ id: spotlight, color: { ...fill, border: "#111111" }, borderWidth: 3 });
       }
     }
     lit.current = spotlight;
     if (changes.length) nodes.update(changes);
   }, [spotlight]);
 
+  const toggleConnect = () => {
+    const wflow = network.current;
+    if (!wflow) return;
+    if (connecting) {
+      wflow.disableEditMode();
+      setConnecting(false);
+    } else {
+      wflow.addEdgeMode();
+      setConnecting(true);
+    }
+  };
+
+  const empty = workflow.nodes.length === 0;
+  const panel = {
+    position: "absolute",
+    top: 8,
+    zIndex: 2,
+    display: "flex",
+    border: "1px solid",
+    borderColor: "divider",
+    borderRadius: 1.5,
+    bgcolor: "rgba(255,255,255,0.94)",
+  };
+
   return (
     <Fragment>
-      <DetailsDialog
-        showDetails={showDetails}
-        details={details}
-        setShowDetails={setShowDetails}
-      />
-      <div ref={domNode} style={{ border: "1px solid lightgrey" }}></div>
+      <DetailsDialog showDetails={showDetails} details={details} setShowDetails={setShowDetails} />
+      <Box
+        className="qresp-graph"
+        sx={{
+          position: "relative",
+          border: "1px solid",
+          borderColor: "divider",
+          borderRadius: 2,
+          overflow: "hidden",
+          backgroundColor: "#FBFCFD",
+          backgroundImage: "radial-gradient(#DCE3E8 1px, transparent 1px)",
+          backgroundSize: "18px 18px",
+        }}
+      >
+        {editable ? (
+          <Paper elevation={0} sx={{ ...panel, left: 8, p: 0.5, gap: 0.5 }}>
+            <Button
+              size="small"
+              startIcon={<AddLink />}
+              variant={connecting ? "contained" : "text"}
+              onClick={toggleConnect}
+              disableElevation
+              sx={{ textTransform: "none" }}
+              data-testid="graph-connect"
+            >
+              {connecting ? "Cancel connection" : "Draw connection"}
+            </Button>
+            <Button
+              size="small"
+              startIcon={<DeleteOutline />}
+              disabled={!hasSelection}
+              onClick={() => network.current && network.current.deleteSelected()}
+              sx={{ textTransform: "none" }}
+              data-testid="graph-delete"
+            >
+              Delete selected
+            </Button>
+          </Paper>
+        ) : null}
+        <Paper elevation={0} sx={{ ...panel, right: 8, p: 0.25 }}>
+          <ToolButton title="Zoom in" onClick={() => zoom(1.25)}>
+            <ZoomIn fontSize="small" />
+          </ToolButton>
+          <ToolButton title="Zoom out" onClick={() => zoom(0.8)}>
+            <ZoomOut fontSize="small" />
+          </ToolButton>
+          <ToolButton title="Fit to view" onClick={() => fitView()}>
+            <CenterFocusStrong fontSize="small" />
+          </ToolButton>
+          <ToolButton title="Re-arrange left to right" onClick={rearrange}>
+            <AccountTree fontSize="small" />
+          </ToolButton>
+          <ToolButton title="Download as PNG" onClick={downloadPng} disabled={empty}>
+            <Download fontSize="small" />
+          </ToolButton>
+        </Paper>
+        {connecting ? (
+          <Typography
+            variant="caption"
+            sx={{
+              position: "absolute",
+              bottom: 8,
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 2,
+              px: 1.5,
+              py: 0.5,
+              borderRadius: 1,
+              bgcolor: "#263238",
+              color: "#fff",
+            }}
+          >
+            Drag from one box to another to connect them.
+          </Typography>
+        ) : null}
+        {empty ? (
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1,
+              pointerEvents: "none",
+            }}
+          >
+            Nothing in the workflow yet.
+          </Typography>
+        ) : null}
+        <div ref={domNode} aria-label="Workflow diagram" role="img" />
+      </Box>
+      <style jsx global>{`
+        .qresp-graph .vis-manipulation,
+        .qresp-graph .vis-edit-mode,
+        .qresp-graph .vis-close {
+          display: none !important;
+        }
+        div.vis-tooltip {
+          background: #ffffff;
+          border: 1px solid #e0e6ea;
+          border-radius: 8px;
+          box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14);
+          padding: 10px 12px;
+          font-family: ${FONT};
+          font-size: 13px;
+          color: #263238;
+          white-space: normal;
+        }
+      `}</style>
     </Fragment>
   );
 };

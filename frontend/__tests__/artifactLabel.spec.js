@@ -50,7 +50,8 @@ describe("what an artifact is called", () => {
 describe("what the drawing writes on a box", () => {
   it("writes the name, not the id", () => {
     const node = createNode("c0", DATA, true);
-    expect(node.label).toBe("Density of states near the Fermi level");
+    // The kind in small capitals, then the curator's name for it.
+    expect(node.label).toBe("<b>FIGURE</b>\nDensity of states near the Fermi level");
     expect(node.label).not.toContain("c0");
   });
 
@@ -65,7 +66,7 @@ describe("what the drawing writes on a box", () => {
   });
 
   it("may still name the id in the tooltip, which is not always on screen", () => {
-    expect(createNode("s0", DATA, true).title).toContain("S0");
+    expect(createNode("s0", DATA, true).title.textContent).toContain("S0");
   });
 });
 
@@ -74,7 +75,9 @@ describe("a figure is named by its number", () => {
     expect(artifactLabel({ caption: "Long caption", number: "2" }, "c1")).toBe("Figure 2");
     expect(artifactLabel({ caption: "x", number: "S3" }, "c4")).toBe("Figure S3");
     expect(artifactLabel({ caption: "x", number: "Table 1" }, "c5")).toBe("Table 1");
-    expect(createNode("c0", { c: { c0: { caption: "x", number: 3 } } }, true).label).toBe("Figure 3");
+    expect(createNode("c0", { c: { c0: { caption: "x", number: 3 } } }, true).label).toBe(
+      "<b>FIGURE</b>\n3"
+    );
   });
 
   it("falls back to the caption without a number", () => {
