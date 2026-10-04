@@ -37,8 +37,16 @@ const StyledAccordionSummary = styled(AccordionSummary)({
 });
 
 const Drawer = (props) => {
-  const { heading, children, defaultOpen = false, editor, status } = props;
-  const [open, setOpen] = useState(defaultOpen);
+  const { heading, children, defaultOpen = false, editor, status, onToggle } = props;
+  const [ownOpen, setOwnOpen] = useState(defaultOpen);
+  // Controlled when the caller passes `open` (e.g. a section that collapses
+  // itself on Save); otherwise the drawer keeps its own state as before.
+  const controlled = typeof props.open === "boolean";
+  const open = controlled ? props.open : ownOpen;
+  const setOpen = (next) => {
+    if (!controlled) setOwnOpen(next);
+    if (onToggle) onToggle(next);
+  };
 
   return (
     <StyledAccordion
@@ -89,6 +97,8 @@ Drawer.propTypes = {
   defaultOpen: PropTypes.bool,
   editor: PropTypes.func,
   status: PropTypes.oneOf(["complete", "incomplete", "optional"]),
+  open: PropTypes.bool,
+  onToggle: PropTypes.func,
 };
 
 export default Drawer;

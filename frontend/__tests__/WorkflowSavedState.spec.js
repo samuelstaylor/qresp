@@ -76,12 +76,17 @@ describe("the workflow's saved state", () => {
   it("remembers a save across a remount", async () => {
     const user = userEvent.setup({ delay: null });
     const first = mount();
+    const header = () => screen.getByRole("button", { name: /build your workflow/i });
+    expect(header()).toHaveAttribute("aria-expanded", "true");
     await user.click(screen.getByTestId("workflow-save"));
     expect(first.setEditing).toHaveBeenLastCalledWith("workflowInfo", false);
     first.unmount();
 
-    const again = mount();
+    // Back from the preview: still saved, and still collapsed.
+    const again = mount(WORKFLOW, { workflowInfo: false });
     expect(again.setEditing).toHaveBeenLastCalledWith("workflowInfo", false);
+    expect(header()).toHaveAttribute("aria-expanded", "false");
+    expect(header()).toHaveTextContent(/saved at/i);
   });
 
   it("is unsaved again once the workflow changes", () => {
@@ -97,5 +102,17 @@ describe("the workflow's saved state", () => {
     expect(workflowSignature({ nodes: ["c0", "s0"], edges: [["s0", "c0"]] })).toBe(
       workflowSignature({ nodes: ["s0", "c0"], edges: [{ from: "s0", to: "c0" }] })
     );
+  });
+
+  it("collapses when the workflow is saved", async () => {
+    const user = userEvent.setup({ delay: null });
+    mount();
+    const header = screen.getByRole("button", { name: /build your workflow/i });
+    expect(header).toHaveAttribute("aria-expanded", "true");
+    await user.click(screen.getByTestId("workflow-save"));
+    expect(header).toHaveAttribute("aria-expanded", "false");
+    // ...and opens again on request.
+    await user.click(header);
+    expect(header).toHaveAttribute("aria-expanded", "true");
   });
 });

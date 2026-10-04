@@ -1,4 +1,4 @@
-import { useEffect, useContext, useState, Fragment } from "react";
+import { useEffect, useContext, useRef, useState, Fragment } from "react";
 
 import {
   Box,
@@ -12,7 +12,7 @@ import {
 } from "@mui/material";
 
 import { useForm } from "react-hook-form";
-import { CheckCircle, Save } from "@mui/icons-material";
+import { Save } from "@mui/icons-material";
 
 import Drawer from "../drawer";
 import { RegularStyledButton } from "../button";
@@ -118,6 +118,11 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
   }, []);
 
   const [savedAt, setSavedAt] = useState("");
+  // The section collapses when it is saved, and starts collapsed when it
+  // comes back already saved (e.g. from the preview). Opening it again is
+  // the curator's choice; a change made elsewhere does not pop it open.
+  const [drawerOpen, setDrawerOpen] = useState(true);
+  const restored = useRef(false);
 
   // Unsaved only when the workflow differs from the one last saved.
   useEffect(() => {
@@ -125,6 +130,10 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
     if (saved && saved.signature === workflowSignature(workflow)) {
       setEditing("workflowInfo", false);
       setSavedAt(saved.at || "");
+      if (!restored.current) {
+        restored.current = true;
+        setDrawerOpen(false);
+      }
     } else {
       setEditing("workflowInfo", true);
     }
@@ -288,6 +297,8 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
     const at = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
     setEditing("workflowInfo", false);
     setSavedAt(at);
+    restored.current = true;
+    setDrawerOpen(false);
     try {
       window.sessionStorage.setItem(
         WORKFLOW_SAVED_KEY,
@@ -298,6 +309,7 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
     }
   };
   const saved = !(editing && editing.workflowInfo) && Boolean(savedAt);
+  const heading = saved ? `Build your workflow · saved at ${savedAt}` : "Build your workflow";
 
   const onSaveInDialog = () => {
     unsetAlert();
@@ -330,7 +342,12 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
   return (
     <Fragment>
       {dialogOnly ? null : (
-      <Drawer heading="Build your workflow" defaultOpen={true}>
+      <Drawer
+        heading={heading}
+        open={drawerOpen}
+        onToggle={setDrawerOpen}
+        status={saved ? "complete" : undefined}
+      >
         {/* The ordinary path is "Organize figures and resources" above: the
             figure is the root and the connections are made for you. This is
             the picture of the result, and the place to draw a connection that
@@ -362,19 +379,13 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
           <Button
             fullWidth
             onClick={onSave}
-            variant={saved ? "outlined" : "contained"}
-            color={saved ? "success" : "primary"}
+            variant="contained"
             disableElevation
-            startIcon={saved ? <CheckCircle /> : <Save />}
-            aria-live="polite"
+            startIcon={<Save />}
             data-testid="workflow-save"
-            sx={
-              saved
-                ? { borderWidth: 2, "&:hover": { borderWidth: 2 } }
-                : { bgcolor: "#800000", "&:hover": { bgcolor: "#9a0000" } }
-            }
+            sx={{ bgcolor: "#800000", "&:hover": { bgcolor: "#9a0000" } }}
           >
-            {saved ? `Workflow saved at ${savedAt}` : "Save workflow"}
+            Save workflow
           </Button>
         </Box>
       </Drawer>
