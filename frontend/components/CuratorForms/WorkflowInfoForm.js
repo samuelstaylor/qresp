@@ -349,6 +349,8 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
         // changes, and an Edit that opens it again once saved.
         editing={!saved}
         editor={() => setDrawerOpen(true)}
+        // Closing it with unsaved changes saves it, like every section.
+        onAutoSave={onSave}
       >
         {/* The ordinary path is "Organize figures and resources" above: the
             figure is the root and the connections are made for you. This is

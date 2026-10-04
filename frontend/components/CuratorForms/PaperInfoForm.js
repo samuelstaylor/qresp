@@ -135,7 +135,7 @@ const PaperInfoForm = ({ editor }) => {
   };
 
   return (
-    <Drawer heading="Qresp Curation Information" defaultOpen={true} editing>
+    <Drawer heading="Qresp Curation Information" defaultOpen={true} editing autoSave>
       <form onSubmit={handleSubmit(onSubmit)}>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1, maxWidth: 720 }}>
           How this paper is described and grouped on Qresp. Only a principal

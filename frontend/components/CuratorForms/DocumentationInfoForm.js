@@ -39,7 +39,7 @@ const DocumentationInfoForm = ({ editor }) => {
   };
 
   return (
-    <Drawer heading="Add additional documentation" defaultOpen={true} editing>
+    <Drawer heading="Add additional documentation" defaultOpen={true} editing autoSave>
       <form onSubmit={handleSubmit(onSubmit)}>
         <Grid container direction="column" spacing={1}>
           <Grid>

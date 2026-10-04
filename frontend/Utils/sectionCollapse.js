@@ -41,8 +41,28 @@ export const collapseAllSections = () => {
   }
 };
 
+// ONE SECTION, CLOSED BY HAND AND SAVED: its form is replaced by its saved
+// summary, which is a new section mounting -- and it must stay closed.
+let nextClosedUntil = 0;
+export const startNextSectionClosed = () => {
+  nextClosedUntil = Date.now() + 1000;
+};
+export const cancelNextSectionClosed = () => {
+  nextClosedUntil = 0;
+};
+const takeNextClosed = () => {
+  if (Date.now() < nextClosedUntil) {
+    nextClosedUntil = 0;
+    return true;
+  }
+  return false;
+};
+
 /** True while freshly mounted sections should start closed. */
 export const sectionsCollapsing = () => collapsing;
+
+/** For a section mounting now: should it start closed? (Consumes a one-off.) */
+export const shouldStartClosed = () => collapsing || takeNextClosed();
 
 /** Called whenever collapseAllSections runs; returns an unsubscribe. */
 export const onCollapseSections = (listener) => {
@@ -54,4 +74,5 @@ export const onCollapseSections = (listener) => {
 export const resetSectionCollapse = () => {
   if (typeof document !== "undefined") end();
   collapsing = false;
+  nextClosedUntil = 0;
 };

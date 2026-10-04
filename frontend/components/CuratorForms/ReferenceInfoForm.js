@@ -197,7 +197,7 @@ const ReferenceInfoForm = ({ editor }) => {
   }, [referenceInfo.authors]);
 
   return (
-    <Drawer heading="Publication Information for This Paper" defaultOpen={true} editing>
+    <Drawer heading="Publication Information for This Paper" defaultOpen={true} editing autoSave>
       {/* This section IS the primary paper's bibliography (the record's
           `reference` block). It is not a cited-works list.
 

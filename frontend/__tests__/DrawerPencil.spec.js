@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import Drawer from "../components/drawer";
@@ -35,5 +35,57 @@ describe("the section pencil", () => {
   it("is absent on a read-only section", () => {
     render(<Drawer heading="Charts">x</Drawer>);
     expect(screen.queryByRole("button", { name: /^edit/i })).toBeNull();
+  });
+});
+
+describe("closing a section that is being edited", () => {
+  const Section = ({ onSubmit, ...props }) => (
+    <Drawer heading="Choose a License" defaultOpen editing autoSave {...props}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmit();
+        }}
+      >
+        <input aria-label="licence" />
+      </form>
+    </Drawer>
+  );
+  const header = () => screen.getByRole("button", { name: /choose a license/i });
+
+  it("saves it", async () => {
+    const onSubmit = jest.fn();
+    render(<Section onSubmit={onSubmit} />);
+    await userEvent.click(header());
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens again when it could not be saved, to show what is missing", async () => {
+    // A form that fails validation stays mounted instead of swapping itself
+    // for its saved summary.
+    render(<Section onSubmit={() => {}} />);
+    await userEvent.click(header());
+    expect(header()).toHaveAttribute("aria-expanded", "false");
+    await waitFor(() => expect(header()).toHaveAttribute("aria-expanded", "true"), {
+      timeout: 1500,
+    });
+  });
+
+  it("does not save a section that is not being edited", async () => {
+    const onSubmit = jest.fn();
+    render(<Section onSubmit={onSubmit} editing={false} editor={() => {}} />);
+    await userEvent.click(header());
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("uses the section's own save when it has one", async () => {
+    const onAutoSave = jest.fn();
+    render(
+      <Drawer heading="Build your workflow" defaultOpen editing onAutoSave={onAutoSave}>
+        x
+      </Drawer>
+    );
+    await userEvent.click(screen.getByRole("button", { name: /build your workflow/i }));
+    expect(onAutoSave).toHaveBeenCalledTimes(1);
   });
 });

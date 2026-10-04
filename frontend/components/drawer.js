@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import PropTypes from "prop-types";
 
 import {
@@ -13,7 +13,12 @@ import {
 import { styled } from "@mui/material/styles";
 import { CheckCircle, Edit, ExpandMore } from "@mui/icons-material";
 
-import { onCollapseSections, sectionsCollapsing } from "../Utils/sectionCollapse";
+import {
+  cancelNextSectionClosed,
+  onCollapseSections,
+  shouldStartClosed,
+  startNextSectionClosed,
+} from "../Utils/sectionCollapse";
 
 const StyledAccordion = styled(Accordion)(({ theme }) => ({
   borderRadius: "8px !important",
@@ -47,10 +52,22 @@ const Drawer = (props) => {
     editing = false,
     status,
     onToggle,
+    // Closing an editing section by hand saves it: `autoSave` submits the
+    // <form> inside it; `onAutoSave` is for a section that saves another way.
+    autoSave = false,
+    onAutoSave,
   } = props;
   // Right after a draft load or a return from the preview, sections start
   // closed (see Utils/sectionCollapse).
-  const [ownOpen, setOwnOpen] = useState(() => defaultOpen && !sectionsCollapsing());
+  const [ownOpen, setOwnOpen] = useState(() => defaultOpen && !shouldStartClosed());
+  const body = useRef(null);
+  const mounted = useRef(true);
+  useEffect(
+    () => () => {
+      mounted.current = false;
+    },
+    []
+  );
   // Controlled when the caller passes `open` (e.g. a section that collapses
   // itself on Save); otherwise the drawer keeps its own state as before.
   const controlled = typeof props.open === "boolean";
@@ -58,6 +75,28 @@ const Drawer = (props) => {
   const setOpen = (next) => {
     if (!controlled) setOwnOpen(next);
     if (onToggle) onToggle(next);
+  };
+
+  // Closed by hand while editing: save it. A valid form swaps itself for its
+  // saved summary (which starts closed); one that cannot be saved yet is
+  // still here a moment later, so it opens again to show what is missing.
+  const saveOnClose = () => {
+    if (onAutoSave) {
+      onAutoSave();
+      return;
+    }
+    if (!autoSave) return;
+    const form = body.current && body.current.querySelector("form");
+    if (!form) return;
+    startNextSectionClosed();
+    if (typeof form.requestSubmit === "function") form.requestSubmit();
+    else form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    setTimeout(() => {
+      if (mounted.current) {
+        cancelNextSectionClosed();
+        setOpen(true);
+      }
+    }, 600);
   };
 
   useEffect(
@@ -74,7 +113,10 @@ const Drawer = (props) => {
     <StyledAccordion
       slotProps={{ transition: { timeout: 200 } }}
       expanded={open}
-      onChange={(_, expanded) => setOpen(expanded)}
+      onChange={(_, expanded) => {
+        setOpen(expanded);
+        if (!expanded && editing) saveOnClose();
+      }}
     >
       <StyledAccordionSummary expandIcon={<ExpandMore />}>
         {status === "complete" && (
@@ -90,9 +132,9 @@ const Drawer = (props) => {
         >
           {heading}
         </Typography>
-        {/* ONE PENCIL ON EVERY EDITABLE SECTION. On a saved section it
-            switches to editing; on a section already being edited it is
-            shown pressed and just opens the section. */}
+        {/* ONE PENCIL ON EVERY EDITABLE SECTION, filled in while the
+            section is open and plain while it is closed. On a saved section
+            it switches to editing; on one being edited it opens it. */}
         {editor || editing ? (
           <Tooltip title={editing ? "Editing" : "Edit"} placement="right" arrow>
             <IconButton
@@ -104,10 +146,10 @@ const Drawer = (props) => {
                 if (!editing && editor) editor();
               }}
               sx={{
-                color: editing ? "#FFFFFF" : "#800000",
-                bgcolor: editing ? "#800000" : "transparent",
+                color: open ? "#FFFFFF" : "#800000",
+                bgcolor: open ? "#800000" : "transparent",
                 mr: 0.5,
-                "&:hover": { bgcolor: editing ? "#9a0000" : "rgba(128,0,0,0.08)" },
+                "&:hover": { bgcolor: open ? "#9a0000" : "rgba(128,0,0,0.08)" },
               }}
             >
               <Edit fontSize="small" />
@@ -115,7 +157,7 @@ const Drawer = (props) => {
           </Tooltip>
         ) : null}
       </StyledAccordionSummary>
-      <AccordionDetails sx={{ pt: 0, pb: 2 }}>
+      <AccordionDetails ref={body} sx={{ pt: 0, pb: 2 }}>
         <Box sx={{ width: "100%", display: "flex", flexDirection: "column" }}>
           {children}
         </Box>
@@ -132,6 +174,8 @@ Drawer.propTypes = {
   defaultOpen: PropTypes.bool,
   editor: PropTypes.func,
   editing: PropTypes.bool,
+  autoSave: PropTypes.bool,
+  onAutoSave: PropTypes.func,
   status: PropTypes.oneOf(["complete", "incomplete", "optional"]),
   open: PropTypes.bool,
   onToggle: PropTypes.func,

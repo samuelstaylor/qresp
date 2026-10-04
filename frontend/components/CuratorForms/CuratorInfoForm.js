@@ -62,7 +62,7 @@ const CuratorInfoForm = ({ editor }) => {
   };
 
   return (
-    <Drawer heading="Who is Curating the paper" defaultOpen={true} editing>
+    <Drawer heading="Who is Curating the paper" defaultOpen={true} editing autoSave>
       <form onSubmit={handleSubmit(onSubmit)}>
         <Grid container direction="column" spacing={1}>
           <Grid>
