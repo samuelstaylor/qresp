@@ -1,6 +1,8 @@
-import { useContext, Fragment } from "react";
+import { useContext, useState, Fragment } from "react";
 import axios from "axios";
+import Router from "next/router";
 import { Box, Button, Paper, Typography } from "@mui/material";
+import { Save, Visibility } from "@mui/icons-material";
 
 import Ajv from "ajv";
 
@@ -15,6 +17,7 @@ import CuratorHelperContext from "../../Context/CuratorHelpers/curatorHelperCont
 import ServerContext from "../../Context/Servers/serverContext";
 import AlertContext from "../../Context/Alert/alertContext";
 import LoadingContext from "../../Context/Loading/loadingContext";
+import { preview } from "./TopActions";
 
 const variableTotext = {
   curatorInfo: "Curator Information",
@@ -211,13 +214,51 @@ const makePublishRequest = (
 };
 
 const Publish = () => {
-  const { metadata, activeDraftId, clearActiveDraft } =
-    useContext(CuratorContext);
+  const {
+    metadata,
+    activeDraftId,
+    activeDraftTitle,
+    clearActiveDraft,
+    saveDraftToServer,
+    getDraftTitle,
+  } = useContext(CuratorContext);
 
   const { editing } = useContext(CuratorHelperContext);
   const { selectedHttp } = useContext(ServerContext);
   const { setAlert } = useContext(AlertContext);
   const { showLoader, hideLoader } = useContext(LoadingContext);
+  const [draftSaving, setDraftSaving] = useState(false);
+
+  const onPreview = () =>
+    preview(metadata, setAlert, { push: (...args) => Router.push(...args) }, {
+      id: activeDraftId,
+      title: activeDraftTitle,
+    });
+
+  const onSaveDraft = () => {
+    if (!saveDraftToServer) return;
+    const title =
+      (getDraftTitle && getDraftTitle()) ||
+      (metadata.referenceInfo && metadata.referenceInfo.title) ||
+      "Untitled draft";
+    setDraftSaving(true);
+    saveDraftToServer(title)
+      .then(() =>
+        setAlert(
+          "Draft saved",
+          "Your draft was saved to your account. Resume it any time from Account > My drafts.",
+          null
+        )
+      )
+      .catch(() =>
+        setAlert(
+          "Error",
+          "Your draft could not be saved. Please check that you are still signed in and try again.",
+          null
+        )
+      )
+      .finally(() => setDraftSaving(false));
+  };
 
   const onClick = () => {
     const paper = convertStatetoReqSchema(metadata, selectedHttp);
@@ -285,6 +326,32 @@ const Publish = () => {
         >
           Publish Paper
         </Button>
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+            gap: 1.5,
+            mt: 1.5,
+          }}
+        >
+          <Button
+            variant="outlined"
+            startIcon={<Visibility />}
+            onClick={onPreview}
+            sx={{ color: "#800000", borderColor: "rgba(128,0,0,0.5)", borderRadius: 2 }}
+          >
+            Preview record
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<Save />}
+            onClick={onSaveDraft}
+            disabled={draftSaving || !saveDraftToServer}
+            sx={{ color: "#800000", borderColor: "rgba(128,0,0,0.5)", borderRadius: 2 }}
+          >
+            {draftSaving ? "Saving…" : "Save draft"}
+          </Button>
+        </Box>
       </Paper>
     </Box>
   );

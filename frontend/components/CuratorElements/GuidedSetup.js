@@ -104,21 +104,46 @@ const DetailField = ({ record, field, type, multiline, onSave, placeholder }) =>
   const initial = Array.isArray(record[field]) ? record[field].join(", ") : record[field] || "";
   const [value, setValue] = useState(initial);
   useEffect(() => setValue(initial), [initial]);
+  const changed = value !== initial;
+  const submit = () => {
+    if (changed) onSave(field, value);
+  };
   return (
-    <TextField
-      size="small"
-      fullWidth
-      multiline={multiline}
-      minRows={multiline ? 1 : undefined}
-      maxRows={multiline ? 4 : undefined}
-      label={labelFor(type, field)}
-      placeholder={placeholder}
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={() => {
-        if (value !== initial) onSave(field, value);
-      }}
-    />
+    <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
+      <TextField
+        size="small"
+        fullWidth
+        multiline={multiline}
+        minRows={multiline ? 1 : undefined}
+        maxRows={multiline ? 4 : undefined}
+        label={labelFor(type, field)}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        // Leaving the field still saves; Enter (Ctrl+Enter in a description)
+        // saves without leaving it.
+        onBlur={submit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (!multiline || e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            submit();
+          }
+        }}
+      />
+      <Button
+        variant="contained"
+        size="small"
+        disableElevation
+        disabled={!changed}
+        // Keep focus in the field so its blur does not save a second time.
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={submit}
+        aria-label={`Save ${labelFor(type, field)}`}
+        sx={{ mt: 0.25, flexShrink: 0, bgcolor: "#800000", "&:hover": { bgcolor: "#9a0000" } }}
+      >
+        Save
+      </Button>
+    </Box>
   );
 };
 

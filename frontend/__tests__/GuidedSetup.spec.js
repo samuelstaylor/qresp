@@ -602,4 +602,28 @@ describe("GuidedSetup ready-to-publish", () => {
     expect(screen.getByLabelText("Description")).toBeInTheDocument();
     expect(screen.queryByTestId("record-ready")).not.toBeInTheDocument();
   });
+
+  it("saves a typed description with its Save button, once", async () => {
+    const user = userEvent.setup();
+    axios.post.mockResolvedValue({ data: { found: false } });
+    const curator = renderSetup({
+      state: {
+        ...blankState,
+        referenceInfo: { title: "T", abstract: "A" },
+        fileServerPath: "https://x/files/y",
+        paperInfo: { PIs: "A B", collections: [], tags: [] },
+        scripts: [{ id: "s0", files: ["plot.py"], readme: "" }],
+      },
+    });
+    const save = screen.getByRole("button", { name: "Save Description" });
+    expect(save).toBeDisabled();
+    await user.type(screen.getByLabelText("Description"), "Plots figure 2.");
+    expect(save).toBeEnabled();
+    await user.click(save);
+    expect(curator.edit).toHaveBeenCalledTimes(1);
+    expect(curator.edit).toHaveBeenCalledWith(
+      "script",
+      expect.objectContaining({ id: "s0", readme: "Plots figure 2." })
+    );
+  });
 });
