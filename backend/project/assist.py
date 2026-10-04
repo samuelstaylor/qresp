@@ -144,6 +144,15 @@ def _int_env(key, default, ceiling=None):
     return value
 
 
+def _model_chain(primary):
+    chain = [primary]
+    for name in (_env("GEMINI_FALLBACK_MODELS") or "").split(","):
+        name = name.strip()
+        if name and GEMINI_MODEL_RE.match(name) and name not in chain:
+            chain.append(name)
+    return chain
+
+
 def _gemini_config():
     # The model name is the only provider knob; it falls back to the default
     # once the feature is enabled, and anything that is not a plain model
@@ -158,6 +167,9 @@ def _gemini_config():
         # integration never reads QRESP_GOOGLE_* and never touches OAuth.
         "API_KEY": (_env("GEMINI_API_KEY") or "").strip(),
         "MODEL": model,
+        # Optional, in order: models tried when the one before has hit its
+        # usage limit (each Gemini model has its own free quota).
+        "MODELS": _model_chain(model),
         # Bounded even against misconfiguration: a worker must never hang on
         # the provider for minutes.
         "TIMEOUT": _int_env("GEMINI_TIMEOUT_SECONDS", GEMINI_DEFAULT_TIMEOUT,
@@ -263,7 +275,7 @@ def _rate_limit_details(response):
     return quota, wait
 
 
-def call_gemini(cfg, payload, system_prompt, schema, max_output_tokens=None):
+def _call_model(cfg, payload, system_prompt, schema, max_output_tokens=None):
     """ONE native Gemini generateContent call — no SDK, no retry of anything
     that may have been billed (only a 503 "overloaded", where nothing was
     generated, is retried; see UNAVAILABLE_RETRY_DELAYS), no tools/grounding/search/URL-context/
@@ -333,10 +345,9 @@ def call_gemini(cfg, payload, system_prompt, schema, max_output_tokens=None):
         print("AI assist provider rate limited (%s, retry in %s)"
               % (quota or "unknown quota", "%ss" % wait if wait else "?"))
         if "perday" in quota.lower():
-            message = ("The AI provider's daily usage limit for this model has "
-                       "been reached. Try again tomorrow, or ask an "
-                       "administrator to enable billing or choose another "
-                       "model.")
+            error = ProviderError(DAILY_LIMIT_MESSAGE, ERROR_RATE_LIMITED)
+            error.daily = True
+            return None, error
         elif "perminute" in quota.lower() or wait:
             message = ("The AI provider's per-minute usage limit was reached. "
                        "Try again in about %d seconds." % max(wait or 60, 5))
@@ -412,6 +423,53 @@ def call_gemini(cfg, payload, system_prompt, schema, max_output_tokens=None):
             "The AI suggestion service did not return suggestions.",
             ERROR_MALFORMED)
     return answer_text, None
+
+
+DAILY_LIMIT_MESSAGE = (
+    "The AI provider's daily usage limit for this model has been reached. "
+    "Try again tomorrow, or ask an administrator to enable billing or choose "
+    "another model.")
+
+# Models whose free DAILY quota ran out, and the UTC day it happened. Only
+# used when fallback models are configured; per process, which is fine for a
+# hint that merely saves a doomed request.
+_EXHAUSTED = {}
+
+
+def call_gemini(cfg, payload, system_prompt, schema, max_output_tokens=None):
+    """Answer from the configured model, falling back IN ORDER to
+    QRESP_GEMINI_FALLBACK_MODELS when one is rate limited. A model that hit
+    its daily quota is skipped until the next UTC day. Any other failure is
+    returned at once -- a different model would not fix a bad request.
+    Returns (answer_text, None) or (None, error) exactly like _call_model."""
+    models = cfg.get("MODELS") or [cfg["MODEL"]]
+    if len(models) == 1:
+        return _call_model(cfg, payload, system_prompt, schema, max_output_tokens)
+
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    available = [m for m in models if _EXHAUSTED.get(m) != today]
+    if not available:
+        print("AI assist: every configured model is out of daily quota")
+        error = ProviderError(DAILY_LIMIT_MESSAGE, ERROR_RATE_LIMITED)
+        error.daily = True
+        return None, error
+
+    error = None
+    for index, model in enumerate(available):
+        answer, error = _call_model(dict(cfg, MODEL=model), payload,
+                                    system_prompt, schema, max_output_tokens)
+        if error is None:
+            if model != models[0]:
+                print("AI assist answered by fallback model %s" % model)
+            return answer, None
+        if error_kind(error) != ERROR_RATE_LIMITED:
+            return None, error
+        if getattr(error, "daily", False):
+            _EXHAUSTED[model] = today
+        if index + 1 < len(available):
+            print("AI assist: %s is rate limited, trying %s"
+                  % (model, available[index + 1]))
+    return None, error
 
 
 def _normalize_keywords(candidates):

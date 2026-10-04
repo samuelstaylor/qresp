@@ -313,3 +313,54 @@ class TestQuotaRefund(AiTestBase):
             self.post("/api/curation/suggest-figure-keywords",
                       {"consent": True, "figures": FIGURES})
         self.assertEqual(1, AssistUsage.objects(email="curator@example.com").first().count)
+
+
+class TestModelFallback(unittest.TestCase):
+    def setUp(self):
+        from project import assist
+        self.assist = assist
+        assist._EXHAUSTED.clear()
+        self.cfg = {"API_KEY": "k", "MODEL": "primary", "TIMEOUT": 5,
+                    "MAX_OUTPUT_TOKENS": 256, "MODELS": ["primary", "backup"]}
+
+    def tearDown(self):
+        self.assist._EXHAUSTED.clear()
+
+    def daily(self):
+        error = self.assist.ProviderError("daily", self.assist.ERROR_RATE_LIMITED)
+        error.daily = True
+        return None, error
+
+    def test_falls_back_when_the_daily_quota_runs_out_and_remembers_it(self):
+        calls = []
+
+        def fake(cfg, *args, **kwargs):
+            calls.append(cfg["MODEL"])
+            return self.daily() if cfg["MODEL"] == "primary" else ("ok", None)
+
+        with mock.patch.object(self.assist, "_call_model", side_effect=fake):
+            self.assertEqual(("ok", None), self.assist.call_gemini(self.cfg, {}, "p", {}))
+            self.assertEqual(("ok", None), self.assist.call_gemini(self.cfg, {}, "p", {}))
+        # The exhausted model is skipped for the rest of the day.
+        self.assertEqual(["primary", "backup", "backup"], calls)
+
+    def test_other_failures_do_not_switch_models(self):
+        bad = (None, self.assist.ProviderError("bad", self.assist.ERROR_OTHER))
+        with mock.patch.object(self.assist, "_call_model", return_value=bad) as call:
+            _answer, error = self.assist.call_gemini(self.cfg, {}, "p", {})
+        self.assertEqual(1, call.call_count)
+        self.assertEqual("bad", error)
+
+    def test_every_model_exhausted_reports_the_daily_limit(self):
+        with mock.patch.object(self.assist, "_call_model", side_effect=lambda *a, **k: self.daily()):
+            self.assist.call_gemini(self.cfg, {}, "p", {})
+        with mock.patch.object(self.assist, "_call_model") as call:
+            _answer, error = self.assist.call_gemini(self.cfg, {}, "p", {})
+        call.assert_not_called()
+        self.assertIn("daily usage limit", error)
+
+    def test_chain_comes_from_the_environment(self):
+        with mock.patch.dict(os.environ, {
+                "QRESP_GEMINI_MODEL": "m1",
+                "QRESP_GEMINI_FALLBACK_MODELS": " m2, m1 ,bad/name, m3 "}):
+            self.assertEqual(["m1", "m2", "m3"], self.assist._gemini_config()["MODELS"])
