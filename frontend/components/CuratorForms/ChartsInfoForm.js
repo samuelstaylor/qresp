@@ -1,6 +1,9 @@
-import { useEffect, useContext, Fragment } from "react";
+import { useEffect, useContext, useState, Fragment } from "react";
 
 import {
+  Box,
+  Button,
+  Chip,
   Grid,
   Tooltip,
   Typography,
@@ -9,7 +12,7 @@ import {
   DialogContent,
   DialogTitle,
 } from "@mui/material";
-import { AddCircleOutlined, DescriptionOutlined } from "@mui/icons-material";
+import { AddCircleOutlined, Check, DescriptionOutlined } from "@mui/icons-material";
 
 import { TextInputField } from "../Form/InputFields";
 import ExtraFieldInput, {
@@ -23,6 +26,49 @@ import {
   useRowLink,
 } from "./ConnectionSection";
 import { RequiredFieldLegend } from "../Form/Util";
+import { artifactLabel } from "../../Utils/artifactLabel";
+import { rowScopedIntent } from "../../Utils/connectionIntent";
+import {
+  LINKS_TO,
+  closesLoop,
+  edgeProblem,
+  fromStoredEdge,
+  inferEdgeType,
+} from "../../Utils/workflowGraph";
+
+// What can feed a figure, in the order a reader thinks about it.
+const RESOURCE_GROUPS = [
+  { key: "datasets", prefix: "d", title: "Data", form: "dataset", add: "New dataset" },
+  { key: "scripts", prefix: "s", title: "Scripts", form: "script", add: "New script" },
+  { key: "tools", prefix: "t", title: "Tools", form: "tool", add: "New tool" },
+  { key: "heads", prefix: "h", title: "External data", form: null, add: null },
+];
+
+/** The arrow from a resource into a figure: the specific relationship when
+ * there is exactly one (data consumes, a script generates), else links_to. */
+export const resourceEdge = (resourceId, chartId) => ({
+  from: resourceId,
+  to: chartId,
+  type: inferEdgeType(resourceId, chartId) || LINKS_TO,
+});
+
+/** Ids joined to this figure by any edge, either way round. */
+export const connectedTo = (edges, chartId) => {
+  const ids = new Set();
+  (edges || []).map(fromStoredEdge).forEach(({ from, to }) => {
+    if (to === chartId) ids.add(from);
+    if (from === chartId) ids.add(to);
+  });
+  return ids;
+};
+
+// The id the reducer will mint for the next chart (same walk as mintIds).
+const nextChartId = (charts) => {
+  const taken = new Set((charts || []).map((c) => c.id));
+  let n = (charts || []).length;
+  while (taken.has(`c${n}`)) n += 1;
+  return `c${n}`;
+};
 
 import { useForm } from "react-hook-form";
 import { useInvalidFieldFocus } from "../../Utils/invalidField";
@@ -38,7 +84,9 @@ import CuratorHelperContext from "../../Context/CuratorHelpers/curatorHelperCont
 // and supplies its own contextual trigger, so showing both would put two
 // ways to do one thing side by side.
 const ChartsInfoForm = ({ hideTrigger = false }) => {
-  const { charts, add, edit } = useContext(CuratorContext);
+  const curator = useContext(CuratorContext);
+  const { charts, add, edit, addEdge, unlink } = curator;
+  const edges = (curator.workflow && curator.workflow.edges) || [];
 
   const { chartsHelper, openForm, closeForm, setDefault } = useContext(
     CuratorHelperContext
@@ -56,9 +104,7 @@ const ChartsInfoForm = ({ hideTrigger = false }) => {
   const schema = Yup.object({
     caption: Yup.string().required("Required"),
     number: Yup.number().required("Required"),
-    files: Yup.string(),
     imageFile: Yup.string().required("Required"),
-    notebookFile: Yup.string(),
     properties: Yup.string().required("Required"),
     extraFields: extraFieldsSchema,
   });
@@ -71,9 +117,7 @@ const ChartsInfoForm = ({ hideTrigger = false }) => {
     number: (chart && chart.number) || charts.length,
     properties:
       (chart && chart.properties && chart.properties.join(", ")) || "",
-    files: (chart && chart.files && chart.files.join(", ")) || "",
     imageFile: (chart && chart.imageFile) || "",
-    notebookFile: (chart && chart.notebookFile) || "",
     extraFields: cleanExtraFields(chart && chart.extraFields),
   });
 
@@ -93,41 +137,84 @@ const ChartsInfoForm = ({ hideTrigger = false }) => {
     defaultValues: chartFormDefaults(def),
   });
 
+  // Resources ticked or unticked in this sitting, {id: true|false}. Only
+  // these are applied on save, so a resource linked some other way while
+  // the form is open is never unlinked by it.
+  const [resourceChoice, setResourceChoice] = useState({});
   useEffect(() => {
-    if (open) reset(chartFormDefaults(def));
+    if (open) {
+      reset(chartFormDefaults(def));
+      setResourceChoice({});
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [def, open]);
 
+  const existing = Boolean(def && charts.find((el) => el.id == def.id));
+  const linkedNow = existing ? connectedTo(edges, def.id) : new Set();
+  const isChosen = (id) =>
+    id in resourceChoice ? resourceChoice[id] : linkedNow.has(id);
+  const toggleResource = (id) =>
+    setResourceChoice((current) => ({ ...current, [id]: !isChosen(id) }));
+
+  const applyResources = (chartId, knownIds) => {
+    let current = edges;
+    Object.entries(resourceChoice).forEach(([id, chosen]) => {
+      const linked = current
+        .map(fromStoredEdge)
+        .filter(
+          (e) => (e.from === id && e.to === chartId) || (e.from === chartId && e.to === id)
+        );
+      if (chosen && !linked.length) {
+        const edge = resourceEdge(id, chartId);
+        if (edgeProblem(edge, knownIds, current) || closesLoop(current, edge)) return;
+        addEdge(edge);
+        current = [...current, edge];
+      }
+      if (!chosen) linked.forEach((e) => unlink(e.from, e.to));
+    });
+  };
+
+  const allIds = () =>
+    RESOURCE_GROUPS.flatMap((g) => (curator[g.key] || []).map((r) => r.id)).concat(
+      (charts || []).map((c) => c.id)
+    );
+
   const onSubmit = (values) => {
     values.properties = values.properties.split(",").map((el) => el.trim());
-    values.files = values.files.split(",").map((el) => el.trim());
     const extraFields = cleanExtraFields(values.extraFields);
     values.extraFields = extraFields;
-    if (def && charts.find((el) => el.id == def.id)) {
+    let chartId;
+    if (existing) {
+      chartId = def.id;
       edit("chart", { ...def, ...values, extraFields: extraFields });
     } else {
+      chartId = nextChartId(charts);
+      // A new figure gets the full record shape; the old free-text file
+      // fields are now real, linked resources instead.
+      const record = { files: [], notebookFile: "", ...values };
       if (link.rowScoped) {
         // The record and its arrow, in one reducer change -- or neither,
         // with the form left open to say why.
-        if (!link.createAndLink(values)) return;
+        if (!link.createAndLink(record)) return;
       } else {
-        values["id"] = `c${charts.length}`;
-        add("chart", values);
+        add("chart", { ...record, id: chartId });
       }
     }
+    applyResources(chartId, [...allIds(), chartId]);
     closeForm("chart");
+  };
+
+  // Create a resource that is linked to this figure the moment it is saved.
+  const newLinkedResource = (formType) => {
+    if (!existing || !openForm) return;
+    setDefault(formType, null);
+    openForm(formType, rowScopedIntent(def.id, artifactLabel(def, def.id)));
   };
 
   const onOpenFileSelector = (type) => {
     if (type == "imageFile") {
       setMultiple(false);
       setSaveMethod((val) => setValue("imageFile", val));
-    } else if (type == "notebookFile") {
-      setMultiple(false);
-      setSaveMethod((val) => setValue("notebookFile", val));
-    } else {
-      setMultiple(true);
-      setSaveMethod((val) => setValue("files", val));
     }
 
     openSelector();
@@ -216,26 +303,6 @@ const ChartsInfoForm = ({ hideTrigger = false }) => {
               </Grid>
               <Grid>
                 <TextInputField
-                  id="files"
-                  placeholder="Enter file names used to contruct the chart"
-                  name="files"
-                  helperText="Enter file name(s) containing the data displayed in the chart (e.g. a file in CSV format), or supporting images that belong with it. Use the file picker button to pick files"
-                  label="Input / Supporting Files"
-                  error={errors.files}
-                  register={register}
-                  action={
-                    <IconButton
-                      size="small"
-                      onClick={() => onOpenFileSelector("files")}
-                    >
-                      <DescriptionOutlined color="primary" />
-                    </IconButton>
-                  }
-                  defaultValue={def && def.files && def.files.join(", ")}
-                />
-              </Grid>
-              <Grid>
-                <TextInputField
                   id="imageFile"
                   placeholder="Enter chart image file name"
                   name="imageFile"
@@ -257,26 +324,6 @@ const ChartsInfoForm = ({ hideTrigger = false }) => {
               </Grid>
               <Grid>
                 <TextInputField
-                  id="notebookFile"
-                  placeholder="Enter notebook file"
-                  name="notebookFile"
-                  helperText="Enter the file name of the notebook that reproduces this figure. Use the file picker button to pick files. Formats Allowed: ipynb"
-                  label="Reproduction Notebook"
-                  error={errors.notebookFile}
-                  action={
-                    <IconButton
-                      size="small"
-                      onClick={() => onOpenFileSelector("notebookFile")}
-                    >
-                      <DescriptionOutlined color="primary" />
-                    </IconButton>
-                  }
-                  register={register}
-                  defaultValue={def && def.notebookFile}
-                />
-              </Grid>
-              <Grid>
-                <TextInputField
                   id="chartproperties"
                   placeholder="Enter keywords"
                   name="properties"
@@ -289,6 +336,78 @@ const ChartsInfoForm = ({ hideTrigger = false }) => {
                   }
                   required
                 />
+              </Grid>
+              <Grid>
+                <Box
+                  data-testid="figure-resources"
+                  sx={{ border: 1, borderColor: "divider", borderRadius: 1, p: 1.5 }}
+                >
+                  <Typography variant="subtitle2">
+                    Resources used to make this figure
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                    Pick the data, scripts and tools behind this figure. Each one is
+                    connected to the figure in the workflow when you save.
+                  </Typography>
+                  {RESOURCE_GROUPS.every((g) => !(curator[g.key] || []).length) ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                      This paper has no datasets, scripts or tools yet.
+                    </Typography>
+                  ) : null}
+                  {RESOURCE_GROUPS.filter((g) => (curator[g.key] || []).length).map((g) => (
+                    <Box key={g.key} sx={{ mb: 1 }}>
+                      <Typography variant="caption" fontWeight={600} color="text.secondary">
+                        {g.title}
+                      </Typography>
+                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75, mt: 0.5 }}>
+                        {(curator[g.key] || []).map((r) => {
+                          const chosen = isChosen(r.id);
+                          return (
+                            <Chip
+                              key={r.id}
+                              size="small"
+                              label={artifactLabel(r, r.id)}
+                              icon={chosen ? <Check /> : undefined}
+                              color={chosen ? "primary" : "default"}
+                              variant={chosen ? "filled" : "outlined"}
+                              onClick={() => toggleResource(r.id)}
+                              aria-pressed={chosen}
+                              data-testid={`figure-resource-${r.id}`}
+                              sx={{ maxWidth: "100%" }}
+                            />
+                          );
+                        })}
+                      </Box>
+                    </Box>
+                  ))}
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 1 }}>
+                    {RESOURCE_GROUPS.filter((g) => g.form).map((g) => (
+                      <Button
+                        key={g.form}
+                        size="small"
+                        variant="outlined"
+                        startIcon={<AddCircleOutlined />}
+                        disabled={!existing}
+                        onClick={() => newLinkedResource(g.form)}
+                        sx={{ textTransform: "none" }}
+                      >
+                        {g.add}
+                      </Button>
+                    ))}
+                  </Box>
+                  {existing ? null : (
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                      Save the figure first to create new resources already linked to it.
+                    </Typography>
+                  )}
+                  {existing && ((def.files || []).filter(Boolean).length || def.notebookFile) ? (
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1, overflowWrap: "anywhere" }}>
+                      {`Files listed on this figure earlier (kept): ${[...(def.files || []), def.notebookFile]
+                        .filter(Boolean)
+                        .join(", ")}`}
+                    </Typography>
+                  ) : null}
+                </Box>
               </Grid>
               <Grid>
                 <ExtraFieldInput

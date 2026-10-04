@@ -6,6 +6,7 @@ import { RegularStyledButton, SmallStyledButton } from "../button";
 import CuratorContext from "../../Context/Curator/curatorContext";
 import CuratorHelperContext from "../../Context/CuratorHelpers/curatorHelperContext";
 import { displayUrl, externalLabel, noteFor } from "../../Utils/externalData";
+import { figureLabel } from "../../Utils/artifactLabel";
 import {
   CHART,
   DATASET,
@@ -103,6 +104,9 @@ const ADD_BUTTONS = [
  */
 export const labelFor = (artifact, id) => {
   if (prefixOf(id) === EXTERNAL) return externalLabel(artifact, id);
+  if (prefixOf(id) === CHART && artifact && figureLabel(artifact.number)) {
+    return figureLabel(artifact.number);
+  }
   const named =
     (artifact &&
       (artifact.label ||

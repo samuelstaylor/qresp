@@ -1,5 +1,5 @@
 import { IdTypeMap, NodeType } from "./Types";
-import { artifactLabel } from "../../Utils/artifactLabel";
+import { artifactLabel, figureLabel } from "../../Utils/artifactLabel";
 import { buildFileUrl } from "../../Utils/fileServerUrl";
 
 const hoverTooltip = (type, id, nodeData) => {
@@ -28,9 +28,9 @@ const hoverTooltip = (type, id, nodeData) => {
           ></img>
           <br>
           <strong>${
-            displayType + " " + displayId
-          }:</strong> ${nodeData.caption.slice(0, maxCaptionLength)}${
-          nodeData.caption.length > maxCaptionLength ? "..." : ""
+            figureLabel(nodeData.number) || displayType + " " + displayId
+          }:</strong> ${(nodeData.caption || "").slice(0, maxCaptionLength)}${
+          (nodeData.caption || "").length > maxCaptionLength ? "..." : ""
         }</p>
       `
       );

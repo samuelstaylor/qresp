@@ -1,7 +1,8 @@
-import { useEffect, useContext, Fragment } from "react";
+import { useEffect, useContext, useState, Fragment } from "react";
 
 import {
   Box,
+  Button,
   Grid,
   useTheme,
   useMediaQuery,
@@ -13,6 +14,7 @@ import {
 } from "@mui/material";
 
 import { useForm } from "react-hook-form";
+import { CheckCircle, Save } from "@mui/icons-material";
 
 import Drawer from "../drawer";
 import { RegularStyledButton } from "../button";
@@ -244,9 +246,19 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
     setWorkflowFit(!fit);
   };
 
+  // When the workflow was last saved, shown on the button until it changes.
+  const [savedAt, setSavedAt] = useState("");
+  const markSaved = () => {
+    setEditing("workflowInfo", false);
+    setSavedAt(
+      new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    );
+  };
+  const saved = !(editing && editing.workflowInfo) && Boolean(savedAt);
+
   const onSaveInDialog = () => {
     unsetAlert();
-    setEditing("workflowInfo", false);
+    markSaved();
   };
 
   const onSave = () => {
@@ -268,7 +280,7 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
           </RegularStyledButton>
         );
       else {
-        setEditing("workflowInfo", false);
+        markSaved();
       }
   };
 
@@ -328,9 +340,23 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
           </Grid>
         </Box>
         <Box sx={{ my: 1 }}>
-          <RegularStyledButton onClick={onSave} fullWidth>
-            Save
-          </RegularStyledButton>
+          <Button
+            fullWidth
+            onClick={onSave}
+            variant={saved ? "outlined" : "contained"}
+            color={saved ? "success" : "primary"}
+            disableElevation
+            startIcon={saved ? <CheckCircle /> : <Save />}
+            aria-live="polite"
+            data-testid="workflow-save"
+            sx={
+              saved
+                ? { borderWidth: 2, "&:hover": { borderWidth: 2 } }
+                : { bgcolor: "#800000", "&:hover": { bgcolor: "#9a0000" } }
+            }
+          >
+            {saved ? `Workflow saved at ${savedAt}` : "Save workflow"}
+          </Button>
         </Box>
       </Drawer>
       )}

@@ -253,8 +253,16 @@ describe("draft and record conversion", () => {
 describe("the Add/Edit forms show exactly the contract's labels", () => {
   it("chart", () => {
     const labels = labelsIn(read("ChartsInfoForm.js"));
-    ARTIFACT_FIELDS.chart.forEach((field) =>
-      expect(labels).toContain(field.label)
+    // Supporting files and the notebook are linked resources in the manual
+    // form (workflow edges), not free-text fields on the chart.
+    const linked = ["files", "notebookFile"];
+    ARTIFACT_FIELDS.chart
+      .filter((field) => !linked.includes(field.key))
+      .forEach((field) => expect(labels).toContain(field.label));
+    linked.forEach((key) =>
+      expect(labels).not.toContain(
+        ARTIFACT_FIELDS.chart.find((field) => field.key === key).label
+      )
     );
   });
 

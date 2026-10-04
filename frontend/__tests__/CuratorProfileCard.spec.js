@@ -61,4 +61,16 @@ describe("CuratorProfileCard", () => {
     expect(screen.queryByRole("link", { name: /alert/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
+
+  it("prefers the up-to-date profile name and affiliation over the record's copy", () => {
+    render(
+      <CuratorProfileCard
+        curator={curator}
+        profile={{ name: "Robin Q. Sharedname", affiliation: "New Institute" }}
+      />
+    );
+    expect(screen.getByText("Robin Q. Sharedname")).toBeInTheDocument();
+    expect(screen.getByText("New Institute")).toBeInTheDocument();
+    expect(screen.queryByText(curator.affiliation)).not.toBeInTheDocument();
+  });
 });

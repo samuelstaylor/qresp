@@ -1,4 +1,4 @@
-import { artifactLabel } from "../Utils/artifactLabel";
+import { artifactLabel, figureLabel } from "../Utils/artifactLabel";
 import createNode from "../components/Workflow/Nodes";
 import { rowLabel } from "../components/CuratorElements/FigureWorkspace";
 
@@ -66,5 +66,19 @@ describe("what the drawing writes on a box", () => {
 
   it("may still name the id in the tooltip, which is not always on screen", () => {
     expect(createNode("s0", DATA, true).title).toContain("S0");
+  });
+});
+
+describe("a figure is named by its number", () => {
+  it("uses the figure number when there is one", () => {
+    expect(artifactLabel({ caption: "Long caption", number: "2" }, "c1")).toBe("Figure 2");
+    expect(artifactLabel({ caption: "x", number: "S3" }, "c4")).toBe("Figure S3");
+    expect(artifactLabel({ caption: "x", number: "Table 1" }, "c5")).toBe("Table 1");
+    expect(createNode("c0", { c: { c0: { caption: "x", number: 3 } } }, true).label).toBe("Figure 3");
+  });
+
+  it("falls back to the caption without a number", () => {
+    expect(artifactLabel({ caption: "Long caption", number: "" }, "c1")).toBe("Long caption");
+    expect(figureLabel(undefined)).toBe("");
   });
 });

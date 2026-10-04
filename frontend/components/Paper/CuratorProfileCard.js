@@ -5,8 +5,8 @@ import ProfileLinks, { initialsOf } from "../Profile/ProfileLinks";
 
 const str = (v) => (typeof v === "string" ? v.trim() : "");
 
-// The record's own curator fields always win (they are what the curator
-// entered for THIS record); the owner's saved profile fills in the rest.
+// The curator's saved account profile wins: it is kept up to date, while the
+// record holds a copy of the name and affiliation from when it was curated.
 // With no profile the card is built from the record alone, initials avatar.
 const CuratorProfileCard = ({ curator, profile }) => {
   const p = profile && typeof profile === "object" ? profile : {};
@@ -16,8 +16,8 @@ const CuratorProfileCard = ({ curator, profile }) => {
     .filter(Boolean)
     .join(" ");
   const email = str(curator.emailId);
-  const name = recordName || str(p.name) || email || "Unknown curator";
-  const affiliation = str(curator.affiliation) || str(p.affiliation);
+  const name = str(p.name) || recordName || email || "Unknown curator";
+  const affiliation = str(p.affiliation) || str(curator.affiliation);
   const bio = str(p.bio);
   const avatar = str(p.avatar_b64).startsWith("data:image/") ? str(p.avatar_b64) : undefined;
 

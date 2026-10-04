@@ -22,9 +22,21 @@ const KIND_LABEL = {
   h: "External data",
 };
 
+/** "2" -> "Figure 2"; a number that already names itself ("Table S1") stays. */
+export const figureLabel = (number) => {
+  const n = String(number === undefined || number === null ? "" : number).trim();
+  if (!n) return "";
+  return /^[a-z]{2,}/i.test(n) ? n : `Figure ${n}`;
+};
+
 /** Never a bare id, never an empty label. */
 export const artifactLabel = (artifact, id) => {
   if (prefixOf(id) === EXTERNAL) return externalLabel(artifact, id);
+  // A figure is called by its number in the paper; the caption is too long
+  // to be a name. Captions only stand in when there is no number yet.
+  if (prefixOf(id) === "c" && artifact && figureLabel(artifact.number)) {
+    return figureLabel(artifact.number);
+  }
   const named =
     (artifact &&
       (artifact.caption ||

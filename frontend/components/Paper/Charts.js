@@ -32,6 +32,7 @@ import Slider from "../HorizontalSlider";
 import StyledTooltip from "../tooltip";
 import ChartWorkflow from "./ChartWorkflow";
 import { formatData } from "../Workflow/util";
+import { figureLabel } from "../../Utils/artifactLabel";
 
 import { useRouter } from "next/router";
 import LoadingContext from "../../Context/Loading/loadingContext";
@@ -40,14 +41,7 @@ import axios from "axios";
 
 // PDF figures get the browser's own PDF viewer (the RCC file server sends no
 // frame restrictions). Re-exported for existing importers.
-export { isPdfFile };
-
-// "2" -> "Figure 2"; "Table S1" stays as written.
-export const figureLabel = (number) => {
-  const n = String(number || "").trim();
-  if (!n) return "";
-  return /^[a-z]{2,}/i.test(n) ? n : `Figure ${n}`;
-};
+export { isPdfFile, figureLabel };
 
 const DetailsView = ({ rowdata }) => {
   const label = figureLabel(rowdata.number);

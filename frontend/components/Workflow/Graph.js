@@ -46,13 +46,24 @@ const getOptions = (manipulate = {}) => {
       arrows: {
         middle: true,
       },
+      // Straight lines, recomputed from both node centres on every frame.
+      // vis's default "dynamic" smoothing bends each edge through a hidden
+      // support point that only physics moves -- with physics off (the
+      // curator's graph) that point stayed put, so an arrow kept leaving a
+      // node from the side it started on however the node was dragged.
+      smooth: false,
       chosen: {
         label: false,
         edge: changeChosenEdgeMiddleArrowScale,
       },
     },
+    // Physics lays the graph out once and then stops, so dragging one node
+    // moves that node only. Rearrange turns it on again for one layout.
     physics: {
-      minVelocity: 0.5,
+      solver: "forceAtlas2Based",
+      forceAtlas2Based: { gravitationalConstant: -60, springLength: 120, avoidOverlap: 0.6 },
+      stabilization: { iterations: 250, updateInterval: 50 },
+      minVelocity: 0.75,
     },
     interaction: {
       hover: true,
@@ -103,7 +114,17 @@ const Graph = ({ workflow, data, manipulate = {} }) => {
     )
   );
 
-  const workflowEdges = workflow.edges.map((pair) => createEdge(pair));
+  // A pair joined both ways gets two gentle opposite curves so the arrows
+  // do not draw on top of each other; every other edge stays straight.
+  const workflowEdges = (() => {
+    const edges = workflow.edges.map((pair) => createEdge(pair));
+    const pairs = new Set(edges.map((edge) => `${edge.from}\u0000${edge.to}`));
+    return edges.map((edge) =>
+      pairs.has(`${edge.to}\u0000${edge.from}`)
+        ? { ...edge, smooth: { enabled: true, type: "curvedCW", roundness: 0.2 } }
+        : edge
+    );
+  })();
 
   const showDetailsDialog = (params) => {
     if (params.nodes.length > 0) {
@@ -139,6 +160,8 @@ const Graph = ({ workflow, data, manipulate = {} }) => {
 
     // Set positions after simulation
     wflow.on("stabilized", function (params) {
+      // Layout done: from here a drag moves one node and nothing else.
+      wflow.setOptions({ physics: { enabled: false } });
       const pos = {};
       workflowNodes.forEach(
         (node) => (pos[node.id] = network.current.getPosition(node.id))
@@ -178,10 +201,26 @@ const Graph = ({ workflow, data, manipulate = {} }) => {
       );
       setPositions(pos);
     }
+
+    // One network per render of this effect: the old one is torn down, not
+    // left running its simulation and listeners behind the new one.
+    return () => {
+      wflow.destroy();
+      if (network.current === wflow) network.current = null;
+    };
   }, [workflow, showLabels, onClick]);
 
+  // Rearrange: one fresh layout, then physics stops again.
+  const firstFit = useRef(true);
   useEffect(() => {
-    network.current.stabilize();
+    if (firstFit.current) {
+      firstFit.current = false;
+      return;
+    }
+    const wflow = network.current;
+    if (!wflow) return;
+    wflow.setOptions({ physics: { enabled: true } });
+    wflow.stabilize(250);
   }, [fit]);
 
   // POINTED AT FROM THE LIST: light up the matching box.
