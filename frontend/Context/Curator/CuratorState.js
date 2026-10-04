@@ -4,7 +4,8 @@ import CuratorContext from "./curatorContext";
 
 import WebStore from "../../Utils/Persist";
 import { summarizeBrowserDraft } from "../../Utils/browserDraft";
-import { saveServerDraft } from "../../Utils/serverDrafts";
+import { listServerDrafts, saveServerDraft } from "../../Utils/serverDrafts";
+import { isNamedDraftTitle, sameDraftTitle as sameTitle } from "../../Utils/draftTitle";
 
 import {
   SET_CURATOR_STATE,
@@ -39,8 +40,36 @@ const CuratorState = (props) => {
   // update it instead of creating duplicates), a dirty flag for the
   // navigation guard, and a version counter that remounts the form tree on
   // reset so uncontrolled RHF inputs actually blank.
-  const [activeDraftId, setActiveDraftId] = useState(null);
-  const [activeDraftTitle, setActiveDraftTitle] = useState("");
+  const [activeDraftId, setActiveDraftIdState] = useState(null);
+  const [activeDraftTitle, setActiveDraftTitleState] = useState("");
+  // The account draft this form is, read synchronously by saves (a second
+  // save started before a re-render must still see the id the first one
+  // got) and kept with the browser copy of the form, so a reload or a trip
+  // to another page keeps overwriting the same draft instead of starting a
+  // copy.
+  const activeDraft = useRef({ id: null, title: "" });
+  const activeDraftKey = draftKey ? `${draftKey}:activeDraft` : null;
+  const persistActiveDraft = () => {
+    if (!activeDraftKey) return;
+    try {
+      if (activeDraft.current.id) WebStore.set(activeDraftKey, activeDraft.current);
+      else WebStore.remove(activeDraftKey);
+    } catch (e) {
+      // Storage unavailable: still tracked for this page.
+    }
+  };
+  const setActiveDraftId = (id) => {
+    activeDraft.current = { ...activeDraft.current, id: id || null };
+    setActiveDraftIdState(id || null);
+    persistActiveDraft();
+  };
+  const setActiveDraftTitle = (title) => {
+    activeDraft.current = { ...activeDraft.current, title: title || "" };
+    setActiveDraftTitleState(title || "");
+    persistActiveDraft();
+  };
+  // Saves run one after another, never side by side.
+  const saveQueue = useRef(Promise.resolve());
   // LIVE mirror of the publication form's currently TYPED title/abstract
   // (reported via react-hook-form watch, before the section is saved). This
   // is an availability SIGNAL only — never a second source of truth: the
@@ -161,13 +190,21 @@ const CuratorState = (props) => {
     if (data !== null) {
       setAll(data);
     }
-    // Back from Preview: keep tracking the account draft that was open.
+    // Keep tracking the account draft this form came from: the one named
+    // on the way back from Preview, else the one stored with the form.
     try {
       const saved = JSON.parse(window.sessionStorage.getItem("qresp:previewReturn") || "null");
       window.sessionStorage.removeItem("qresp:previewReturn");
-      if (saved && saved.draftId) {
-        setActiveDraftId(saved.draftId);
-        setActiveDraftTitle(saved.draftTitle || "");
+      const stored = data !== null && activeDraftKey ? WebStore.get(activeDraftKey) : null;
+      const pick =
+        saved && saved.draftId
+          ? { id: saved.draftId, title: saved.draftTitle || "" }
+          : stored && typeof stored === "object" && stored.id
+          ? stored
+          : null;
+      if (pick) {
+        setActiveDraftId(pick.id);
+        setActiveDraftTitle(pick.title || "");
       }
     } catch (e) {
       // No storage, or nothing saved: resume without an account draft id.
@@ -273,7 +310,12 @@ const CuratorState = (props) => {
 
   const getDraftTitle = useCallback(() => {
     const summary = summarizeBrowserDraft(collectDraftState());
-    return activeDraftTitle || (summary && summary.title) || "Untitled draft";
+    return (
+      activeDraft.current.title ||
+      activeDraftTitle ||
+      (summary && summary.title) ||
+      "Untitled draft"
+    );
   }, [activeDraftTitle, collectDraftState]);
 
   const hasMeaningfulDraft = () =>
@@ -325,18 +367,49 @@ const CuratorState = (props) => {
   // the loaded draft when there is one, otherwise creates a new draft and
   // starts tracking its id. Resolves to the draft id; rejects on API errors
   // (e.g. 401 when not signed in) so callers can surface them.
-  const saveDraftToServer = async (title) => {
-    const draftState = collectDraftState();
-    const nextTitle = (title || getDraftTitle()).trim() || "Untitled draft";
-    const draft = await saveServerDraft(activeDraftId, draftState, nextTitle);
-    if (draft && draft.id) {
-      setActiveDraftId(draft.id);
-    }
-    setActiveDraftTitle((draft && draft.title) || nextTitle);
-    skipNextDirty.current = true;
-    dispatch({ type: SET_CURATOR_STATE, payload: draftState });
-    setDraftDirty(false);
-    return draft && draft.id;
+  //
+  // ONE DRAFT PER WORK. With no tracked draft, a draft already saved under
+  // the same (real) name is overwritten rather than duplicated.
+  const saveDraftToServer = (title) => {
+    const run = async () => {
+      const draftState = collectDraftState();
+      const nextTitle = (title || getDraftTitle()).trim() || "Untitled draft";
+      let id = activeDraft.current.id;
+      if (!id && isNamedDraftTitle(nextTitle)) {
+        try {
+          const existing = (await listServerDrafts())
+            .filter((draft) => sameTitle(draft.title, nextTitle))
+            .sort((a, b) =>
+              String(b.updated_at || "").localeCompare(String(a.updated_at || ""))
+            );
+          if (existing.length) id = existing[0].id;
+        } catch (e) {
+          // Could not list drafts: fall back to creating one.
+        }
+      }
+      let draft;
+      try {
+        draft = await saveServerDraft(id, draftState, nextTitle);
+      } catch (error) {
+        // The tracked draft was deleted elsewhere: save this as a new one.
+        if (id && error && error.response && error.response.status === 404) {
+          draft = await saveServerDraft(null, draftState, nextTitle);
+        } else {
+          throw error;
+        }
+      }
+      if (draft && draft.id) {
+        setActiveDraftId(draft.id);
+      }
+      setActiveDraftTitle((draft && draft.title) || nextTitle);
+      skipNextDirty.current = true;
+      dispatch({ type: SET_CURATOR_STATE, payload: draftState });
+      setDraftDirty(false);
+      return draft && draft.id;
+    };
+    const next = saveQueue.current.then(run, run);
+    saveQueue.current = next.catch(() => {});
+    return next;
   };
 
   // Remount the form tree WITHOUT clearing state: used after programmatic
@@ -388,6 +461,12 @@ const CuratorState = (props) => {
     const data = getSavedDraft();
     if (data !== null) {
       setAll(data);
+      // The account draft this browser copy belongs to, if any.
+      const stored = activeDraftKey ? WebStore.get(activeDraftKey) : null;
+      if (stored && typeof stored === "object" && stored.id) {
+        setActiveDraftId(stored.id);
+        setActiveDraftTitle(stored.title || "");
+      }
       // Same reason as applyServerDraft: the inputs re-seed only on remount.
       remountForms();
     }

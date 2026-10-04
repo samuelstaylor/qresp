@@ -43,6 +43,7 @@ import AlertContext from "../../Context/Alert/alertContext";
 import ServerContext from "../../Context/Servers/serverContext";
 import AuthContext from "../../Context/Auth/authContext";
 import { fetchServerDraft, listServerDrafts } from "../../Utils/serverDrafts";
+import { isNamedDraftTitle } from "../../Utils/draftTitle";
 
 const formatDraftDate = (iso) => {
   if (!iso) return "";
@@ -208,6 +209,27 @@ const TopActions = () => {
           "Sign in to save drafts to your account. Account drafts can be resumed from any browser via the Account page.",
           null
         );
+        return;
+      }
+      // A draft that already has a name is saved under it, overwriting the
+      // stored copy. Only an untitled draft asks for a name.
+      const title = getDraftTitle ? getDraftTitle() : "";
+      if (isNamedDraftTitle(title)) {
+        saveDraftToServer(title)
+          .then(() =>
+            setAlert(
+              "Draft saved",
+              `Saved as \u201c${title}\u201d. Resume it any time from Account > My drafts.`,
+              null
+            )
+          )
+          .catch(() =>
+            setAlert(
+              "Error",
+              "Your draft could not be saved. Please check that you are still signed in and try again.",
+              null
+            )
+          );
         return;
       }
       openDraftDialog("save");

@@ -38,13 +38,17 @@ const metadata = {
   license: "",
 };
 
-const renderTopActions = ({ hasDraft = true, authenticated = true } = {}) => {
+const renderTopActions = ({
+  hasDraft = true,
+  authenticated = true,
+  draftTitle = "Draft title",
+} = {}) => {
   const setAlert = jest.fn();
   const unsetAlert = jest.fn();
   const resetAll = jest.fn();
   const hasMeaningfulDraft = jest.fn(() => hasDraft);
   const saveDraftToServer = jest.fn(() => Promise.resolve("draft123"));
-  const getDraftTitle = jest.fn(() => "Draft title");
+  const getDraftTitle = jest.fn(() => draftTitle);
   const applyServerDraft = jest.fn();
   render(
     <CuratorContext.Provider
@@ -112,9 +116,9 @@ describe("TopActions toolbar contents", () => {
 });
 
 describe("TopActions draft controls", () => {
-  it("asks for a draft name before saving an account draft", async () => {
+  it("saves a named draft straight over the stored copy, without asking", async () => {
     const user = typingUser();
-    const { saveDraftToServer } = renderTopActions();
+    const { saveDraftToServer, setAlert } = renderTopActions();
 
     await user.click(
       screen.getAllByRole("button", {
@@ -122,7 +126,24 @@ describe("TopActions draft controls", () => {
       })[0]
     );
 
-    expect(screen.getByLabelText(/draft name/i)).toHaveValue("Draft title");
+    expect(screen.queryByLabelText(/draft name/i)).not.toBeInTheDocument();
+    await waitFor(() => expect(saveDraftToServer).toHaveBeenCalledWith("Draft title"));
+    await waitFor(() =>
+      expect(setAlert).toHaveBeenCalledWith("Draft saved", expect.stringMatching(/Draft title/), null)
+    );
+  });
+
+  it("asks for a draft name only when the draft is untitled", async () => {
+    const user = typingUser();
+    const { saveDraftToServer } = renderTopActions({ draftTitle: "Untitled draft" });
+
+    await user.click(
+      screen.getAllByRole("button", {
+        name: /save this work as a draft in your account/i,
+      })[0]
+    );
+
+    expect(screen.getByLabelText(/draft name/i)).toHaveValue("Untitled draft");
     await user.clear(screen.getByLabelText(/draft name/i));
     await user.type(screen.getByLabelText(/draft name/i), "Named QA draft");
     await user.click(screen.getByRole("button", { name: /^save draft$/i }));
