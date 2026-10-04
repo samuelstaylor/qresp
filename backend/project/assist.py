@@ -96,6 +96,18 @@ PROVIDER_ERROR_KINDS = (ERROR_MAX_TOKENS, ERROR_RATE_LIMITED, ERROR_TIMEOUT,
                         ERROR_OTHER)
 
 
+class ProviderAnswer(str):
+    """The answer text, carrying which model produced it (`.model`). A `str`
+    subclass so every existing caller keeps treating it as plain text."""
+
+    model = ""
+
+    def __new__(cls, text, model=""):
+        answer = super(ProviderAnswer, cls).__new__(cls, text)
+        answer.model = model or ""
+        return answer
+
+
 class ProviderError(str):
     """The user-facing message, carrying a machine-readable `kind`.
 
@@ -456,7 +468,7 @@ def _call_model(cfg, payload, system_prompt, schema, max_output_tokens=None):
         return None, ProviderError(
             "The AI suggestion service did not return suggestions.",
             ERROR_MALFORMED)
-    return answer_text, None
+    return ProviderAnswer(answer_text, cfg.get("MODEL", "")), None
 
 
 DAILY_LIMIT_MESSAGE = (

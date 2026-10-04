@@ -2,7 +2,9 @@ import { Fragment, useContext, useEffect } from "react";
 import PropTypes from "prop-types";
 
 import { useRouter } from "next/router";
-import { Alert, Container, Box, Typography } from "@mui/material";
+import { Alert, Button, Container, Box, Typography } from "@mui/material";
+import { ArrowBack } from "@mui/icons-material";
+import Link from "next/link";
 import FavoriteButton from "../../components/FavoriteButton";
 
 import SEO from "../../components/seo";
@@ -105,7 +107,23 @@ const PaperDetails = ({ paper, error, preview = false, query }) => {
       <Container maxWidth="lg">
         <Box sx={{ mt: 4, mb: 8 }}>
           {preview ? (
-            <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }}>
+            <Alert
+              severity="warning"
+              sx={{ mb: 2, borderRadius: 2, alignItems: "center" }}
+              action={
+                <Button
+                  component={Link}
+                  href="/curator?resumeDraft=1"
+                  variant="contained"
+                  disableElevation
+                  size="small"
+                  startIcon={<ArrowBack />}
+                  sx={{ textTransform: "none", whiteSpace: "nowrap" }}
+                >
+                  Back to editing
+                </Button>
+              }
+            >
               This is unpublished content — a preview of a record under curation.
             </Alert>
           ) : (

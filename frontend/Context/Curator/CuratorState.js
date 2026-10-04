@@ -157,6 +157,17 @@ const CuratorState = (props) => {
     if (data !== null) {
       setAll(data);
     }
+    // Back from Preview: keep tracking the account draft that was open.
+    try {
+      const saved = JSON.parse(window.sessionStorage.getItem("qresp:previewReturn") || "null");
+      window.sessionStorage.removeItem("qresp:previewReturn");
+      if (saved && saved.draftId) {
+        setActiveDraftId(saved.draftId);
+        setActiveDraftTitle(saved.draftTitle || "");
+      }
+    } catch (e) {
+      // No storage, or nothing saved: resume without an account draft id.
+    }
   }, [draftKey, props.autoResumeDraft]);
 
   useEffect(() => {

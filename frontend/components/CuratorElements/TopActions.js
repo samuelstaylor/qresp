@@ -57,7 +57,19 @@ const formatDraftDate = (iso) => {
   });
 };
 
-const preview = (metadata, setAlert, router) => {
+export const PREVIEW_RETURN_KEY = "qresp:previewReturn";
+
+const preview = (metadata, setAlert, router, draft = {}) => {
+  // The preview page links back to the curator; remember which account draft
+  // was open so Save Draft keeps updating it instead of creating a copy.
+  try {
+    window.sessionStorage.setItem(
+      PREVIEW_RETURN_KEY,
+      JSON.stringify({ draftId: draft.id || null, draftTitle: draft.title || "" })
+    );
+  } catch (e) {
+    // Storage unavailable: the curator still resumes, just without the id.
+  }
   axios
     .post(getServer() + "/api/preview", convertStateToViewSchema(metadata))
     .then((res) => res.data)
@@ -87,6 +99,7 @@ const TopActions = () => {
     saveDraftToServer,
     applyServerDraft,
     activeDraftId,
+    activeDraftTitle,
   } = useContext(CuratorContext);
   const { setAlert, unsetAlert } = useContext(AlertContext);
   const { setSelectedHttp, selectedHttp } = useContext(ServerContext);
@@ -228,7 +241,7 @@ const TopActions = () => {
     },
     preview: (e) => {
       e.preventDefault();
-      preview(metadata, setAlert, router);
+      preview(metadata, setAlert, router, { id: activeDraftId, title: activeDraftTitle });
     },
   };
 

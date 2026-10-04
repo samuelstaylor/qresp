@@ -63,6 +63,13 @@ export const scrollToSection = (id) => {
   if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
 };
 
+const ModelNote = ({ models }) =>
+  models && models.length ? (
+    <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.75 }}>
+      {`Suggested by ${models.join(", ")}`}
+    </Typography>
+  ) : null;
+
 const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
 
 const Summary = ({ children }) => (
@@ -1526,6 +1533,7 @@ const GuidedSetup = () => {
                           );
                         })}
                       </Box>
+                      <ModelNote models={kwResult.models} />
                       <Box sx={{ display: "flex", gap: 1, mt: 1.5 }}>
                         <Button variant="contained" disableElevation onClick={applyKeywords} sx={{ textTransform: "none", fontWeight: 600 }}>
                           Apply selected keywords
@@ -1538,9 +1546,12 @@ const GuidedSetup = () => {
                   {linkResult && (
                     <Box sx={{ mt: 1.5 }}>
                       {(linkResult.links || []).length === 0 ? (
-                        <Typography variant="body2" color="text.secondary">
-                          The AI found no further links it could support with evidence.
-                        </Typography>
+                        <Box>
+                          <Typography variant="body2" color="text.secondary">
+                            The AI found no further links it could support with evidence.
+                          </Typography>
+                          <ModelNote models={linkResult.models} />
+                        </Box>
                       ) : (
                         <Box>
                           <Box sx={{ maxHeight: 340, overflowY: "auto", border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
@@ -1571,6 +1582,7 @@ const GuidedSetup = () => {
                               );
                             })}
                           </Box>
+                          <ModelNote models={linkResult.models} />
                           <Box sx={{ display: "flex", gap: 1, mt: 1.5 }}>
                             <Button variant="contained" disableElevation onClick={applyLinks} sx={{ textTransform: "none", fontWeight: 600 }}>
                               Add selected links

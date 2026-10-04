@@ -82,6 +82,7 @@ class TestFigureKeywords(AiTestBase):
              "c1": ["formation energy", "defect levels"]},
             {f["id"]: f["keywords"] for f in body["figures"]})
         self.assertEqual(["spin qubit", "MgO"], body["paper_keywords"])
+        self.assertEqual(["gemini-test"], body["models"])
         payload = gemini.call_args[0][1]
         # Only captioned figures, and nothing about the curator, are sent.
         self.assertEqual(["c0", "c1"], [f["id"] for f in payload["figures"]])

@@ -212,7 +212,7 @@ def suggest_figure_keywords(body):
     paper = _paper(body)
     vocabulary, _known = assist._qresp_taxonomy()
     wanted = {ident for ident, _f in figures}
-    out, paper_keywords, failures, last_error = {}, [], 0, None
+    out, paper_keywords, failures, last_error, used = {}, [], 0, None, []
     for chunk in chunks:
         payload = {"paper": paper, "vocabulary": vocabulary[:150],
                    "figures": [f for _ident, f in chunk]}
@@ -224,6 +224,9 @@ def suggest_figure_keywords(body):
             failures += 1
             last_error = error or last_error
             continue
+        model = getattr(answer, "model", "") or cfg.get("MODEL", "")
+        if model and model not in used:
+            used.append(model)
         for entry in data.get("figures") or []:
             ident = str((entry or {}).get("id") or "")
             if ident in wanted:
@@ -240,6 +243,8 @@ def suggest_figure_keywords(body):
           % (len(figures), len(out), len(chunks)))
     return {"figures": [{"id": i, "keywords": k} for i, k in out.items()],
             "paper_keywords": paper_keywords,
+            # Which model(s) answered -- a fallback may have stepped in.
+            "models": used,
             # Some batches failed (e.g. the provider was busy): say so, so a
             # partial answer is never mistaken for the whole one.
             "incomplete": failures > 0}, 200
@@ -398,6 +403,7 @@ def suggest_links(body):
         confidence = confidence if confidence in CONFIDENCE else "low"
         out.append({"from": source, "to": target, "type": kind, "confidence": confidence,
                     "reason": _clip(link.get("reason"), MAX_REASON_CHARS)})
-    print("AI links: figures=%d scripts=%d datasets=%d suggested=%d"
-          % (len(figures), len(script_info), len(datasets), len(out)))
-    return {"links": out}, 200
+    model = getattr(answer, "model", "") or cfg.get("MODEL", "")
+    print("AI links: figures=%d scripts=%d datasets=%d suggested=%d model=%s"
+          % (len(figures), len(script_info), len(datasets), len(out), model))
+    return {"links": out, "models": [model] if model else []}, 200
