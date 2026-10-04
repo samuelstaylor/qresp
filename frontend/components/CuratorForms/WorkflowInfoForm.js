@@ -27,7 +27,12 @@ import Graph from "../Workflow/Graph";
 import Legend from "../Workflow/Legend";
 import { formatData } from "../Workflow/util";
 import { isGraph } from "../../Utils/graph";
-import { LINKS_TO, closesLoop, edgeProblem } from "../../Utils/workflowGraph";
+import {
+  LINKS_TO,
+  closesLoop,
+  edgeProblem,
+  fromStoredEdge,
+} from "../../Utils/workflowGraph";
 import { changedUrlProblem } from "../../Utils/externalData";
 
 import AlertContext from "../../Context/Alert/alertContext";
@@ -44,6 +49,27 @@ import CuratorHelperContext from "../../Context/CuratorHelpers/curatorHelperCont
  * curator had none of it yet. The workspace mounts this the way it mounts
  * the other four forms: hidden, for its dialog.
  */
+// WHAT WAS SAVED, so a saved workflow stays saved when this section mounts
+// again -- after a trip to the preview, for one. Kept per browser tab.
+export const WORKFLOW_SAVED_KEY = "qresp:workflowSaved";
+
+/** The workflow's content, independent of order and stored edge shape. */
+export const workflowSignature = (workflow) =>
+  JSON.stringify({
+    nodes: [...((workflow && workflow.nodes) || [])].map(String).sort(),
+    edges: ((workflow && workflow.edges) || [])
+      .map((edge) => JSON.stringify(fromStoredEdge(edge)))
+      .sort(),
+  });
+
+const readSaved = () => {
+  try {
+    return JSON.parse(window.sessionStorage.getItem(WORKFLOW_SAVED_KEY)) || null;
+  } catch (e) {
+    return null;
+  }
+};
+
 const WorkflowInfoForm = ({ dialogOnly = false }) => {
   const { setAlert, unsetAlert } = useContext(AlertContext);
 
@@ -91,8 +117,18 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
     };
   }, []);
 
+  const [savedAt, setSavedAt] = useState("");
+
+  // Unsaved only when the workflow differs from the one last saved.
   useEffect(() => {
-    setEditing("workflowInfo", true);
+    const saved = readSaved();
+    if (saved && saved.signature === workflowSignature(workflow)) {
+      setEditing("workflowInfo", false);
+      setSavedAt(saved.at || "");
+    } else {
+      setEditing("workflowInfo", true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workflow]);
 
   // Every artifact this paper holds, which is what an edge's endpoints are
@@ -248,12 +284,18 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
   };
 
   // When the workflow was last saved, shown on the button until it changes.
-  const [savedAt, setSavedAt] = useState("");
   const markSaved = () => {
+    const at = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
     setEditing("workflowInfo", false);
-    setSavedAt(
-      new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
-    );
+    setSavedAt(at);
+    try {
+      window.sessionStorage.setItem(
+        WORKFLOW_SAVED_KEY,
+        JSON.stringify({ signature: workflowSignature(workflow), at })
+      );
+    } catch (e) {
+      // Storage unavailable: still saved for this visit.
+    }
   };
   const saved = !(editing && editing.workflowInfo) && Boolean(savedAt);
 
