@@ -87,6 +87,17 @@ class TestFigureKeywords(AiTestBase):
         self.assertEqual(["c0", "c1"], [f["id"] for f in payload["figures"]])
         self.assertNotIn("curator", json.dumps(payload))
 
+    def test_provider_rate_limit_is_passed_through(self):
+        from project import assist
+        self.login()
+        error = assist.ProviderError("You have reached the AI usage limit.",
+                                     assist.ERROR_RATE_LIMITED)
+        with mock.patch("project.assist.call_gemini", return_value=(None, error)):
+            response = self.post("/api/curation/suggest-figure-keywords",
+                                 {"consent": True, "figures": FIGURES})
+        self.assertEqual(429, response.status_code)
+        self.assertEqual("You have reached the AI usage limit.", response.json()["error"])
+
     def test_unusable_answer_is_a_502(self):
         self.login()
         with mock.patch("project.assist.call_gemini", return_value=("not json", None)):

@@ -638,7 +638,8 @@ const GuidedSetup = () => {
 
   const aiErrorFrom = (err) => {
     const response = err && err.response;
-    if (response && response.status === 503) {
+    const message = (response && response.data && response.data.error) || "";
+    if (response && response.status === 503 && /not configured/i.test(message)) {
       return "AI suggestions are not set up on this server. An administrator can turn them on with QRESP_GEMINI_ENABLED and QRESP_GEMINI_API_KEY.";
     }
     if (response && response.status === 404) {

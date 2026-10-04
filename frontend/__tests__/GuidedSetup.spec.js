@@ -390,12 +390,25 @@ describe("GuidedSetup AI assistant", () => {
     const user = userEvent.setup();
     axios.post.mockImplementation((url) =>
       url === "/api/curation/suggest-figure-keywords"
-        ? Promise.reject({ response: { status: 503, data: { error: "x" } } })
+        ? Promise.reject({ response: { status: 503, data: { error: "AI suggestions are not configured on this server." } } })
         : Promise.resolve({ data: { found: false } })
     );
     renderSetup({ state, auth });
     await user.click(screen.getByRole("checkbox", { name: /send the paper's title/i }));
     await user.click(screen.getByRole("button", { name: /suggest keywords/i }));
     expect(await screen.findByText(/QRESP_GEMINI_ENABLED/)).toBeInTheDocument();
+  });
+
+  it("shows the provider's own reason when Gemini is busy or rate limited", async () => {
+    const user = userEvent.setup();
+    axios.post.mockImplementation((url) =>
+      url === "/api/curation/suggest-figure-keywords"
+        ? Promise.reject({ response: { status: 429, data: { error: "You have reached the AI usage limit." } } })
+        : Promise.resolve({ data: { found: false } })
+    );
+    renderSetup({ state, auth });
+    await user.click(screen.getByRole("checkbox", { name: /send the paper's title/i }));
+    await user.click(screen.getByRole("button", { name: /suggest keywords/i }));
+    expect(await screen.findByText("You have reached the AI usage limit.")).toBeInTheDocument();
   });
 });

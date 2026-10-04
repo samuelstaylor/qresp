@@ -92,6 +92,18 @@ def _start(body, cost):
     return cfg, email, None
 
 
+def _provider_failure(error):
+    """The provider's safe, user-facing reason, with a status that says
+    whether trying again later can help."""
+    kind = assist.error_kind(error) if error else None
+    status = {assist.ERROR_RATE_LIMITED: 429, assist.ERROR_TIMEOUT: 504,
+              assist.ERROR_UNAVAILABLE: 503}.get(kind, 502)
+    message = str(error) if error else ("The AI service did not return usable "
+                                        "suggestions. Please try again.")
+    print("Curation AI provider failure: %s" % (kind or "unparseable answer"))
+    return {"error": message}, status
+
+
 def _parse(answer):
     try:
         return json.loads(answer)
@@ -181,7 +193,7 @@ def suggest_figure_keywords(body):
     paper = _paper(body)
     vocabulary, _known = assist._qresp_taxonomy()
     wanted = {ident for ident, _f in figures}
-    out, paper_keywords, failures = {}, [], 0
+    out, paper_keywords, failures, last_error = {}, [], 0, None
     for chunk in chunks:
         payload = {"paper": paper, "vocabulary": vocabulary[:150],
                    "figures": [f for _ident, f in chunk]}
@@ -191,6 +203,7 @@ def suggest_figure_keywords(body):
         data = _parse(answer) if not error else None
         if not isinstance(data, dict):
             failures += 1
+            last_error = error or last_error
             continue
         for entry in data.get("figures") or []:
             ident = str((entry or {}).get("id") or "")
@@ -202,8 +215,7 @@ def suggest_figure_keywords(body):
             data.get("paper_keywords"), MAX_PAPER_KEYWORDS)
 
     if failures == len(chunks):
-        return {"error": "The AI service did not return usable suggestions. "
-                         "Please try again."}, 502
+        return _provider_failure(last_error)
     print("Figure keywords: figures=%d suggested=%d calls=%d"
           % (len(figures), len(out), len(chunks)))
     return {"figures": [{"id": i, "keywords": k} for i, k in out.items()],
@@ -340,8 +352,7 @@ def suggest_links(body):
                                        max_output_tokens=LINK_OUTPUT_TOKENS)
     data = _parse(answer) if not error else None
     if not isinstance(data, dict):
-        return {"error": str(error) if error else "The AI service did not "
-                         "return usable suggestions. Please try again."}, 502
+        return _provider_failure(error)
 
     taken = {(l["from"], l["to"]) for l in existing}
     out, seen = [], set()
