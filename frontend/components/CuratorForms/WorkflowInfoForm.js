@@ -345,9 +345,10 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
         heading="Build your workflow"
         open={drawerOpen}
         onToggle={setDrawerOpen}
-        // Saved and closed, it looks like every other saved section: the
-        // title and an Edit pencil that opens it again.
-        editor={saved && !drawerOpen ? () => setDrawerOpen(true) : undefined}
+        // The same pencil as every section: pressed while there are unsaved
+        // changes, and an Edit that opens it again once saved.
+        editing={!saved}
+        editor={() => setDrawerOpen(true)}
       >
         {/* The ordinary path is "Organize figures and resources" above: the
             figure is the root and the connections are made for you. This is

@@ -176,7 +176,7 @@ const FileServerInfoForm = ({ editor }) => {
   }, [fileServerPath, selectedFolder, getValues, registerDraftFlusher]);
 
   return (
-    <Drawer heading="Where is the paper" defaultOpen={true}>
+    <Drawer heading="Where is the paper" defaultOpen={true} editing>
       <form onSubmit={handleSubmit(onSubmit)}>
         <Grid direction="column" container spacing={1}>
           <Grid>

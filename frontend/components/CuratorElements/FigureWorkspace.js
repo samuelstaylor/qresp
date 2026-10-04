@@ -1447,7 +1447,7 @@ const FigureWorkspace = () => {
   });
 
   return (
-    <Drawer heading="Organize figures and resources" defaultOpen={true}>
+    <Drawer heading="Organize figures and resources" defaultOpen={true} editing>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
         Everything this paper holds. Add resources, link them, and see the
         workflow they make in “Build your workflow” below.
