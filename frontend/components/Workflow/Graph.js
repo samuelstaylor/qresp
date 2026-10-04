@@ -8,7 +8,7 @@ import {
   AccountTree,
   AddLink,
   CenterFocusStrong,
-  DeleteOutline,
+  DeleteOutlined,
   Download,
   ZoomIn,
   ZoomOut,
@@ -393,7 +393,7 @@ const Graph = ({ workflow, data, manipulate = {} }) => {
             </Button>
             <Button
               size="small"
-              startIcon={<DeleteOutline />}
+              startIcon={<DeleteOutlined />}
               disabled={!hasSelection}
               onClick={() => network.current && network.current.deleteSelected()}
               sx={{ textTransform: "none" }}
