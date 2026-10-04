@@ -194,6 +194,7 @@ class TestSchemas(unittest.TestCase):
 
         walk(cai.LINK_SCHEMA)
         walk(cai.FIGURE_KEYWORD_SCHEMA)
+        walk(cai.CURATE_SCHEMA)
 
 
 class TestScriptExcerpt(unittest.TestCase):
@@ -411,3 +412,92 @@ class TestThinkingLevelFallback(unittest.TestCase):
             _answer, error = self.assist._call_model(self.CFG, {}, "p", {})
         self.assertEqual(1, post.call_count)
         self.assertEqual(self.assist.ERROR_OTHER, self.assist.error_kind(error))
+
+
+INVENTORY_FILES = [
+    "plots/fig_energy.png", "plots/logo.png", "plots/notes.txt",
+    "raw/run1/out.dat", "raw/run2/out.dat", "code/make_plots.py", "README.md",
+    "Figures/Figure1.pdf",
+]
+INVENTORY_DIRS = ["plots", "raw", "raw/run1", "raw/run2", "code", "Figures"]
+EXISTING = {"charts": [{"id": "c0", "imageFile": "/Figures/Figure1.pdf", "number": "1", "caption": "x"}],
+            "datasets": [], "scripts": [], "tools": []}
+
+
+class TestValidateCuration(unittest.TestCase):
+    def run_it(self, data):
+        existing, taken = cai._existing({"existing": EXISTING})
+        return cai.validate_curation(data, INVENTORY_FILES, INVENTORY_DIRS, existing, taken)
+
+    def test_keeps_only_real_new_paths_of_the_right_kind(self):
+        proposal, _links = self.run_it({
+            "charts": [
+                {"key": "n1", "imageFile": "plots/fig_energy.png", "number": "2", "keywords": ["energy"], "reason": "r"},
+                {"key": "n2", "imageFile": "plots/invented.png", "reason": "not in folder"},
+                {"key": "n3", "imageFile": "plots/notes.txt", "reason": "not an image"},
+                {"key": "n4", "imageFile": "Figures/Figure1.pdf", "reason": "already in record"},
+            ],
+            "datasets": [{"key": "n5", "files": ["raw", "nope"], "description": "Runs.", "reason": "r"}],
+            "scripts": [{"key": "n6", "files": ["/code/make_plots.py"], "description": "Plots.", "reason": "r"}],
+            "tools": [{"key": "n7", "packageName": "numpy", "version": "1.26.4", "reason": "r"},
+                      {"key": "n8", "packageName": "scipy", "version": "", "reason": "no version"}],
+            "links": [],
+        })
+        self.assertEqual(["plots/fig_energy.png"], [c["imageFile"] for c in proposal["charts"]])
+        self.assertEqual([["raw"]], [d["files"] for d in proposal["datasets"]])
+        self.assertEqual([["code/make_plots.py"]], [s["files"] for s in proposal["scripts"]])
+        self.assertEqual(["numpy"], [t["packageName"] for t in proposal["tools"]])
+
+    def test_links_need_known_ends_an_allowed_direction_and_a_new_item(self):
+        _proposal, links = self.run_it({
+            "charts": [{"key": "n1", "imageFile": "plots/fig_energy.png", "reason": "r"}],
+            "datasets": [{"key": "n2", "files": ["raw"], "description": "d", "reason": "r"}],
+            "scripts": [{"key": "n3", "files": ["code/make_plots.py"], "description": "s", "reason": "r"}],
+            "tools": [],
+            "links": [
+                {"from": "n3", "to": "n1", "reason": "plots it", "confidence": "high"},
+                {"from": "n2", "to": "n3", "reason": "reads it", "confidence": "Medium"},
+                {"from": "n3", "to": "c0", "reason": "existing figure", "confidence": "low"},
+                {"from": "n1", "to": "n3", "reason": "wrong way", "confidence": "high"},
+                {"from": "n9", "to": "n1", "reason": "unknown", "confidence": "high"},
+                {"from": "c0", "to": "c0", "reason": "existing only", "confidence": "high"},
+            ],
+        })
+        self.assertEqual(
+            [("n3", "n1", "generates", "high"), ("n2", "n3", "consumes", "medium"),
+             ("n3", "c0", "generates", "low")],
+            [(l["from"], l["to"], l["type"], l["confidence"]) for l in links])
+
+    def test_inventory_summarizes_big_folders(self):
+        files = ["data/f%03d.dat" % i for i in range(40)] + ["a.py"]
+        text = cai.summarize_inventory(files, ["data"])
+        self.assertIn("data/  40 files (40 .dat)", text)
+        self.assertIn("./  a.py", text)
+
+
+class TestAiCurateEndpoint(AiTestBase):
+    def test_reads_the_folder_and_returns_validated_proposals(self):
+        self.login()
+        answer = json.dumps({
+            "charts": [{"key": "n1", "imageFile": "plots/fig_energy.png", "reason": "A results figure."}],
+            "datasets": [], "scripts": [], "tools": [], "links": [],
+        })
+        with mock.patch("project.curation_ai.walk_folder",
+                        return_value=(INVENTORY_FILES, INVENTORY_DIRS, [], False)), \
+                mock.patch("project.curation_ai._fetch_text_sized", return_value=("print(1)", False)), \
+                mock.patch("project.assist.call_gemini", return_value=(answer, None)) as gemini:
+            response = self.post("/api/curation/ai-curate", {
+                "consent": True, "path": FOLDER, "paper": {"title": "T"}, "existing": EXISTING})
+        self.assertEqual(200, response.status_code, response.text)
+        body = response.json()
+        self.assertEqual(["plots/fig_energy.png"], [c["imageFile"] for c in body["proposal"]["charts"]])
+        sent = gemini.call_args[0][1]
+        self.assertIn("plots/", sent["inventory"])
+        self.assertEqual("c0", sent["existing"]["charts"][0]["id"])
+
+    def test_requires_consent(self):
+        self.login()
+        with mock.patch("project.assist.call_gemini") as gemini:
+            response = self.post("/api/curation/ai-curate", {"consent": False, "path": FOLDER})
+        self.assertEqual(400, response.status_code)
+        gemini.assert_not_called()

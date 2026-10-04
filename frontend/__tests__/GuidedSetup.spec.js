@@ -438,3 +438,63 @@ describe("GuidedSetup finish step", () => {
     expect(screen.queryByText(/optional paper details are empty/i)).not.toBeInTheDocument();
   });
 });
+
+describe("GuidedSetup AI folder curation", () => {
+  afterEach(() => jest.resetAllMocks());
+
+  const state = {
+    ...blankState,
+    curatorInfo: { firstName: "Ada", middleName: "", lastName: "Lovelace", emailId: "ada@example.edu", affiliation: "" },
+    referenceInfo: { doi: "10.1/x", title: "T", abstract: "A" },
+    paperInfo: { tags: [], collections: [], PIs: "" },
+    fileServerPath: "https://notebook.rcc.uchicago.edu/files/x",
+    charts: [{ id: "c0", imageFile: "Figures/Figure1.pdf", number: "1", caption: "C", properties: ["k"] }],
+  };
+  const auth = { authenticated: true, user: { name: "Ada Lovelace", email: "ada@example.edu" } };
+
+  it("proposes what Qresp missed and adds the chosen items with their links", async () => {
+    const user = userEvent.setup();
+    axios.post.mockImplementation((url) =>
+      Promise.resolve({
+        data:
+          url === "/api/curation/ai-curate"
+            ? {
+                proposal: {
+                  charts: [{ key: "n1", imageFile: "plots/fig_energy.png", number: "2", keywords: ["energy"], reason: "A results figure." }],
+                  datasets: [{ key: "n2", files: ["raw"], description: "Raw runs.", reason: "Read by the script." }],
+                  scripts: [{ key: "n3", files: ["code/plot.py"], description: "Plots it.", reason: "Saves fig_energy.png." }],
+                  tools: [],
+                },
+                links: [
+                  { from: "n3", to: "n1", type: "generates", confidence: "high", reason: "Saves it." },
+                  { from: "n3", to: "c0", type: "generates", confidence: "medium", reason: "Plots figure 1 too." },
+                ],
+                models: ["gemini-3.8-flash"],
+              }
+            : { found: false },
+      })
+    );
+    const curator = renderSetup({ state, auth });
+    await user.click(screen.getByRole("checkbox", { name: /send the paper's title/i }));
+    await user.click(screen.getByRole("button", { name: /curate the whole folder with ai/i }));
+    expect(axios.post).toHaveBeenCalledWith(
+      "/api/curation/ai-curate",
+      expect.objectContaining({
+        consent: true,
+        path: "https://notebook.rcc.uchicago.edu/files/x",
+        existing: expect.objectContaining({ charts: [expect.objectContaining({ id: "c0" })] }),
+      })
+    );
+    expect(await screen.findByText("A results figure.")).toBeInTheDocument();
+    expect(screen.getByText("Suggested by gemini-3.8-flash")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /add selected/i }));
+    const [records, links] = curator.importBundle.mock.calls[0];
+    expect(records.map((r) => [r.key, r.list])).toEqual([["n1", "charts"], ["n2", "datasets"], ["n3", "scripts"]]);
+    expect(records[0].value).toEqual(expect.objectContaining({ imageFile: "plots/fig_energy.png", number: "2", properties: ["energy"] }));
+    expect(records[2].value).toEqual(expect.objectContaining({ files: ["code/plot.py"], readme: "Plots it." }));
+    expect(links).toEqual([
+      { from: "n3", to: "n1", type: "generates" },
+      { from: "n3", to: "c0", type: "generates" },
+    ]);
+  });
+});

@@ -1299,6 +1299,42 @@ paths:
           description: Daily AI limit reached
         503:
           description: AI not configured
+  /curation/ai-curate:
+    post:
+      operationId: "project.curation_ai.ai_curate"
+      tags:
+        - "Curation"
+      summary: "Opt-in AI proposal of figures, data, scripts and tools Qresp did not find"
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+              - consent
+              - path
+            properties:
+              consent:
+                type: boolean
+              path:
+                type: string
+                maxLength: 1000
+              paper:
+                type: object
+              existing:
+                type: object
+      responses:
+        200:
+          description: Proposals with reasons (nothing is stored)
+        400:
+          description: No consent or invalid folder
+        401:
+          description: Not authenticated
+        429:
+          description: Daily AI limit reached
+        503:
+          description: AI not configured
   /curation/locate-folder:
     post:
       operationId: "project.curation.locate_folder"

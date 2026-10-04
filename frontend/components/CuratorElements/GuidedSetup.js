@@ -45,7 +45,7 @@ import { getList } from "../../Utils/Scraper";
 import { doiUtil } from "../../Utils/doi";
 import { buildFileUrl, isPdfFile } from "../../Utils/fileServerUrl";
 import { initialsOf } from "../Profile/ProfileLinks";
-import { labelFor } from "../../Utils/artifactFields";
+import { labelFor, toRecord } from "../../Utils/artifactFields";
 import {
   LISTS,
   buildImportPlan,
@@ -762,6 +762,90 @@ const GuidedSetup = () => {
     }
     return String((record.files || [])[0] || record.packageName || id).split("/").filter(Boolean).pop();
   };
+
+  // Whole-folder AI curation: what Qresp's own pass missed, or the whole
+  // paper when the folder is not organised the Qresp way.
+  const [curateResult, setCurateResult] = useState(null);
+  const [curateSkip, setCurateSkip] = useState({});
+
+  const curateFolder = () => {
+    setAiBusy("curate");
+    setAiError("");
+    setAiApplied("");
+    setCurateResult(null);
+    axios
+      .post("/api/curation/ai-curate", {
+        consent: aiConsent,
+        path: fileServerPath,
+        paper: paperForAi(),
+        existing: {
+          charts: charts.map(({ id, imageFile, number, caption }) => ({ id, imageFile, number, caption })),
+          datasets: datasets.map(({ id, files }) => ({ id, files: files || [] })),
+          scripts: scripts.map(({ id, files }) => ({ id, files: files || [] })),
+          tools: tools.map(({ id, packageName }) => ({ id, packageName: packageName || "" })),
+        },
+      })
+      .then((res) => {
+        const data = res.data || {};
+        setCurateResult(data);
+        const skip = {};
+        (data.links || []).forEach((link) => {
+          if (link.confidence === "low") skip[`${link.from}>${link.to}`] = true;
+        });
+        setCurateSkip(skip);
+      })
+      .catch((err) => setAiError(aiErrorFrom(err)))
+      .finally(() => setAiBusy(""));
+  };
+
+  const CURATE_GROUPS = [
+    { key: "charts", list: "charts", type: "chart", title: "Figures" },
+    { key: "datasets", list: "datasets", type: "dataset", title: "Datasets" },
+    { key: "scripts", list: "scripts", type: "script", title: "Scripts" },
+    { key: "tools", list: "tools", type: "tool", title: "Tools" },
+  ];
+  const curateItems = curateResult
+    ? CURATE_GROUPS.flatMap(({ key, list, type }) =>
+        ((curateResult.proposal || {})[key] || []).map((item) => ({ ...item, list, type })))
+    : [];
+  const curateLabel = (item) =>
+    item.type === "chart"
+      ? `${String(item.imageFile).split("/").pop()}${item.number ? ` (${/^Table/.test(item.number) ? item.number : `Figure ${item.number}`})` : ""}`
+      : item.type === "tool"
+      ? `${item.packageName} ${item.version}`
+      : (item.files || []).join(", ");
+  const curateLabels = Object.fromEntries(curateItems.map((item) => [item.key, curateLabel(item)]));
+  const endLabel = (id) => curateLabels[id] || recordLabel(id);
+
+  const applyCuration = () => {
+    const chosen = curateItems.filter((item) => !curateSkip[item.key]);
+    const chosenKeys = new Set(chosen.map((item) => item.key));
+    const isExisting = (id) => /^[cdst]\d+$/.test(id);
+    const records = chosen.map((item) => {
+      let draft;
+      if (item.type === "chart") {
+        draft = { imageFile: item.imageFile, number: item.number || "", caption: "",
+                  properties: (item.keywords || []).join(", "), files: "", notebookFile: "" };
+      } else if (item.type === "tool") {
+        draft = { packageName: item.packageName, version: item.version, description: "" };
+      } else {
+        draft = { files: (item.files || []).join(", "), readme: item.description || "", keywords: "" };
+      }
+      return { key: item.key, list: item.list, value: toRecord(item.type, draft) };
+    });
+    const links = ((curateResult && curateResult.links) || []).filter(
+      (link) =>
+        !curateSkip[`${link.from}>${link.to}`] &&
+        (chosenKeys.has(link.from) || isExisting(link.from)) &&
+        (chosenKeys.has(link.to) || isExisting(link.to))
+    );
+    importBundle(records, links.map(({ from, to, type }) => ({ from, to, type })));
+    setAiApplied(
+      `Added ${plural(records.length, "item", "items")}${links.length ? ` and ${plural(links.length, "link", "links")}` : ""}. Captions for new figures can be filled from the LaTeX in step 5.`
+    );
+    setCurateResult(null);
+  };
+
   const figuresWithoutKeywords = charts.filter((chart) => !(chart.properties || []).length).length;
 
   // 7. Finish ----------------------------------------------------------------
@@ -1224,9 +1308,13 @@ const GuidedSetup = () => {
                       </Box>
                     </Collapse>
                     <Divider sx={{ my: 1.5 }} />
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" color="text.secondary" component="div">
                       Need finer control over what becomes a figure?{" "}
                       <SectionLink target="curate-figures">Use the detailed import</SectionLink>
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" component="div">
+                      Folder not organised the Qresp way, or something missing? Step 6 can
+                      curate the whole folder with AI.
                     </Typography>
                   </Box>
                 )
@@ -1464,9 +1552,9 @@ const GuidedSetup = () => {
                     control={<Checkbox size="small" checked={aiConsent} onChange={(e) => setAiConsent(e.target.checked)} />}
                     label={
                       <Typography variant="body2">
-                        Send the paper's title, abstract and figure captions, and the
-                        start of each script in the project folder, to Google Gemini.
-                        Nothing is stored.
+                        Send the paper's title, abstract and figure captions, the list
+                        of files in the project folder, its READMEs and the start of
+                        each script, to Google Gemini. Nothing is stored.
                       </Typography>
                     }
                     sx={{ alignItems: "flex-start", mb: 1, "& .MuiCheckbox-root": { pt: 0.25 } }}
@@ -1481,6 +1569,15 @@ const GuidedSetup = () => {
                       sx={{ textTransform: "none" }}
                     >
                       Suggest keywords
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      onClick={curateFolder}
+                      disabled={!aiConsent || Boolean(aiBusy) || !fileServerPath}
+                      startIcon={aiBusy === "curate" ? <CircularProgress size={16} /> : <AutoAwesome />}
+                      sx={{ textTransform: "none" }}
+                    >
+                      Curate the whole folder with AI
                     </Button>
                     <Button
                       variant="outlined"
@@ -1500,6 +1597,100 @@ const GuidedSetup = () => {
 
                   {aiError && <Alert severity="warning" sx={{ mt: 1.5 }}>{aiError}</Alert>}
                   {aiApplied && <Alert severity="success" sx={{ mt: 1.5 }}>{aiApplied}</Alert>}
+
+                  {aiBusy === "curate" && (
+                    <Box sx={{ mt: 1.5 }}>
+                      <Typography variant="body2" color="text.secondary" gutterBottom>
+                        Reading the folder and asking the AI… this can take a minute.
+                      </Typography>
+                      <LinearProgress />
+                    </Box>
+                  )}
+
+                  {curateResult && (
+                    <Box sx={{ mt: 1.5 }}>
+                      {curateItems.length === 0 ? (
+                        <Box>
+                          <Typography variant="body2" color="text.secondary">
+                            The AI found nothing more to add: the record already covers the folder.
+                          </Typography>
+                          <ModelNote models={curateResult.models} />
+                        </Box>
+                      ) : (
+                        <Box>
+                          <Typography variant="body2" sx={{ mb: 1 }}>
+                            {`The AI proposes ${plural(curateItems.length, "item", "items")} that Qresp did not find${(curateResult.links || []).length ? `, and ${plural(curateResult.links.length, "link", "links")}` : ""}. Untick anything that is wrong.`}
+                          </Typography>
+                          <Box sx={{ maxHeight: 420, overflowY: "auto", border: "1px solid", borderColor: "divider", borderRadius: 2, p: 1 }}>
+                            {CURATE_GROUPS.map(({ key, type, title }) => {
+                              const group = curateItems.filter((item) => item.type === type);
+                              if (!group.length) return null;
+                              return (
+                                <Box key={key} sx={{ mb: 1 }}>
+                                  <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                                    {title}
+                                  </Typography>
+                                  {group.map((item) => (
+                                    <Box key={item.key} sx={{ display: "flex", gap: 0.5, alignItems: "flex-start" }}>
+                                      <Checkbox
+                                        size="small"
+                                        checked={!curateSkip[item.key]}
+                                        onChange={(e) => setCurateSkip((x) => ({ ...x, [item.key]: !e.target.checked }))}
+                                        slotProps={{ input: { "aria-label": curateLabel(item) } }}
+                                      />
+                                      <Box sx={{ minWidth: 0 }}>
+                                        <Typography variant="body2" fontWeight={600} sx={{ overflowWrap: "anywhere" }}>
+                                          {curateLabel(item)}
+                                        </Typography>
+                                        {item.description && (
+                                          <Typography variant="caption" component="div">{item.description}</Typography>
+                                        )}
+                                        <Typography variant="caption" color="text.secondary" component="div">{item.reason}</Typography>
+                                      </Box>
+                                    </Box>
+                                  ))}
+                                </Box>
+                              );
+                            })}
+                            {(curateResult.links || []).length > 0 && (
+                              <Box>
+                                <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                                  Links
+                                </Typography>
+                                {curateResult.links.map((link) => {
+                                  const id = `${link.from}>${link.to}`;
+                                  return (
+                                    <Box key={id} sx={{ display: "flex", gap: 0.5, alignItems: "flex-start" }}>
+                                      <Checkbox
+                                        size="small"
+                                        checked={!curateSkip[id]}
+                                        onChange={(e) => setCurateSkip((x) => ({ ...x, [id]: !e.target.checked }))}
+                                        slotProps={{ input: { "aria-label": `${endLabel(link.from)} to ${endLabel(link.to)}` } }}
+                                      />
+                                      <Box sx={{ minWidth: 0 }}>
+                                        <Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>
+                                          {`${endLabel(link.from)} → ${endLabel(link.to)}`}
+                                          <Chip size="small" label={link.confidence} variant="outlined" sx={{ ml: 1, height: 18 }} />
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary">{link.reason}</Typography>
+                                      </Box>
+                                    </Box>
+                                  );
+                                })}
+                              </Box>
+                            )}
+                          </Box>
+                          <ModelNote models={curateResult.models} />
+                          <Box sx={{ display: "flex", gap: 1, mt: 1.5 }}>
+                            <Button variant="contained" disableElevation onClick={applyCuration} sx={{ textTransform: "none", fontWeight: 600 }}>
+                              Add selected
+                            </Button>
+                            <Button onClick={() => setCurateResult(null)} sx={{ textTransform: "none" }}>Cancel</Button>
+                          </Box>
+                        </Box>
+                      )}
+                    </Box>
+                  )}
 
                   {kwResult && (
                     <Box sx={{ mt: 1.5 }}>
