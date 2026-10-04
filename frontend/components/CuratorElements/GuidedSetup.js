@@ -29,6 +29,8 @@ import {
   AutoAwesome,
   CheckCircle,
   Description,
+  SaveOutlined,
+  Visibility,
   Psychology,
   ExpandMore,
   FolderOpen,
@@ -37,8 +39,12 @@ import {
   Search,
 } from "@mui/icons-material";
 
+import Router from "next/router";
+
 import CuratorContext from "../../Context/Curator/curatorContext";
 import AuthContext from "../../Context/Auth/authContext";
+import AlertContext from "../../Context/Alert/alertContext";
+import { preview as openPreview } from "./TopActions";
 import ServerContext from "../../Context/Servers/serverContext";
 import SourceTreeContext from "../../Context/SourceTree/SourceTreeContext";
 import { getList } from "../../Utils/Scraper";
@@ -274,7 +280,12 @@ const GuidedSetup = () => {
     cacheRccAnalysis,
     edit,
     resetVersion,
+    saveDraftToServer,
+    getDraftTitle,
+    activeDraftId,
+    activeDraftTitle,
   } = ctx;
+  const { setAlert } = useContext(AlertContext) || {};
   const { loading: authLoading, authenticated, user } = useContext(AuthContext);
 
   // Apply programmatic changes without losing anything typed into open
@@ -865,7 +876,27 @@ const GuidedSetup = () => {
   const figuresWithoutKeywords = charts.filter((chart) => !(chart.properties || []).length).length;
 
   // 7. Finish ----------------------------------------------------------------
-  const needing = recordsNeedingDetails(metadata);
+  // What publishing actually requires: every dataset and script needs a
+  // description (and its files). A figure's caption, number and keywords may
+  // be empty, so those are optional here and can be skipped.
+  const REQUIRED_TO_PUBLISH = {
+    chart: ["imageFile"],
+    dataset: ["files", "readme"],
+    script: ["files", "readme"],
+    tool: ["packageName", "version"],
+  };
+  const allNeeding = recordsNeedingDetails(metadata);
+  const splitNeeding = (wantRequired) =>
+    allNeeding
+      .map((entry) => ({
+        ...entry,
+        missing: entry.missing.filter(
+          (field) => (REQUIRED_TO_PUBLISH[entry.type] || []).includes(field) === wantRequired
+        ),
+      }))
+      .filter((entry) => entry.missing.length);
+  const requiredNeeding = splitNeeding(true);
+  const optionalNeeding = splitNeeding(false);
   const missingPI = !(
     paperInfo.PIs && String(paperInfo.PIs).trim() &&
     (!Array.isArray(paperInfo.PIs) || paperInfo.PIs.length)
@@ -874,12 +905,26 @@ const GuidedSetup = () => {
     !(paperInfo.collections && paperInfo.collections.length) && "collections",
     !(paperInfo.tags && paperInfo.tags.length) && "keywords",
   ].filter(Boolean);
-  // Collections and keywords may publish empty; a P.I. may not.
+  // Collections, keywords, captions and figure numbers may publish empty; a
+  // P.I. and the dataset/script descriptions may not.
   const [skipOptional, setSkipOptional] = useState(false);
-  const paperMissing = [
-    missingPI && "principal investigator",
-    ...(skipOptional ? [] : missingOptional),
-  ].filter(Boolean);
+  const optionalLeft = !skipOptional && (missingOptional.length > 0 || optionalNeeding.length > 0);
+  const recordReady = artifactCount > 0 && !missingPI && requiredNeeding.length === 0 && !optionalLeft;
+  const [draftNote, setDraftNote] = useState("");
+  const [draftSaving, setDraftSaving] = useState(false);
+  const saveDraftNow = () => {
+    if (!saveDraftToServer) return;
+    setDraftSaving(true);
+    setDraftNote("");
+    const title = (getDraftTitle && getDraftTitle()) || referenceInfo.title || "Untitled draft";
+    saveDraftToServer(title)
+      .then(() => setDraftNote("Saved to your account drafts."))
+      .catch(() => setDraftNote("The draft could not be saved. Check that you are still signed in."))
+      .finally(() => setDraftSaving(false));
+  };
+  const previewNow = () =>
+    openPreview(metadata, setAlert || (() => {}), { push: (...args) => Router.push(...args) },
+      { id: activeDraftId, title: activeDraftTitle });
   const lastAuthor = String(referenceInfo.authors || "")
     .split(",")
     .map((name) => name.replace(/\s+/g, " ").trim())
@@ -898,7 +943,7 @@ const GuidedSetup = () => {
     import: artifactCount > 0,
     captions: charts.length > 0 && uncaptioned === 0,
     ai: charts.length > 0 && figuresWithoutKeywords === 0,
-    finish: artifactCount > 0 && needing.length === 0 && paperMissing.length === 0,
+    finish: recordReady,
   };
   const done = Object.values(steps).filter(Boolean).length;
   const STEP_KEYS = ["you", "paper", "folder", "import", "captions", "ai", "finish"];
@@ -1861,41 +1906,105 @@ const GuidedSetup = () => {
                       A principal investigator is required to publish.
                     </Alert>
                   )}
-                  {missingOptional.length > 0 && !skipOptional && (
-                    <Alert
-                      severity="info"
-                      action={
-                        <Box sx={{ display: "flex", gap: 0.5 }}>
-                          <Button size="small" onClick={() => setSkipOptional(true)} sx={{ textTransform: "none" }}>
-                            Skip, leave blank
-                          </Button>
-                          <SectionLink target="curate-paperinfo">Open</SectionLink>
-                        </Box>
-                      }
-                    >
-                      {`Optional paper details are empty: ${missingOptional.join(" and ")}. They help readers find the paper, but you can publish without them.`}
-                    </Alert>
-                  )}
-                  {needing.length > 0 ? (
+                  {requiredNeeding.length > 0 && (
                     <>
-                      <Typography variant="body2" color="text.secondary">
-                        {`${plural(needing.length, "item needs", "items need")} details. Changes save as you leave each field.`}
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {`Required to publish: ${plural(requiredNeeding.length, "item needs", "items need")} a description.`}
                       </Typography>
                       <FinishDetails
-                        needing={needing}
+                        needing={requiredNeeding}
                         fileServerPath={fileServerPath}
                         paperTags={paperTags}
                         edit={edit}
                       />
                     </>
-                  ) : paperMissing.length === 0 ? (
-                    <Alert
-                      severity="success"
-                      action={<SectionLink target="curate-publish">Go to publish</SectionLink>}
+                  )}
+
+                  {optionalLeft && (
+                    <>
+                      <Alert
+                        severity="info"
+                        action={
+                          <Button size="small" onClick={() => setSkipOptional(true)} sx={{ textTransform: "none", whiteSpace: "nowrap" }}>
+                            Skip, leave blank
+                          </Button>
+                        }
+                      >
+                        {[
+                          missingOptional.length ? `The paper has no ${missingOptional.join(" or ")}` : "",
+                          optionalNeeding.length
+                            ? `${plural(optionalNeeding.length, "figure is", "figures are")} missing a caption, number or keywords`
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join("; ") + ". These are optional: they help readers, but you can publish without them."}
+                      </Alert>
+                      {optionalNeeding.length > 0 && (
+                        <FinishDetails
+                          needing={optionalNeeding}
+                          fileServerPath={fileServerPath}
+                          paperTags={paperTags}
+                          edit={edit}
+                        />
+                      )}
+                      {missingOptional.length > 0 && (
+                        <Typography variant="caption" color="text.secondary">
+                          Add collections or keywords in{" "}
+                          <SectionLink target="curate-paperinfo">Qresp Curation Information</SectionLink>.
+                        </Typography>
+                      )}
+                    </>
+                  )}
+
+                  {recordReady && (
+                    <Paper
+                      variant="outlined"
+                      sx={{ p: 2, borderRadius: 2, borderColor: "success.light", bgcolor: "rgba(46,125,50,0.04)" }}
+                      data-testid="record-ready"
                     >
-                      Everything required is filled in. Review the record below, then publish.
-                    </Alert>
-                  ) : null}
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <CheckCircle sx={{ color: "success.main" }} />
+                        <Typography variant="subtitle2" fontWeight={700}>
+                          Your curated record is ready
+                        </Typography>
+                      </Box>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                        Review the full record below, then preview how it will look or
+                        save it as a draft. When you are happy, choose a license and publish.
+                      </Typography>
+                      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mt: 1.5 }}>
+                        <Button
+                          variant="contained"
+                          disableElevation
+                          startIcon={<Visibility />}
+                          onClick={previewNow}
+                          sx={{ textTransform: "none" }}
+                        >
+                          Preview
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          startIcon={draftSaving ? <CircularProgress size={16} /> : <SaveOutlined />}
+                          onClick={saveDraftNow}
+                          disabled={draftSaving || !authenticated}
+                          sx={{ textTransform: "none" }}
+                        >
+                          Save draft
+                        </Button>
+                        <Button onClick={() => scrollToSection("curate-curator")} sx={{ textTransform: "none" }}>
+                          Review the record
+                        </Button>
+                        <Button onClick={() => scrollToSection("curate-publish")} sx={{ textTransform: "none" }}>
+                          Go to publish
+                        </Button>
+                      </Box>
+                      {draftNote && (
+                        <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 1 }}>
+                          {draftNote}
+                        </Typography>
+                      )}
+                    </Paper>
+                  )}
                 </Box>
               )}
             </StepContent>

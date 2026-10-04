@@ -432,9 +432,9 @@ describe("GuidedSetup finish step", () => {
     expect(curator.setAll).toHaveBeenCalledWith(
       expect.objectContaining({ paperInfo: expect.objectContaining({ PIs: "Giulia Galli" }) })
     );
-    expect(screen.getByText(/optional paper details are empty/i)).toBeInTheDocument();
+    expect(screen.getByText(/these are optional/i)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /skip, leave blank/i }));
-    expect(screen.queryByText(/optional paper details are empty/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/these are optional/i)).not.toBeInTheDocument();
   });
 });
 
@@ -544,5 +544,62 @@ describe("GuidedSetup keyword apply keeps every change", () => {
     const written = curator.setAll.mock.calls[0][0];
     expect(written.charts.map((c) => c.properties)).toEqual([["screening"], ["defect levels"]]);
     expect(written.paperInfo.tags).toEqual(["spin qubit"]);
+  });
+});
+
+
+describe("GuidedSetup ready-to-publish", () => {
+  afterEach(() => jest.resetAllMocks());
+
+  it("hides optional fields once skipped and offers preview and save draft", async () => {
+    const user = userEvent.setup();
+    axios.post.mockResolvedValue({ data: { found: false } });
+    const state = {
+      ...blankState,
+      curatorInfo: { firstName: "Ada", middleName: "", lastName: "Lovelace", emailId: "ada@example.edu", affiliation: "" },
+      referenceInfo: { doi: "10.1/x", title: "A paper", abstract: "A", authors: "A B" },
+      fileServerPath: "https://notebook.rcc.uchicago.edu/files/x",
+      paperInfo: { PIs: "A B", collections: [], tags: [] },
+      charts: [{ id: "c0", imageFile: "a.png", number: "", caption: "", properties: [] }],
+      datasets: [{ id: "d0", files: ["Data/x"], readme: "Raw data." }],
+    };
+    const saveDraftToServer = jest.fn(() => Promise.resolve("draft1"));
+    const curator = renderSetup({
+      state: { ...state },
+      auth: { authenticated: true, user: { name: "Ada Lovelace", email: "ada@example.edu" } },
+    });
+    curator.rerenderWith({ saveDraftToServer, getDraftTitle: () => "A paper" });
+
+    // Optional figure fields are offered until skipped...
+    expect(screen.getByLabelText("Figure Caption")).toBeInTheDocument();
+    expect(screen.queryByTestId("record-ready")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /skip, leave blank/i }));
+    // ...then hidden, and the record is ready.
+    expect(screen.queryByLabelText("Figure Caption")).not.toBeInTheDocument();
+    const ready = screen.getByTestId("record-ready");
+    expect(ready).toHaveTextContent(/your curated record is ready/i);
+    expect(screen.getByRole("button", { name: /^preview$/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^save draft$/i }));
+    expect(saveDraftToServer).toHaveBeenCalledWith("A paper");
+    expect(await screen.findByText(/saved to your account drafts/i)).toBeInTheDocument();
+  });
+
+  it("keeps required descriptions visible even after skipping", async () => {
+    const user = userEvent.setup();
+    axios.post.mockResolvedValue({ data: { found: false } });
+    renderSetup({
+      state: {
+        ...blankState,
+        referenceInfo: { title: "T", abstract: "A" },
+        fileServerPath: "https://x/files/y",
+        paperInfo: { PIs: "A B", collections: [], tags: [] },
+        charts: [{ id: "c0", imageFile: "a.png", number: "", caption: "", properties: [] }],
+        scripts: [{ id: "s0", files: ["plot.py"], readme: "" }],
+      },
+    });
+    await user.click(screen.getByRole("button", { name: /skip, leave blank/i }));
+    expect(screen.getByText(/required to publish/i)).toBeInTheDocument();
+    expect(screen.getByLabelText("Description")).toBeInTheDocument();
+    expect(screen.queryByTestId("record-ready")).not.toBeInTheDocument();
   });
 });
