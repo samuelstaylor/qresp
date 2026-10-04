@@ -12,9 +12,12 @@ const FileServerElement = () => {
   const { editing, setEditing } = useContext(CuratorHelperContext);
 
   useEffect(() => {
-    if (paperInfo.tags.length > 0) {
-      setEditing("paperInfo", false);
-    } else setEditing("paperInfo", true);
+    // Complete once it has a P.I. -- the one field here that publishing
+    // requires. Keywords and collections are optional and may stay empty.
+    const pis = Array.isArray(paperInfo.PIs)
+      ? paperInfo.PIs.filter((pi) => String(pi || "").trim())
+      : String(paperInfo.PIs || "").trim();
+    setEditing("paperInfo", !(pis && pis.length > 0));
   }, [paperInfo]);
 
   return (
