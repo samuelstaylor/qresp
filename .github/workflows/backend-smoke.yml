@@ -90,6 +90,7 @@ jobs:
             project.tests.test_ownership_rules \
             project.tests.test_paperDAO \
             project.tests.test_permissions \
+            project.tests.test_paper_curator \
             project.tests.test_publish_validation \
             project.tests.test_relatedness \
             project.tests.test_update_paper \

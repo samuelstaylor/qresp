@@ -8,8 +8,17 @@ import Captions from "yet-another-react-lightbox/plugins/captions";
 import "yet-another-react-lightbox/styles.css";
 import "yet-another-react-lightbox/plugins/captions.css";
 
-import { Box, Typography, Button } from "@mui/material";
-import { PictureAsPdf } from "@mui/icons-material";
+import {
+  Box,
+  Typography,
+  Button,
+  Chip,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+} from "@mui/material";
+import { Close, OpenInFull, PictureAsPdf } from "@mui/icons-material";
 
 import RecordTable from "../Table/Table";
 import Drawer from "../drawer";
@@ -33,11 +42,42 @@ import axios from "axios";
 // frame restrictions). Re-exported for existing importers.
 export { isPdfFile };
 
-const PropsView = ({ rowdata }) => {
+// "2" -> "Figure 2"; "Table S1" stays as written.
+export const figureLabel = (number) => {
+  const n = String(number || "").trim();
+  if (!n) return "";
+  return /^[a-z]{2,}/i.test(n) ? n : `Figure ${n}`;
+};
+
+const DetailsView = ({ rowdata }) => {
+  const label = figureLabel(rowdata.number);
+  const keywords = (rowdata.properties || []).filter(Boolean);
   return (
-    <Typography variant="body2" color="secondary">
-      {rowdata["properties"].join(", ")}
-    </Typography>
+    <Box sx={{ textAlign: "left", minWidth: { md: 280 } }} data-testid="chart-details">
+      {label && (
+        <Typography variant="subtitle2" fontWeight={700} sx={{ color: "#800000" }}>
+          {label}
+        </Typography>
+      )}
+      <Typography
+        variant="body2"
+        sx={{ mt: 0.5, lineHeight: 1.6, color: rowdata.caption ? "text.primary" : "text.disabled" }}
+      >
+        {rowdata.caption || "No caption provided."}
+      </Typography>
+      {keywords.length > 0 && (
+        <Box sx={{ mt: 1.25 }}>
+          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+            Key words
+          </Typography>
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
+            {keywords.map((word) => (
+              <Chip key={word} size="small" variant="outlined" label={word} />
+            ))}
+          </Box>
+        </Box>
+      )}
+    </Box>
   );
 };
 
@@ -91,6 +131,8 @@ const ChartInfo = ({
 }) => {
   // Light Box Controls: the open slide index (-1 = closed).
   const [lightboxIndex, setLightboxIndex] = useState(-1);
+  // PDFs cannot go in the lightbox; they expand into a dialog instead.
+  const [expandedPdf, setExpandedPdf] = useState(null);
 
   // Chart Workflow Controls
   const [chartWorkflow, setChartWorkflow] = useState({});
@@ -159,7 +201,7 @@ const ChartInfo = ({
     return (
       <Fragment>
         {pdf ? (
-          <Box sx={{ width: { xs: "70vw", md: "30vw" }, maxWidth: 440, mx: "auto" }}>
+          <Box sx={{ width: { xs: "60vw", md: 240 }, maxWidth: 240, mx: "auto" }}>
             {mixedContent ? (
               <Typography
                 variant="caption"
@@ -184,7 +226,7 @@ const ChartInfo = ({
                 sx={{
                   display: "block",
                   width: "100%",
-                  height: 280,
+                  height: 180,
                   border: "1px solid",
                   borderColor: "divider",
                   borderRadius: 1,
@@ -221,6 +263,21 @@ const ChartInfo = ({
                 fontSize: "0.8rem",
               }}
             >
+              {!mixedContent && (
+                <Fragment>
+                  <a
+                    href={imageUrl}
+                    data-testid="chart-pdf-expand"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setExpandedPdf({ url: imageUrl, title: figureLabel(rowdata.number) || rowdata.imageFile, caption: rowdata.caption });
+                    }}
+                  >
+                    Expand
+                  </a>
+                  <span aria-hidden="true">·</span>
+                </Fragment>
+              )}
               <a href={imageUrl} rel="noopener noreferrer" target="_blank" data-testid="chart-pdf-open">
                 Open PDF
               </a>
@@ -232,10 +289,15 @@ const ChartInfo = ({
           </Box>
         ) : (
         <StyledTooltip title={rowdata.caption} placement="left" arrow>
-          <Button focusRipple onClick={() => setLightboxIndex(rowdata.index)}>
+          <Button
+            focusRipple
+            onClick={() => setLightboxIndex(rowdata.index)}
+            aria-label={`Expand ${figureLabel(rowdata.number) || "figure"}`}
+            sx={{ flexDirection: "column", "&:hover .expand-hint": { opacity: 1 } }}
+          >
             <img
               src={imageUrl}
-              style={{ maxWidth: "30vw" }}
+              style={{ maxWidth: "min(240px, 60vw)", maxHeight: 200, objectFit: "contain" }}
               alt={rowdata.caption || rowdata.imageFile}
               loading="lazy"
               data-testid="chart-image"
@@ -247,6 +309,14 @@ const ChartInfo = ({
                 if (note) note.style.display = "block";
               }}
             ></img>
+            <Typography
+              className="expand-hint"
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 0.5, opacity: 0.7, textTransform: "none" }}
+            >
+              <OpenInFull sx={{ fontSize: 14 }} /> Click to expand
+            </Typography>
             {/* One line, then the two ways out.
                 
                 WHY THIS IS SHORT. Almost every cause of a failed chart image
@@ -355,14 +425,14 @@ const ChartInfo = ({
       },
     },
     {
-      label: "Properties",
+      label: "Caption & key words",
       name: "props",
-      view: PropsView,
+      view: DetailsView,
       options: {
-        align: "center",
+        align: "left",
         sort: true,
         searchable: true,
-        value: (data) => data.properties.join(""),
+        value: (data) => `${data.caption || ""} ${(data.properties || []).join(" ")}`,
       },
     },
     {
@@ -393,6 +463,7 @@ const ChartInfo = ({
       row["index"] = Gallery.length;
       Gallery.push({
         src: buildFileUrl(row["server"], row["imageFile"]),
+        title: figureLabel(row["number"]),
         description: row["caption"],
       });
     }
@@ -400,7 +471,9 @@ const ChartInfo = ({
       figure: row,
       props: {
         server: fileserverpath,
-        properties: row["properties"],
+        number: row["number"],
+        caption: row["caption"],
+        properties: row["properties"] || [],
       },
       files: {
         server: fileserverpath,
@@ -419,6 +492,41 @@ const ChartInfo = ({
         plugins={[Captions]}
         animation={{ fade: 300 }}
       />
+      <Dialog
+        open={Boolean(expandedPdf)}
+        onClose={() => setExpandedPdf(null)}
+        maxWidth="lg"
+        fullWidth
+      >
+        {expandedPdf && (
+          <Fragment>
+            <DialogTitle sx={{ pr: 6 }}>
+              {expandedPdf.title}
+              <IconButton
+                aria-label="Close"
+                onClick={() => setExpandedPdf(null)}
+                sx={{ position: "absolute", right: 8, top: 8 }}
+              >
+                <Close />
+              </IconButton>
+            </DialogTitle>
+            <DialogContent>
+              <Box
+                component="object"
+                data={`${expandedPdf.url}#view=FitH`}
+                type="application/pdf"
+                aria-label={expandedPdf.caption || expandedPdf.title}
+                sx={{ display: "block", width: "100%", height: "75vh", border: 0 }}
+              />
+              {expandedPdf.caption && (
+                <Typography variant="body2" sx={{ mt: 1.5, lineHeight: 1.6 }}>
+                  {expandedPdf.caption}
+                </Typography>
+              )}
+            </DialogContent>
+          </Fragment>
+        )}
+      </Dialog>
       {inDrawer ? (
         <Drawer heading="Charts">
           <RecordTable rows={rows} columns={columns} />

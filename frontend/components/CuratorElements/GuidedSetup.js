@@ -44,7 +44,7 @@ import Router from "next/router";
 import CuratorContext from "../../Context/Curator/curatorContext";
 import AuthContext from "../../Context/Auth/authContext";
 import AlertContext from "../../Context/Alert/alertContext";
-import { preview as openPreview } from "./TopActions";
+import { saveThenPreview } from "./TopActions";
 import ServerContext from "../../Context/Servers/serverContext";
 import SourceTreeContext from "../../Context/SourceTree/SourceTreeContext";
 import { getList } from "../../Utils/Scraper";
@@ -307,8 +307,6 @@ const GuidedSetup = () => {
     resetVersion,
     saveDraftToServer,
     getDraftTitle,
-    activeDraftId,
-    activeDraftTitle,
   } = ctx;
   const { setAlert } = useContext(AlertContext) || {};
   const { loading: authLoading, authenticated, user } = useContext(AuthContext);
@@ -948,8 +946,14 @@ const GuidedSetup = () => {
       .finally(() => setDraftSaving(false));
   };
   const previewNow = () =>
-    openPreview(metadata, setAlert || (() => {}), { push: (...args) => Router.push(...args) },
-      { id: activeDraftId, title: activeDraftTitle });
+    saveThenPreview({
+      metadata,
+      collectDraftState,
+      saveDraftToServer,
+      getDraftTitle,
+      setAlert: setAlert || (() => {}),
+      router: { push: (...args) => Router.push(...args) },
+    });
   const lastAuthor = String(referenceInfo.authors || "")
     .split(",")
     .map((name) => name.replace(/\s+/g, " ").trim())
@@ -1994,8 +1998,8 @@ const GuidedSetup = () => {
                         </Typography>
                       </Box>
                       <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                        Review the full record below, then preview how it will look or
-                        save it as a draft. When you are happy, choose a license and publish.
+                        Review the full record below, then preview how it will look
+                        (this saves your draft first) or just save the draft. When you are happy, choose a license and publish.
                       </Typography>
                       <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mt: 1.5 }}>
                         <Button
@@ -2005,7 +2009,7 @@ const GuidedSetup = () => {
                           onClick={previewNow}
                           sx={{ textTransform: "none" }}
                         >
-                          Preview
+                          Save &amp; preview
                         </Button>
                         <Button
                           variant="outlined"

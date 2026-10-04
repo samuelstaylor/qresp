@@ -340,3 +340,27 @@ describe("PDF chart figures", () => {
     expect(screen.getByTestId("chart-image")).toBeInTheDocument();
   });
 });
+
+describe("chart details column", () => {
+  it("shows the figure number, caption and key words beside the figure", () => {
+    renderCharts(
+      [{ id: "c3", imageFile: "/Figures_Tables/Figure2.png", caption: "Band structure of MgO.",
+         number: "2", properties: ["band gap", "MgO"], files: [], notebookFile: "" }],
+      ROOT
+    );
+    const details = screen.getByTestId("chart-details");
+    expect(details).toHaveTextContent("Figure 2");
+    expect(details).toHaveTextContent("Band structure of MgO.");
+    expect(details).toHaveTextContent(/key words/i);
+    expect(screen.getByText("band gap")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /expand figure 2/i })).toBeInTheDocument();
+    expect(screen.queryByText(/^properties$/i)).toBeNull();
+  });
+
+  it("labels tables as written", () => {
+    const { figureLabel } = require("../components/Paper/Charts");
+    expect(figureLabel("S1")).toBe("Figure S1");
+    expect(figureLabel("Table 1")).toBe("Table 1");
+    expect(figureLabel("")).toBe("");
+  });
+});

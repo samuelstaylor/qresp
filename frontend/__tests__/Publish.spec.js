@@ -133,8 +133,7 @@ describe("Publish", () => {
       </CuratorContext.Provider>
     );
     const user = userEvent.setup();
-    expect(screen.getByRole("button", { name: /preview record/i })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /save draft/i }));
+    await user.click(screen.getByRole("button", { name: /^save draft$/i }));
     expect(saveDraftToServer).toHaveBeenCalledWith("My paper");
     await waitFor(() =>
       expect(setAlert).toHaveBeenCalledWith("Draft saved", expect.anything(), null)
@@ -142,11 +141,42 @@ describe("Publish", () => {
     expect(axios.post).not.toHaveBeenCalled();
   });
 
-  it("previews the record through the preview endpoint", async () => {
+  const renderWithDraft = (saveDraftToServer, setAlert = jest.fn()) => {
+    const metadata = convertReqSchematoState(paperDoc);
+    render(
+      <CuratorContext.Provider value={{ metadata, saveDraftToServer, getDraftTitle: () => "My paper" }}>
+        <CuratorHelperContext.Provider value={{ editing: {} }}>
+          <ServerContext.Provider value={{ selectedHttp: null }}>
+            <AlertContext.Provider value={{ setAlert }}>
+              <LoadingContext.Provider value={{ showLoader: jest.fn(), hideLoader: jest.fn() }}>
+                <Publish />
+              </LoadingContext.Provider>
+            </AlertContext.Provider>
+          </ServerContext.Provider>
+        </CuratorHelperContext.Provider>
+      </CuratorContext.Provider>
+    );
+    return setAlert;
+  };
+
+  it("saves the draft, then previews the record", async () => {
     axios.post.mockReturnValueOnce(new Promise(() => {}));
-    renderPublish();
-    await userEvent.setup().click(screen.getByRole("button", { name: /preview record/i }));
+    const saveDraftToServer = jest.fn(() => Promise.resolve("draft1"));
+    renderWithDraft(saveDraftToServer);
+    await userEvent.setup().click(screen.getByRole("button", { name: /save & preview record/i }));
+    expect(saveDraftToServer).toHaveBeenCalledWith("My paper");
+    await waitFor(() => expect(axios.post).toHaveBeenCalledTimes(1));
     expect(axios.post.mock.calls[0][0]).toMatch(/\/api\/preview$/);
+  });
+
+  it("does not preview when the draft cannot be saved", async () => {
+    const saveDraftToServer = jest.fn(() => Promise.reject(new Error("401")));
+    const setAlert = renderWithDraft(saveDraftToServer);
+    await userEvent.setup().click(screen.getByRole("button", { name: /save & preview record/i }));
+    await waitFor(() =>
+      expect(setAlert).toHaveBeenCalledWith("Save your draft to preview", expect.anything(), null)
+    );
+    expect(axios.post).not.toHaveBeenCalled();
   });
 
   it("extracts useful publish errors from current and legacy backend shapes", () => {

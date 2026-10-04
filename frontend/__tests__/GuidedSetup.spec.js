@@ -578,7 +578,7 @@ describe("GuidedSetup ready-to-publish", () => {
     expect(screen.queryByLabelText("Figure Caption")).not.toBeInTheDocument();
     const ready = screen.getByTestId("record-ready");
     expect(ready).toHaveTextContent(/your curated record is ready/i);
-    expect(screen.getByRole("button", { name: /^preview$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^save & preview$/i })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /^save draft$/i }));
     expect(saveDraftToServer).toHaveBeenCalledWith("A paper");
     expect(await screen.findByText(/saved to your account drafts/i)).toBeInTheDocument();

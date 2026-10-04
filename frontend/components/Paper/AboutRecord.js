@@ -23,8 +23,8 @@ const AboutRecord = ({ paperId, preview, curator, fileServerPath, license }) => 
   const [profile, setProfile] = useState(null);
 
   useEffect(() => {
-    // An unpublished preview has no owner yet.
-    if (preview || !paperId) return undefined;
+    // Previews resolve through the same endpoint, by the curator's email.
+    if (!paperId) return undefined;
     let cancelled = false;
     axios
       .get(`/api/paper/${encodeURIComponent(paperId)}/curator`)

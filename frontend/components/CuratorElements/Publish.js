@@ -17,7 +17,7 @@ import CuratorHelperContext from "../../Context/CuratorHelpers/curatorHelperCont
 import ServerContext from "../../Context/Servers/serverContext";
 import AlertContext from "../../Context/Alert/alertContext";
 import LoadingContext from "../../Context/Loading/loadingContext";
-import { preview } from "./TopActions";
+import { saveThenPreview } from "./TopActions";
 
 const variableTotext = {
   curatorInfo: "Curator Information",
@@ -217,8 +217,8 @@ const Publish = () => {
   const {
     metadata,
     activeDraftId,
-    activeDraftTitle,
     clearActiveDraft,
+    collectDraftState,
     saveDraftToServer,
     getDraftTitle,
   } = useContext(CuratorContext);
@@ -230,9 +230,13 @@ const Publish = () => {
   const [draftSaving, setDraftSaving] = useState(false);
 
   const onPreview = () =>
-    preview(metadata, setAlert, { push: (...args) => Router.push(...args) }, {
-      id: activeDraftId,
-      title: activeDraftTitle,
+    saveThenPreview({
+      metadata,
+      collectDraftState,
+      saveDraftToServer,
+      getDraftTitle,
+      setAlert,
+      router: { push: (...args) => Router.push(...args) },
     });
 
   const onSaveDraft = () => {
@@ -340,7 +344,7 @@ const Publish = () => {
             onClick={onPreview}
             sx={{ color: "#800000", borderColor: "rgba(128,0,0,0.5)", borderRadius: 2 }}
           >
-            Preview record
+            Save &amp; preview record
           </Button>
           <Button
             variant="outlined"

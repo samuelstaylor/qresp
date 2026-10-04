@@ -147,15 +147,25 @@ def paper(id):
 
 
 def paper_curator(id):
-    """GET /api/paper/{id}/curator — the record owner's public profile.
+    """GET /api/paper/{id}/curator — the curator's public account profile.
 
-    Matched on the verified owner_email stamped at publish time, never on the
-    curator email typed into the form, so a record cannot borrow someone
-    else's profile. Returns {"profile": null} for legacy ownerless records or
-    owners without a saved profile; the owner's email is never returned.
+    The verified owner_email stamped at publish time wins. When there is no
+    owner (legacy records, unpublished previews) or the owner has no saved
+    profile, the account registered to the record's curator email is used.
+    Only public profile fields are returned; never the email.
     """
+    sid = str(id)
+    if sid.startswith("PREVIEW_"):
+        if not re.fullmatch(r"PREVIEW_[0-9a-f]{32}", sid):
+            return {"error": "Paper not found."}, 404
+        data = Preview().getMetadata(sid)
+        if not isinstance(data, dict):
+            return {"error": "Paper not found."}, 404
+        email = str(data.get("emailId") or "").strip().lower()
+        return {"profile": public_profile(email) if email else None}, 200
+
     try:
-        stored = Paper.objects.get(id=str(id))
+        stored = Paper.objects.get(id=sid)
     except Exception:
         return {"error": "Paper not found."}, 404
 
@@ -165,7 +175,13 @@ def paper_curator(id):
             return {"error": "This record is not available."}, 404
 
     owner = (stored.owner_email or "").strip().lower()
-    return {"profile": public_profile(owner) if owner else None}, 200
+    profile = public_profile(owner) if owner else None
+    if not profile:
+        inserted = getattr(getattr(stored, "info", None), "insertedBy", None)
+        declared = str(getattr(inserted, "emailId", "") or "").strip().lower()
+        if declared and declared != owner:
+            profile = public_profile(declared)
+    return {"profile": profile}, 200
 
 
 def workflow(id):

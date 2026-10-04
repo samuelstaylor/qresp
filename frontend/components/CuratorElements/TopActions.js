@@ -70,7 +70,7 @@ const preview = (metadata, setAlert, router, draft = {}) => {
   } catch (e) {
     // Storage unavailable: the curator still resumes, just without the id.
   }
-  axios
+  return axios
     .post(getServer() + "/api/preview", convertStateToViewSchema(metadata))
     .then((res) => res.data)
     .then((res) =>
@@ -89,6 +89,39 @@ const preview = (metadata, setAlert, router, draft = {}) => {
     });
 };
 
+// Every Preview saves the draft first, so the record being looked at is
+// always one the curator can come back to. No saved draft, no preview.
+const saveThenPreview = ({
+  metadata,
+  collectDraftState,
+  saveDraftToServer,
+  getDraftTitle,
+  setAlert,
+  router,
+}) => {
+  const title =
+    (getDraftTitle && getDraftTitle()) ||
+    (metadata.referenceInfo && metadata.referenceInfo.title) ||
+    "Untitled draft";
+  const notSaved = () =>
+    setAlert(
+      "Save your draft to preview",
+      "Previewing saves your draft to your account first, and it could not be saved. " +
+        "Please check that you are signed in and try again.",
+      null
+    );
+  if (!saveDraftToServer) {
+    notSaved();
+    return Promise.resolve();
+  }
+  // Snapshot before saving: open forms flush into this, not into `metadata`.
+  const snapshot = collectDraftState ? collectDraftState() : metadata;
+  return saveDraftToServer(title).then(
+    (id) => preview(snapshot, setAlert, router, { id, title }),
+    notSaved
+  );
+};
+
 const TopActions = () => {
   const {
     metadata,
@@ -97,6 +130,7 @@ const TopActions = () => {
     hasMeaningfulDraft,
     getDraftTitle,
     saveDraftToServer,
+    collectDraftState,
     applyServerDraft,
     activeDraftId,
     activeDraftTitle,
@@ -241,7 +275,14 @@ const TopActions = () => {
     },
     preview: (e) => {
       e.preventDefault();
-      preview(metadata, setAlert, router, { id: activeDraftId, title: activeDraftTitle });
+      saveThenPreview({
+        metadata,
+        collectDraftState,
+        saveDraftToServer,
+        getDraftTitle,
+        setAlert,
+        router,
+      });
     },
   };
 
@@ -381,7 +422,7 @@ const TopActions = () => {
           </Button>
         </Tooltip>
 
-        <Tooltip title="Preview how this paper will look when published">
+        <Tooltip title="Save your draft, then preview how this paper will look when published">
           <Button
             variant="contained"
             size="small"
@@ -552,5 +593,5 @@ const TopActions = () => {
   );
 };
 
-export { preview };
+export { preview, saveThenPreview };
 export default TopActions;
