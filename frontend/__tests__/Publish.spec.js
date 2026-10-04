@@ -4,6 +4,8 @@ import axios from "axios";
 
 import Publish, {
   getPublishErrorMessage,
+  publishSchemaValidator,
+  stripSchemaIds,
 } from "../components/CuratorElements/Publish";
 import AlertContext from "../Context/Alert/alertContext";
 import CuratorContext from "../Context/Curator/curatorContext";
@@ -189,5 +191,29 @@ describe("Publish", () => {
     expect(
       getPublishErrorMessage({ response: { data: "Internal Server Error" } })
     ).toBe("Internal Server Error");
+  });
+});
+
+describe("the client-side publishing check", () => {
+  it("compiles despite the schema's duplicate anchors", () => {
+    expect(publishSchemaValidator()).toEqual(expect.any(Function));
+  });
+
+  it("accepts typed workflow connections as well as legacy pairs", () => {
+    const check = publishSchemaValidator();
+    const doc = JSON.parse(JSON.stringify(paperDoc));
+    doc.workflow = {
+      nodes: (doc.workflow && doc.workflow.nodes) || [],
+      edges: [["s0", "c0"], { from: "c16", to: "d7", type: "links_to" }],
+    };
+    expect(check(doc)).toBe(true);
+    doc.workflow.edges = [{ to: "c0" }];
+    expect(check(doc)).toBe(false);
+  });
+
+  it("strips only anchors, never a property named id", () => {
+    expect(
+      stripSchemaIds({ $id: "#/a", properties: { id: { type: "string", $id: "#/b" } } })
+    ).toEqual({ properties: { id: { type: "string" } } });
   });
 });

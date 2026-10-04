@@ -29,6 +29,34 @@ const variableTotext = {
   workflowInfo: "Workflow Graph",
 };
 
+// `$id`/`id` anchors removed; property schemas NAMED "id" are kept (their
+// value is an object, an anchor's is a string).
+export const stripSchemaIds = (node) => {
+  if (Array.isArray(node)) return node.map(stripSchemaIds);
+  if (!node || typeof node !== "object") return node;
+  const out = {};
+  Object.entries(node).forEach(([key, value]) => {
+    if ((key === "$id" || key === "id") && typeof value === "string") return;
+    out[key] = stripSchemaIds(value);
+  });
+  return out;
+};
+
+let compiledSchema;
+export const publishSchemaValidator = () => {
+  if (compiledSchema === undefined) {
+    try {
+      compiledSchema = new Ajv({ strict: false, allErrors: true }).compile(
+        stripSchemaIds(Schema)
+      );
+    } catch (e) {
+      // Leave it to the server; never block or crash the curator over this.
+      compiledSchema = null;
+    }
+  }
+  return compiledSchema;
+};
+
 const validate = (editing, metadata) => {
   /*
   Validate before sending a publish request
@@ -81,18 +109,29 @@ const validate = (editing, metadata) => {
   }
   if (errors.length > 0) return { valid: false, errors: errors };
 
-  // Ajv 8: strict mode is off to accept the legacy schema, but compilation
-  // can still THROW — the schema's duplicate draft-04-style `id` anchors make
-  // "#/properties/collections/items" ambiguous. The backend re-validates
-  // every publish/update payload anyway, so a schema-compile failure must
-  // not block (or crash) the user; skip the client-side sanity check instead.
-  try {
-    const ajv = new Ajv({ strict: false });
-    const validateSchema = ajv.compile(Schema);
-    const valid = validateSchema(metadata);
-    if (!valid) return { valid: false, errors: errors };
-  } catch (e) {
-    console.error("Client-side schema validation skipped:", e);
+  // The same schema the server checks. Its draft-04-era `$id` anchors are
+  // duplicated (e.g. "#/properties/collections/items" twice), which Ajv 8
+  // refuses to compile -- so they are stripped from a copy first. If it
+  // still cannot compile, the server re-validates every publish anyway.
+  const check = publishSchemaValidator();
+  if (check) {
+    if (!check(metadata)) {
+      return {
+        valid: false,
+        errors: [
+          <Fragment key="schema">
+            <strong>The record does not match the publishing format:</strong>
+            <ul>
+              {(check.errors || []).slice(0, 8).map((error, i) => (
+                <li key={i}>
+                  {`${error.instancePath || "record"} ${error.message}`}
+                </li>
+              ))}
+            </ul>
+          </Fragment>,
+        ],
+      };
+    }
   }
 
   return { valid: true, errors: errors };

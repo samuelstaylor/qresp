@@ -933,16 +933,46 @@
           "title": "The Edges Schema",
           "items": {
             "$id": "#/properties/workflow/properties/edges/items",
-            "type": ["array"],
-            "title": "The Items Schema",
-            "items": {
-              "$id": "#/properties/workflow/properties/edges/items/items",
-              "type": ["string"],
-              "title": "The Items Schema",
-              "default": "",
-              "examples": ["s4", "s6"],
-              "pattern": "^(.*)$"
-            }
+            "title": "One workflow connection",
+            "description": "A legacy untyped pair [from, to], or a typed connection {from, to, type, feedback?}. Which endpoints and relationships are allowed is checked by project/workflow.py.",
+            "anyOf": [
+              {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "string",
+                  "examples": [
+                    "s4",
+                    "s6"
+                  ],
+                  "pattern": "^(.*)$"
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "from",
+                  "to"
+                ],
+                "properties": {
+                  "from": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "to": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "type": {
+                    "type": "string"
+                  },
+                  "feedback": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            ]
           }
         },
         "nodes": {

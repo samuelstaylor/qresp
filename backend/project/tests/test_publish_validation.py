@@ -126,3 +126,31 @@ class TestPublishValidation(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestWorkflowEdgeShapes(unittest.TestCase):
+    """Both edge shapes publish: legacy pairs and typed connections.
+
+    The schema only checks the SHAPE; which endpoints and relationships are
+    allowed is project/workflow.py's job (validate_workflow), run first.
+    """
+
+    def with_edges(self, edges):
+        document = paper()
+        document["workflow"] = {"nodes": ["s0", "c1", "d7"], "edges": edges}
+        return document
+
+    def test_legacy_pair(self):
+        validate(self.with_edges([["s0", "c1"]]), SCHEMA)
+
+    def test_typed_connection(self):
+        validate(self.with_edges([{"from": "c1", "to": "d7", "type": "links_to"}]), SCHEMA)
+
+    def test_confirmed_feedback_loop(self):
+        validate(self.with_edges(
+            [{"from": "d7", "to": "s0", "type": "links_to", "feedback": True}]), SCHEMA)
+
+    def test_malformed_edges_are_refused(self):
+        for edges in ([{"to": "c1"}], [["s0"]], [5], [{"from": "", "to": "c1"}]):
+            with self.assertRaises(ValidationError, msg=repr(edges)):
+                validate(self.with_edges(edges), SCHEMA)
