@@ -1,4 +1,4 @@
-import { useContext, useEffect } from "react";
+import { useContext, useEffect, useRef } from "react";
 
 import ReferenceInfoForm from "../CuratorForms/ReferenceInfoForm";
 import ReferenceC from "../Paper/ReferenceC";
@@ -7,20 +7,43 @@ import CuratorContext from "../../Context/Curator/curatorContext";
 import CuratorHelperContext from "../../Context/CuratorHelpers/curatorHelperContext";
 
 import SwitchFade from "../switchFade";
+import { matchesSaved, rememberSaved, signatureOf } from "../../Utils/savedSection";
 
 const ReferenceInfoElement = () => {
   const { referenceInfo } = useContext(CuratorContext);
   const { editing, setEditing } = useContext(CuratorHelperContext);
 
+  const signature = signatureOf(referenceInfo);
+  // Opened only because the page loaded blank -- not by the curator's Edit.
+  const openedForBlank = useRef(false);
+
   useEffect(() => {
-    // A blank new record starts in edit mode. Once the curator is editing,
-    // however, importing a manuscript or applying an AI proposal must not
-    // turn a newly populated title into an implicit Save/close action.
-    // Explicit Save is the only action that closes this section.
-    if (!referenceInfo.title && !editing.referenceInfo) {
-      setEditing("referenceInfo", true);
+    // Shown as saved, with something in it: remember it, so it is still
+    // saved after the page remounts (e.g. coming back from the preview).
+    if (!editing.referenceInfo && referenceInfo.title) {
+      rememberSaved("referenceInfo", signature);
+      return;
     }
-  }, [editing.referenceInfo, referenceInfo.title, setEditing]);
+    // A blank new record starts in edit mode.
+    if (!referenceInfo.title && !editing.referenceInfo) {
+      openedForBlank.current = true;
+      setEditing("referenceInfo", true);
+      return;
+    }
+    // The draft arrives a moment after the page: if it is exactly what was
+    // last saved, it is saved. Importing a manuscript or applying an AI
+    // proposal changes it, so those never count as an implicit Save --
+    // explicit Save is still the only other way this section closes.
+    if (
+      openedForBlank.current &&
+      editing.referenceInfo &&
+      referenceInfo.title &&
+      matchesSaved("referenceInfo", signature)
+    ) {
+      openedForBlank.current = false;
+      setEditing("referenceInfo", false);
+    }
+  }, [editing.referenceInfo, referenceInfo.title, signature, setEditing]);
 
   return (
     <SwitchFade
