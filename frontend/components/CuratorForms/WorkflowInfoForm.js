@@ -32,6 +32,7 @@ import {
   fromStoredEdge,
 } from "../../Utils/workflowGraph";
 import { changedUrlProblem } from "../../Utils/externalData";
+import { sectionsCollapsing } from "../../Utils/sectionCollapse";
 
 import AlertContext from "../../Context/Alert/alertContext";
 import CuratorContext from "../../Context/Curator/curatorContext";
@@ -119,7 +120,7 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
   // The section collapses when it is saved, and starts collapsed when it
   // comes back already saved (e.g. from the preview). Opening it again is
   // the curator's choice; a change made elsewhere does not pop it open.
-  const [drawerOpen, setDrawerOpen] = useState(true);
+  const [drawerOpen, setDrawerOpen] = useState(() => !sectionsCollapsing());
   const restored = useRef(false);
 
   // Unsaved only when the workflow differs from the one last saved.

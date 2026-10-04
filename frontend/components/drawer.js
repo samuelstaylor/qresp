@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import PropTypes from "prop-types";
 
 import {
@@ -12,6 +12,8 @@ import {
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import { CheckCircle, Edit, ExpandMore } from "@mui/icons-material";
+
+import { onCollapseSections, sectionsCollapsing } from "../Utils/sectionCollapse";
 
 const StyledAccordion = styled(Accordion)(({ theme }) => ({
   borderRadius: "8px !important",
@@ -38,7 +40,9 @@ const StyledAccordionSummary = styled(AccordionSummary)({
 
 const Drawer = (props) => {
   const { heading, children, defaultOpen = false, editor, status, onToggle } = props;
-  const [ownOpen, setOwnOpen] = useState(defaultOpen);
+  // Right after a draft load or a return from the preview, sections start
+  // closed (see Utils/sectionCollapse).
+  const [ownOpen, setOwnOpen] = useState(() => defaultOpen && !sectionsCollapsing());
   // Controlled when the caller passes `open` (e.g. a section that collapses
   // itself on Save); otherwise the drawer keeps its own state as before.
   const controlled = typeof props.open === "boolean";
@@ -47,6 +51,16 @@ const Drawer = (props) => {
     if (!controlled) setOwnOpen(next);
     if (onToggle) onToggle(next);
   };
+
+  useEffect(
+    () =>
+      onCollapseSections(() => {
+        setOwnOpen(false);
+        if (onToggle) onToggle(false);
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
   return (
     <StyledAccordion

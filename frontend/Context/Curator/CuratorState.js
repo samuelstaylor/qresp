@@ -6,6 +6,7 @@ import WebStore from "../../Utils/Persist";
 import { summarizeBrowserDraft } from "../../Utils/browserDraft";
 import { listServerDrafts, saveServerDraft } from "../../Utils/serverDrafts";
 import { isNamedDraftTitle, sameDraftTitle as sameTitle } from "../../Utils/draftTitle";
+import { collapseAllSections } from "../../Utils/sectionCollapse";
 
 import {
   SET_CURATOR_STATE,
@@ -206,6 +207,8 @@ const CuratorState = (props) => {
         setActiveDraftId(pick.id);
         setActiveDraftTitle(pick.title || "");
       }
+      // Back from the preview (or resuming): the record opens tidy.
+      if (data !== null) collapseAllSections();
     } catch (e) {
       // No storage, or nothing saved: resume without an account draft id.
     }
@@ -453,6 +456,8 @@ const CuratorState = (props) => {
     setDraftDirty(false);
     setFreshVersion((version) => version + 1);
     remountForms();
+    // A loaded draft opens with every section closed.
+    collapseAllSections();
   };
 
   const getSavedDraft = () => (draftKey ? WebStore.get(draftKey) : null);
@@ -467,6 +472,7 @@ const CuratorState = (props) => {
         setActiveDraftId(stored.id);
         setActiveDraftTitle(stored.title || "");
       }
+      collapseAllSections();
       // Same reason as applyServerDraft: the inputs re-seed only on remount.
       remountForms();
     }
