@@ -240,6 +240,32 @@ class TestBusyProviderRetry(unittest.TestCase):
         self.assertEqual(1, post.call_count)
         self.assertEqual(assist.ERROR_OTHER, assist.error_kind(error))
 
+    def rate_limited(self, quota, delay=None):
+        details = [{"@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                    "violations": [{"quotaId": quota}]}]
+        if delay:
+            details.append({"@type": "type.googleapis.com/google.rpc.RetryInfo",
+                            "retryDelay": delay})
+        return self.response(429, {"error": {"code": 429, "message": "secret prompt echo",
+                                             "details": details}})
+
+    def test_a_per_minute_limit_says_how_long_to_wait(self):
+        from project import assist
+        with mock.patch.object(assist.requests, "post", return_value=self.rate_limited(
+                "GenerateRequestsPerMinutePerProjectPerModel-FreeTier", "37.2s")):
+            _answer, error = assist.call_gemini(self.CFG, {}, "p", {})
+        self.assertEqual(assist.ERROR_RATE_LIMITED, assist.error_kind(error))
+        self.assertIn("about 38 seconds", error)
+        self.assertNotIn("secret prompt echo", error)
+
+    def test_a_per_day_limit_says_try_tomorrow(self):
+        from project import assist
+        with mock.patch.object(assist.requests, "post", return_value=self.rate_limited(
+                "GenerateRequestsPerDayPerProjectPerModel-FreeTier")):
+            _answer, error = assist.call_gemini(self.CFG, {}, "p", {})
+        self.assertIn("daily usage limit", error)
+        self.assertIn("tomorrow", error)
+
     def test_gives_up_after_the_retries(self):
         from project import assist
         with mock.patch.object(assist.requests, "post",

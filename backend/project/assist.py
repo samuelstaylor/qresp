@@ -242,6 +242,27 @@ def _answer_text_from_parts(parts):
     return "".join(chunks).strip()
 
 
+def _rate_limit_details(response):
+    """(quota id, seconds to wait) from a Gemini 429, when it says. Only the
+    quota's NAME and the delay are read -- never the message, which can quote
+    the request."""
+    quota, wait = "", None
+    try:
+        details = ((response.json() or {}).get("error") or {}).get("details") or []
+        for detail in details:
+            kind = str(detail.get("@type") or "")
+            if kind.endswith("QuotaFailure"):
+                for violation in detail.get("violations") or []:
+                    quota = quota or str(violation.get("quotaId") or "")[:100]
+            elif kind.endswith("RetryInfo"):
+                match = re.match(r"^(\d+(?:\.\d+)?)s$", str(detail.get("retryDelay") or ""))
+                if match:
+                    wait = int(float(match.group(1)) + 0.999)
+    except Exception:
+        pass
+    return quota, wait
+
+
 def call_gemini(cfg, payload, system_prompt, schema, max_output_tokens=None):
     """ONE native Gemini generateContent call — no SDK, no retry of anything
     that may have been billed (only a 503 "overloaded", where nothing was
@@ -308,9 +329,20 @@ def call_gemini(cfg, payload, system_prompt, schema, max_output_tokens=None):
             break
         print("AI assist provider busy (HTTP 503), attempt %d" % (attempt + 1))
     if response.status_code == 429:
-        print("AI assist provider rate limited")
-        return None, ProviderError("You have reached the AI usage limit.",
-                                   ERROR_RATE_LIMITED)
+        quota, wait = _rate_limit_details(response)
+        print("AI assist provider rate limited (%s, retry in %s)"
+              % (quota or "unknown quota", "%ss" % wait if wait else "?"))
+        if "perday" in quota.lower():
+            message = ("The AI provider's daily usage limit for this model has "
+                       "been reached. Try again tomorrow, or ask an "
+                       "administrator to enable billing or choose another "
+                       "model.")
+        elif "perminute" in quota.lower() or wait:
+            message = ("The AI provider's per-minute usage limit was reached. "
+                       "Try again in about %d seconds." % max(wait or 60, 5))
+        else:
+            message = "You have reached the AI usage limit."
+        return None, ProviderError(message, ERROR_RATE_LIMITED)
     if response.status_code in (500, 502, 503, 504):
         print("AI assist provider error: HTTP %s" % response.status_code)
         return None, ProviderError(
