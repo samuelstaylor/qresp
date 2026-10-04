@@ -27,7 +27,7 @@ const end = () => {
 export const collapseAllSections = () => {
   if (typeof document === "undefined") return;
   collapsing = true;
-  listeners.forEach((listener) => listener());
+  listeners.forEach((listener) => listener(false));
   if (timer) clearTimeout(timer);
   timer = setTimeout(end, MAX_MS);
   if (!armed) {
@@ -64,7 +64,19 @@ export const sectionsCollapsing = () => collapsing;
 /** For a section mounting now: should it start closed? (Consumes a one-off.) */
 export const shouldStartClosed = () => collapsing || takeNextClosed();
 
-/** Called whenever collapseAllSections runs; returns an unsubscribe. */
+/** Open every section now (the record's "Expand all"). */
+export const expandAllSections = () => {
+  if (typeof document !== "undefined") end();
+  listeners.forEach((listener) => listener(true));
+};
+
+/** Close every section now (the record's "Collapse all"); never saves. */
+export const closeAllSections = () => {
+  listeners.forEach((listener) => listener(false));
+};
+
+/** Called with `open` (true/false) whenever every section is opened or
+ * closed together; returns an unsubscribe. */
 export const onCollapseSections = (listener) => {
   listeners.add(listener);
   return () => listeners.delete(listener);

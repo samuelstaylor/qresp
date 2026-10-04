@@ -101,9 +101,9 @@ const Drawer = (props) => {
 
   useEffect(
     () =>
-      onCollapseSections(() => {
-        setOwnOpen(false);
-        if (onToggle) onToggle(false);
+      onCollapseSections((next) => {
+        setOwnOpen(next);
+        if (onToggle) onToggle(next);
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []

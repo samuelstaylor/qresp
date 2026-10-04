@@ -13,7 +13,8 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { ArrowBack, Edit as EditIcon } from "@mui/icons-material";
+import { ArrowBack, Edit as EditIcon, UnfoldLess, UnfoldMore } from "@mui/icons-material";
+import { closeAllSections, expandAllSections } from "../Utils/sectionCollapse";
 import Link from "next/link";
 import { useRouter } from "next/router";
 
@@ -420,15 +421,39 @@ const curator = () => {
                       survive the form remounts its own auto-fills trigger. */}
                   {!editMode && <GuidedSetupFresh />}
                   <CuratorFormsRemounter>
-                    {!editMode && (
-                      <Typography
-                        variant="overline"
-                        component="h2"
-                        sx={{ display: "block", color: "text.secondary", letterSpacing: "0.1em", fontWeight: 700, mb: 0.5 }}
-                      >
-                        Full record
-                      </Typography>
-                    )}
+                    <Box
+                      sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", mb: 0.5 }}
+                    >
+                      {!editMode && (
+                        <Typography
+                          variant="overline"
+                          component="h2"
+                          sx={{ color: "text.secondary", letterSpacing: "0.1em", fontWeight: 700, flex: 1 }}
+                        >
+                          Full record
+                        </Typography>
+                      )}
+                      {/* Every section at once. Collapsing never saves; it
+                          only tidies the page. */}
+                      <Box sx={{ display: "flex", gap: 0.5, ml: "auto" }} data-testid="record-expand-collapse">
+                        <Button
+                          size="small"
+                          startIcon={<UnfoldMore />}
+                          onClick={expandAllSections}
+                          sx={{ textTransform: "none" }}
+                        >
+                          Expand all
+                        </Button>
+                        <Button
+                          size="small"
+                          startIcon={<UnfoldLess />}
+                          onClick={closeAllSections}
+                          sx={{ textTransform: "none" }}
+                        >
+                          Collapse all
+                        </Button>
+                      </Box>
+                    </Box>
                     {/* Order follows the guided setup: who, the paper, where
                         its files are, then what is in them. Each section has
                         an anchor the setup's Edit / Change links scroll to. */}

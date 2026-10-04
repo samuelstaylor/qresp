@@ -8,7 +8,9 @@ import userEvent from "@testing-library/user-event";
 
 import Drawer from "../components/drawer";
 import {
+  closeAllSections,
   collapseAllSections,
+  expandAllSections,
   resetSectionCollapse,
   sectionsCollapsing,
 } from "../Utils/sectionCollapse";
@@ -58,5 +60,33 @@ describe("closing every section after a load", () => {
     render(<Drawer heading="Datasets" defaultOpen>d</Drawer>);
     await userEvent.click(header(/datasets/i));
     expect(header(/datasets/i)).toHaveAttribute("aria-expanded", "true");
+  });
+});
+
+describe("the record's Expand all / Collapse all", () => {
+  it("opens and closes every section", () => {
+    render(
+      <>
+        <Drawer heading="Curator Information">x</Drawer>
+        <Drawer heading="Charts" defaultOpen>y</Drawer>
+      </>
+    );
+    act(() => expandAllSections());
+    expect(header(/curator information/i)).toHaveAttribute("aria-expanded", "true");
+    expect(header(/charts/i)).toHaveAttribute("aria-expanded", "true");
+    act(() => closeAllSections());
+    expect(header(/curator information/i)).toHaveAttribute("aria-expanded", "false");
+    expect(header(/charts/i)).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("collapsing by button does not keep new sections closed", () => {
+    act(() => closeAllSections());
+    expect(sectionsCollapsing()).toBe(false);
+  });
+
+  it("expanding ends the after-load mode", () => {
+    act(() => collapseAllSections());
+    act(() => expandAllSections());
+    expect(sectionsCollapsing()).toBe(false);
   });
 });
