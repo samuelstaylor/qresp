@@ -254,6 +254,25 @@ def _answer_text_from_parts(parts):
     return "".join(chunks).strip()
 
 
+# Cheapest first: thinking tokens share the output budget. None = omit it.
+THINKING_LEVELS = ("minimal", "low", None)
+_THINKING_LEVEL = {}
+
+
+def _next_thinking_level(level):
+    index = THINKING_LEVELS.index(level) if level in THINKING_LEVELS else -1
+    return THINKING_LEVELS[min(index + 1, len(THINKING_LEVELS) - 1)]
+
+
+def _rejects_thinking_level(response):
+    try:
+        message = str(((response.json() or {}).get("error") or {}).get("message") or "")
+    except Exception:
+        return False
+    return bool(re.search(r"thinking", message, re.IGNORECASE)
+                and re.search(r"not supported|unsupported|invalid", message, re.IGNORECASE))
+
+
 def _rate_limit_details(response):
     """(quota id, seconds to wait) from a Gemini 429, when it says. Only the
     quota's NAME and the delay are read -- never the message, which can quote
@@ -288,6 +307,7 @@ def _call_model(cfg, payload, system_prompt, schema, max_output_tokens=None):
     so the configuration, quota, hardening and error vocabulary stay in one
     place. Callers supply their own system prompt and response schema and
     parse the returned answer text themselves."""
+    level = _THINKING_LEVEL.get(cfg["MODEL"], THINKING_LEVELS[0])
     for attempt, delay in enumerate((0,) + UNAVAILABLE_RETRY_DELAYS):
         if delay:
             time.sleep(delay)
@@ -319,7 +339,10 @@ def _call_model(cfg, payload, system_prompt, schema, max_output_tokens=None):
                         # Keyword extraction needs no deliberation, and thinking
                         # tokens share the output budget — minimal keeps the
                         # answer inside the cap. Thought summaries stay OFF.
-                        "thinkingConfig": {"thinkingLevel": "minimal"},
+                        # Models differ in which levels they accept (Gemini 3.8
+                        # Flash refuses "minimal"); see _THINKING_FALLBACK.
+                        **({"thinkingConfig": {"thinkingLevel": level}}
+                           if level else {}),
                         # No temperature/top_p/top_k: deprecated for this model
                         # generation, and defaults are fine for keywording.
                     },
@@ -367,6 +390,17 @@ def _call_model(cfg, payload, system_prompt, schema, max_output_tokens=None):
         except Exception:
             label = ""
         print("AI assist provider error: HTTP %s %s" % (response.status_code, label))
+        # A model that refuses this thinking level gets the next one, once
+        # per level, and remembers it. The message is only matched, never
+        # logged or returned.
+        if response.status_code == 400 and _rejects_thinking_level(response):
+            following = _next_thinking_level(level)
+            if following != level:
+                _THINKING_LEVEL[cfg["MODEL"]] = following
+                print("AI assist: %s refuses thinking level %s; using %s"
+                      % (cfg["MODEL"], level or "none", following or "none"))
+                return _call_model(cfg, payload, system_prompt, schema,
+                                   max_output_tokens)
         return None, ProviderError("The AI provider returned an error.",
                                    ERROR_OTHER)
     try:

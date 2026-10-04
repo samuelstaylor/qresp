@@ -37,7 +37,8 @@ MAX_DATASETS = 30
 MAX_SCRIPT_EXCERPT = 2500
 MAX_REASON_CHARS = 200
 
-KEYWORD_OUTPUT_TOKENS = 1536
+# Room for a short reasoning pass on models that refuse "minimal".
+KEYWORD_OUTPUT_TOKENS = 3072
 # Up to 40 links with a one-sentence reason each; thinking shares the budget.
 LINK_OUTPUT_TOKENS = 4096
 MAX_LINKS = 40

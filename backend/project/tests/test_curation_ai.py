@@ -364,3 +364,49 @@ class TestModelFallback(unittest.TestCase):
                 "QRESP_GEMINI_MODEL": "m1",
                 "QRESP_GEMINI_FALLBACK_MODELS": " m2, m1 ,bad/name, m3 "}):
             self.assertEqual(["m1", "m2", "m3"], self.assist._gemini_config()["MODELS"])
+
+
+class TestThinkingLevelFallback(unittest.TestCase):
+    CFG = {"API_KEY": "k", "MODEL": "gemini-new", "TIMEOUT": 5, "MAX_OUTPUT_TOKENS": 256}
+
+    def setUp(self):
+        from project import assist
+        self.assist = assist
+        assist._THINKING_LEVEL.clear()
+
+    def tearDown(self):
+        self.assist._THINKING_LEVEL.clear()
+
+    def response(self, status, body):
+        r = mock.Mock()
+        r.status_code = status
+        r.json.return_value = body
+        return r
+
+    def ok(self):
+        return self.response(200, {"candidates": [{
+            "content": {"parts": [{"text": '{"a": "ok"}'}]}, "finishReason": "STOP"}]})
+
+    def refused(self):
+        return self.response(400, {"error": {"status": "INVALID_ARGUMENT", "message":
+            "Thinking level MINIMAL is not supported for this model."}})
+
+    def levels(self, post):
+        return [call.kwargs["json"]["generationConfig"].get("thinkingConfig", {}).get("thinkingLevel")
+                for call in post.call_args_list]
+
+    def test_a_refused_level_is_retried_with_the_next_and_remembered(self):
+        with mock.patch.object(self.assist.requests, "post",
+                               side_effect=[self.refused(), self.ok(), self.ok()]) as post:
+            first = self.assist._call_model(self.CFG, {}, "p", {})
+            second = self.assist._call_model(self.CFG, {}, "p", {})
+        self.assertEqual(('{"a": "ok"}', None), first)
+        self.assertEqual(('{"a": "ok"}', None), second)
+        self.assertEqual(["minimal", "low", "low"], self.levels(post))
+
+    def test_an_unrelated_400_is_not_retried(self):
+        bad = self.response(400, {"error": {"status": "INVALID_ARGUMENT", "message": "Bad schema."}})
+        with mock.patch.object(self.assist.requests, "post", return_value=bad) as post:
+            _answer, error = self.assist._call_model(self.CFG, {}, "p", {})
+        self.assertEqual(1, post.call_count)
+        self.assertEqual(self.assist.ERROR_OTHER, self.assist.error_kind(error))
