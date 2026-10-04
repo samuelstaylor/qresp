@@ -229,3 +229,19 @@ class EndpointTest(CurationTestBase):
             response = self.post("/api/curation/find-arxiv", {"title": "An NV- center in MgO"})
         self.assertEqual({"found": True, "arxiv": "2409.00246",
                           "url": "https://arxiv.org/abs/2409.00246"}, response.json())
+
+
+class AbstractTest(unittest.TestCase):
+    def test_abstract_environment(self):
+        texts = {"main.tex": r"\documentclass{x}\begin{document}"
+                             r"\begin{abstract}We study NV$^-$ centers~\cite{a}.\end{abstract}"
+                             r"\end{document}"}
+        self.assertEqual("We study NV^- centers.", L.extract_abstract(texts))
+
+    def test_abstract_command(self):
+        texts = {"main.tex": r"\documentclass{nature}\abstract{Short \textbf{bold} text.}"
+                             r"\begin{document}\end{document}"}
+        self.assertEqual("Short bold text.", L.extract_abstract(texts))
+
+    def test_no_abstract(self):
+        self.assertEqual("", L.extract_abstract(TEXTS))

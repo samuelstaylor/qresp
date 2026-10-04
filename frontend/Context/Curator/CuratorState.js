@@ -53,6 +53,10 @@ const CuratorState = (props) => {
   // keyword assist can re-read the file after explicit consent.
   const [draftDirty, setDraftDirty] = useState(false);
   const [resetVersion, setResetVersion] = useState(0);
+  // Bumped only when the form starts over or another record/draft replaces
+  // it -- never by remountForms -- so guided-setup progress and messages are
+  // cleared exactly then.
+  const [freshVersion, setFreshVersion] = useState(0);
   // Runtime-only RCC analysis. It is deliberately outside `state`, so it is
   // never serialized into browser/account drafts, metadata exports or a
   // publish payload. Artifact sections share it to avoid crawling the same
@@ -313,6 +317,7 @@ const CuratorState = (props) => {
     // Remount the form tree: context reset alone leaves stale values in the
     // always-mounted uncontrolled form inputs.
     setResetVersion((version) => version + 1);
+    setFreshVersion((version) => version + 1);
     dispatch({ type: SET_CURATOR_STATE, payload: initialState });
   };
 
@@ -354,6 +359,7 @@ const CuratorState = (props) => {
     skipNextDirty.current = true;
     setAll(data || {});
     setDraftDirty(false);
+    setFreshVersion((version) => version + 1);
     remountForms();
   };
 
@@ -372,6 +378,7 @@ const CuratorState = (props) => {
     setActiveDraftId(draft ? draft.id : null);
     setActiveDraftTitle(draft ? draft.title || "" : "");
     setDraftDirty(false);
+    setFreshVersion((version) => version + 1);
     remountForms();
   };
 
@@ -486,6 +493,7 @@ const CuratorState = (props) => {
         activeDraftTitle,
         draftDirty,
         resetVersion,
+        freshVersion,
         remountForms,
         rccAnalysisCache,
         cacheRccAnalysis,

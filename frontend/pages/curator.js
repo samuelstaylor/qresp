@@ -71,6 +71,13 @@ const ServerDraftLoader = ({ draftId }) => {
 // Remounts the curator form tree whenever the context is reset. Without
 // this, uncontrolled form inputs keep showing their old values after
 // "Start from Scratch" even though the context state is blank.
+// A new guided setup (no leftover messages or results) whenever the form
+// starts over or another draft is loaded; plain form remounts keep it.
+const GuidedSetupFresh = () => {
+  const { freshVersion } = useContext(CuratorContext);
+  return <GuidedSetup key={freshVersion} />;
+};
+
 const CuratorFormsRemounter = ({ children }) => {
   const { resetVersion } = useContext(CuratorContext);
   return <Fragment key={resetVersion}>{children}</Fragment>;
@@ -411,7 +418,7 @@ const curator = () => {
                   )}
                   {/* Outside the remounter: its scan results and lookups must
                       survive the form remounts its own auto-fills trigger. */}
-                  {!editMode && <GuidedSetup />}
+                  {!editMode && <GuidedSetupFresh />}
                   <CuratorFormsRemounter>
                     {!editMode && (
                       <Typography

@@ -569,7 +569,15 @@ const GuidedSetup = () => {
       })
       .then((res) => {
         const data = res.data || {};
-        setLatexResult(data);
+        // The DOI registry often has no abstract; the paper's source does.
+        const current = collectDraftState();
+        const abstractFilled = Boolean(
+          data.abstract && !String((current.referenceInfo || {}).abstract || "").trim()
+        );
+        if (abstractFilled) {
+          apply({ referenceInfo: { ...current.referenceInfo, abstract: data.abstract } });
+        }
+        setLatexResult({ ...data, abstractFilled });
         const skip = {};
         (data.matches || []).forEach((match) => {
           const record = charts.find((chart) => chart.id === match.id);
@@ -970,6 +978,11 @@ const GuidedSetup = () => {
                   <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.25 }}>
                     {[referenceInfo.authors, referenceInfo.year].filter(Boolean).join(" · ")}
                   </Typography>
+                  <Typography variant="caption" color={referenceInfo.abstract ? "text.secondary" : "warning.main"} component="div">
+                    {referenceInfo.abstract
+                      ? "Abstract included."
+                      : "The DOI registry has no abstract for this paper; step 5 fills it in from the LaTeX source."}
+                  </Typography>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 0.75, flexWrap: "wrap" }}>
                     {referenceInfo.doi && <Chip size="small" variant="outlined" label={`DOI ${referenceInfo.doi}`} />}
                     <Box sx={{ flex: 1 }} />
@@ -1361,7 +1374,8 @@ const GuidedSetup = () => {
                     Point Qresp at the source and it copies each{" "}
                     <Box component="code" sx={{ fontSize: "0.85em" }}>\caption{"{…}"}</Box>{" "}
                     onto the matching figure: the paper's exact words, no AI,
-                    and nothing is stored.
+                    and nothing is stored. If the DOI lookup found no abstract,
+                    the abstract is taken from the source too.
                   </Typography>
 
                   <ToggleButtonGroup
@@ -1453,6 +1467,11 @@ const GuidedSetup = () => {
 
                   {latexResult && (
                     <Box sx={{ mt: 1.5 }}>
+                      {latexResult.abstractFilled && (
+                        <Alert severity="success" sx={{ mb: 1 }}>
+                          The DOI lookup had no abstract, so it was filled in from the LaTeX source.
+                        </Alert>
+                      )}
                       <Typography variant="body2" sx={{ mb: 1 }}>
                         {`Read ${latexResult.source} · ${plural((latexResult.figures || []).length, "figure or table", "figures and tables")} found · `}
                         <strong>{`${plural((latexResult.matches || []).length, "matches a figure", "match figures")} in this record`}</strong>

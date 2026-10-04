@@ -490,6 +490,25 @@ def extract_figures(texts):
     return main, figures
 
 
+MAX_ABSTRACT_CHARS = 6000
+
+
+def extract_abstract(texts):
+    """The paper's abstract as plain text, from the main document:
+    \\begin{abstract}...\\end{abstract}, or \\abstract{...} (some journal
+    classes). "" when there is none."""
+    main = _main_file(texts)
+    if main is None:
+        return ""
+    document = flatten(texts, main)
+    match = re.search(r"\\begin\{abstract\}(.*?)\\end\{abstract\}", document, re.S)
+    raw = match.group(1) if match else ""
+    if not raw:
+        args = _command_args(document, "abstract")
+        raw = args[0] if args else ""
+    return to_plain(raw)[:MAX_ABSTRACT_CHARS]
+
+
 # ---- matching to the record's figures -------------------------------------------
 
 def _stem(path):
@@ -588,6 +607,7 @@ def latex_captions(body):
         return {"error": "That archive could not be opened."}, 400
 
     matches = match_captions(figures, charts)
+    abstract = extract_abstract(texts)
     print("LaTeX captions: files=%d figures=%d matched=%d"
           % (len(texts), len(figures), len(matches)))
     return {
@@ -596,4 +616,6 @@ def latex_captions(body):
         "tex_files": len(texts),
         "figures": figures,
         "matches": matches,
+        # The paper's own abstract, for records whose DOI lookup had none.
+        "abstract": abstract,
     }, 200
