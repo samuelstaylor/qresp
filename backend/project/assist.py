@@ -40,6 +40,7 @@ Privacy/safety model:
 import json
 import os
 import re
+import time
 from datetime import datetime
 
 import requests
@@ -69,6 +70,11 @@ GEMINI_DEFAULT_MAX_OUTPUT_TOKENS = 256
 # curation.AI_OUTPUT_TOKENS), sized from its response schema -- the
 # environment variable is the outer bound, not the per-feature setting.
 GEMINI_MAX_OUTPUT_TOKENS_CEILING = 2048
+
+# Gemini answers 503 UNAVAILABLE when the model is overloaded -- common on the
+# free tier. Nothing was generated (and nothing billed), so those, and only
+# those, are retried after these waits. Every other failure is final.
+UNAVAILABLE_RETRY_DELAYS = (1.0, 2.5)
 
 MAX_SUGGESTIONS = 8
 
@@ -237,8 +243,9 @@ def _answer_text_from_parts(parts):
 
 
 def call_gemini(cfg, payload, system_prompt, schema, max_output_tokens=None):
-    """ONE native Gemini generateContent call — no SDK, no retry (a retried
-    paid call is accidental spend), no tools/grounding/search/URL-context/
+    """ONE native Gemini generateContent call — no SDK, no retry of anything
+    that may have been billed (only a 503 "overloaded", where nothing was
+    generated, is retried; see UNAVAILABLE_RETRY_DELAYS), no tools/grounding/search/URL-context/
     code-execution/file uploads, and no OAuth. Structured output is requested
     with a narrow JSON schema and a hard output-token cap. Returns
     (answer_text, None) or (None, error_message); the API key, request headers,
@@ -248,52 +255,58 @@ def call_gemini(cfg, payload, system_prompt, schema, max_output_tokens=None):
     so the configuration, quota, hardening and error vocabulary stay in one
     place. Callers supply their own system prompt and response schema and
     parse the returned answer text themselves."""
-    try:
-        response = requests.post(
-            _gemini_url(cfg),
-            headers={
-                # Header auth only: never a ?key= query string, which would
-                # leak the credential into proxy/access logs.
-                "x-goog-api-key": cfg["API_KEY"],
-                "Content-Type": "application/json",
-            },
-            json={
-                "system_instruction": {
-                    "parts": [{"text": system_prompt}],
+    for attempt, delay in enumerate((0,) + UNAVAILABLE_RETRY_DELAYS):
+        if delay:
+            time.sleep(delay)
+        try:
+            response = requests.post(
+                _gemini_url(cfg),
+                headers={
+                    # Header auth only: never a ?key= query string, which would
+                    # leak the credential into proxy/access logs.
+                    "x-goog-api-key": cfg["API_KEY"],
+                    "Content-Type": "application/json",
                 },
-                # The manuscript-derived data rides as a JSON string so it
-                # stays data, not conversational instructions.
-                "contents": [{
-                    "role": "user",
-                    "parts": [{"text": json.dumps(payload,
-                                                  ensure_ascii=False)}],
-                }],
-                "generationConfig": {
-                    "responseMimeType": "application/json",
-                    "responseSchema": schema,
-                    "maxOutputTokens": max_output_tokens
-                    or cfg["MAX_OUTPUT_TOKENS"],
-                    # Keyword extraction needs no deliberation, and thinking
-                    # tokens share the output budget — minimal keeps the
-                    # answer inside the cap. Thought summaries stay OFF.
-                    "thinkingConfig": {"thinkingLevel": "minimal"},
-                    # No temperature/top_p/top_k: deprecated for this model
-                    # generation, and defaults are fine for keywording.
+                json={
+                    "system_instruction": {
+                        "parts": [{"text": system_prompt}],
+                    },
+                    # The manuscript-derived data rides as a JSON string so it
+                    # stays data, not conversational instructions.
+                    "contents": [{
+                        "role": "user",
+                        "parts": [{"text": json.dumps(payload,
+                                                      ensure_ascii=False)}],
+                    }],
+                    "generationConfig": {
+                        "responseMimeType": "application/json",
+                        "responseSchema": schema,
+                        "maxOutputTokens": max_output_tokens
+                        or cfg["MAX_OUTPUT_TOKENS"],
+                        # Keyword extraction needs no deliberation, and thinking
+                        # tokens share the output budget — minimal keeps the
+                        # answer inside the cap. Thought summaries stay OFF.
+                        "thinkingConfig": {"thinkingLevel": "minimal"},
+                        # No temperature/top_p/top_k: deprecated for this model
+                        # generation, and defaults are fine for keywording.
+                    },
                 },
-            },
-            timeout=cfg["TIMEOUT"],
-        )
-    except requests.exceptions.Timeout as e:
-        # Distinct from "unreachable": the provider is there and simply slow,
-        # and the useful advice is different.
-        print("AI assist provider timeout: %s" % type(e).__name__)
-        return None, ProviderError(
-            "The AI provider did not respond in time. Try again or select "
-            "fewer items.", ERROR_TIMEOUT)
-    except Exception as e:
-        print("AI assist provider unreachable: %s" % type(e).__name__)
-        return None, ProviderError(
-            "The server could not reach the AI provider.", ERROR_UNAVAILABLE)
+                timeout=cfg["TIMEOUT"],
+            )
+        except requests.exceptions.Timeout as e:
+            # Distinct from "unreachable": the provider is there and simply slow,
+            # and the useful advice is different.
+            print("AI assist provider timeout: %s" % type(e).__name__)
+            return None, ProviderError(
+                "The AI provider did not respond in time. Try again or select "
+                "fewer items.", ERROR_TIMEOUT)
+        except Exception as e:
+            print("AI assist provider unreachable: %s" % type(e).__name__)
+            return None, ProviderError(
+                "The server could not reach the AI provider.", ERROR_UNAVAILABLE)
+        if response.status_code != 503:
+            break
+        print("AI assist provider busy (HTTP 503), attempt %d" % (attempt + 1))
     if response.status_code == 429:
         print("AI assist provider rate limited")
         return None, ProviderError("You have reached the AI usage limit.",

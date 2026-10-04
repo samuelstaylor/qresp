@@ -1478,6 +1478,11 @@ const GuidedSetup = () => {
 
                   {kwResult && (
                     <Box sx={{ mt: 1.5 }}>
+                      {kwResult.incomplete && (
+                        <Alert severity="info" sx={{ mb: 1 }}>
+                          {`The AI service was busy for part of the request, so only ${plural((kwResult.figures || []).length, "figure has", "figures have")} suggestions. Apply these, then run Suggest keywords again for the rest.`}
+                        </Alert>
+                      )}
                       <Box sx={{ maxHeight: 340, overflowY: "auto", border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
                         {(kwResult.paper_keywords || []).length > 0 && !paperTags.length && (
                           <Box sx={{ display: "flex", gap: 0.5, alignItems: "flex-start", px: 1, py: 0.75, borderBottom: "1px solid", borderColor: "divider" }}>

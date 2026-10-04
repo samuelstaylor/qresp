@@ -219,7 +219,10 @@ def suggest_figure_keywords(body):
     print("Figure keywords: figures=%d suggested=%d calls=%d"
           % (len(figures), len(out), len(chunks)))
     return {"figures": [{"id": i, "keywords": k} for i, k in out.items()],
-            "paper_keywords": paper_keywords}, 200
+            "paper_keywords": paper_keywords,
+            # Some batches failed (e.g. the provider was busy): say so, so a
+            # partial answer is never mistaken for the whole one.
+            "incomplete": failures > 0}, 200
 
 
 # ---- links ----------------------------------------------------------------------

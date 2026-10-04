@@ -204,3 +204,63 @@ class TestScriptExcerpt(unittest.TestCase):
         self.assertIn("loadtxt('a.dat')", excerpt)
         self.assertIn("savefig('fig2.pdf')", excerpt)
         self.assertNotIn("x = 59", excerpt)
+
+
+class TestBusyProviderRetry(unittest.TestCase):
+    CFG = {"API_KEY": "k", "MODEL": "m", "TIMEOUT": 5, "MAX_OUTPUT_TOKENS": 256}
+
+    def response(self, status, body=None):
+        r = mock.Mock()
+        r.status_code = status
+        r.json.return_value = body if body is not None else {}
+        return r
+
+    def ok(self):
+        return self.response(200, {"candidates": [{
+            "content": {"parts": [{"text": '{"links": []}'}]},
+            "finishReason": "STOP"}]})
+
+    def test_a_busy_503_is_retried_then_succeeds(self):
+        from project import assist
+        with mock.patch.object(assist.requests, "post",
+                               side_effect=[self.response(503), self.ok()]) as post, \
+                mock.patch.object(assist.time, "sleep") as sleep:
+            answer, error = assist.call_gemini(self.CFG, {}, "p", {})
+        self.assertIsNone(error)
+        self.assertEqual('{"links": []}', answer)
+        self.assertEqual(2, post.call_count)
+        sleep.assert_called_once()
+
+    def test_other_errors_are_never_retried(self):
+        from project import assist
+        with mock.patch.object(assist.requests, "post",
+                               return_value=self.response(400)) as post, \
+                mock.patch.object(assist.time, "sleep"):
+            _answer, error = assist.call_gemini(self.CFG, {}, "p", {})
+        self.assertEqual(1, post.call_count)
+        self.assertEqual(assist.ERROR_OTHER, assist.error_kind(error))
+
+    def test_gives_up_after_the_retries(self):
+        from project import assist
+        with mock.patch.object(assist.requests, "post",
+                               return_value=self.response(503)) as post, \
+                mock.patch.object(assist.time, "sleep"):
+            _answer, error = assist.call_gemini(self.CFG, {}, "p", {})
+        self.assertEqual(1 + len(assist.UNAVAILABLE_RETRY_DELAYS), post.call_count)
+        self.assertEqual(assist.ERROR_UNAVAILABLE, assist.error_kind(error))
+
+
+class TestPartialKeywords(AiTestBase):
+    def test_a_failed_batch_marks_the_answer_incomplete(self):
+        from project import assist
+        self.login()
+        figures = [{"id": "c%d" % i, "number": str(i), "caption": "Caption %d" % i}
+                   for i in range(25)]
+        good = json.dumps({"figures": [{"id": "c0", "keywords": ["spin defects"]}]})
+        busy = assist.ProviderError("busy", assist.ERROR_UNAVAILABLE)
+        with mock.patch("project.assist.call_gemini",
+                        side_effect=[(good, None), (None, busy)]):
+            response = self.post("/api/curation/suggest-figure-keywords",
+                                 {"consent": True, "figures": figures})
+        self.assertEqual(200, response.status_code, response.text)
+        self.assertTrue(response.json()["incomplete"])
