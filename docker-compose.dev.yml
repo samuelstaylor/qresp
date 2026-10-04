@@ -43,6 +43,9 @@ services:
       # This exempts ONLY that host; every other host still verifies.
       - QRESP_FILESERVER_ROOTS=https://notebook.rcc.uchicago.edu/files
       - QRESP_FILESERVER_INSECURE_TLS_HOSTS=notebook.rcc.uchicago.edu
+      # No mail server in dev: Publish shows the verification link on screen
+      # instead of emailing it (same as docker-compose.staging-full.yml).
+      - QRESP_PUBLISH_SKIP_EMAIL=1
     volumes:
       - ./backend:/home/flask/app/web/
     networks:

@@ -109,60 +109,75 @@ const Drawer = (props) => {
     []
   );
 
+  const hasPencil = Boolean(editor || editing);
+
   return (
-    <StyledAccordion
-      slotProps={{ transition: { timeout: 200 } }}
-      expanded={open}
-      onChange={(_, expanded) => {
-        setOpen(expanded);
-        if (!expanded && editing) saveOnClose();
-      }}
-    >
-      <StyledAccordionSummary expandIcon={<ExpandMore />}>
-        {status === "complete" && (
-          <CheckCircle sx={{ fontSize: 18, color: "#2e7d32", flexShrink: 0 }} />
-        )}
-        {/* A span, not subtitle1's default <h6>: the Accordion already wraps
-            the summary in an <h3>, and a heading inside a button is invalid. */}
-        <Typography
-          variant="subtitle1"
-          component="span"
-          fontWeight={600}
-          sx={{ color: open ? "#800000" : "#333333", flex: 1, transition: "color 0.2s" }}
-        >
-          {heading}
-        </Typography>
-        {/* ONE PENCIL ON EVERY EDITABLE SECTION, filled in while the
-            section is open and plain while it is closed. On a saved section
-            it switches to editing; on one being edited it opens it. */}
-        {editor || editing ? (
-          <Tooltip title={editing ? "Editing" : "Edit"} placement="right" arrow>
-            <IconButton
-              size="small"
-              aria-pressed={editing}
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpen(true);
-                if (!editing && editor) editor();
-              }}
-              sx={{
-                color: open ? "#FFFFFF" : "#800000",
-                bgcolor: open ? "#800000" : "transparent",
-                mr: 0.5,
-                "&:hover": { bgcolor: open ? "#9a0000" : "rgba(128,0,0,0.08)" },
-              }}
-            >
-              <Edit fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        ) : null}
-      </StyledAccordionSummary>
-      <AccordionDetails ref={body} sx={{ pt: 0, pb: 2 }}>
-        <Box sx={{ width: "100%", display: "flex", flexDirection: "column" }}>
-          {children}
-        </Box>
-      </AccordionDetails>
-    </StyledAccordion>
+    <Box sx={{ position: "relative" }}>
+      <StyledAccordion
+        slotProps={{ transition: { timeout: 200 } }}
+        expanded={open}
+        onChange={(_, expanded) => {
+          setOpen(expanded);
+          if (!expanded && editing) saveOnClose();
+        }}
+      >
+        <StyledAccordionSummary expandIcon={<ExpandMore />}>
+          {status === "complete" && (
+            <CheckCircle sx={{ fontSize: 18, color: "#2e7d32", flexShrink: 0 }} />
+          )}
+          {/* A span, not subtitle1's default <h6>: the Accordion already wraps
+              the summary in an <h3>, and a heading inside a button is invalid. */}
+          <Typography
+            variant="subtitle1"
+            component="span"
+            fontWeight={600}
+            sx={{
+              color: open ? "#800000" : "#333333",
+              flex: 1,
+              transition: "color 0.2s",
+              pr: hasPencil ? 5 : 0,
+            }}
+          >
+            {heading}
+          </Typography>
+        </StyledAccordionSummary>
+        <AccordionDetails ref={body} sx={{ pt: 0, pb: 2 }}>
+          <Box sx={{ width: "100%", display: "flex", flexDirection: "column" }}>
+            {children}
+          </Box>
+        </AccordionDetails>
+      </StyledAccordion>
+      {/* ONE PENCIL ON EVERY EDITABLE SECTION, filled in while the section
+          is open and plain while it is closed. On a saved section it switches
+          to editing; on one being edited it opens it. It sits OVER the header
+          rather than inside it: the header is itself a <button>, and a button
+          inside a button is invalid HTML (React reports it on hydration). */}
+      {editor || editing ? (
+        <Tooltip title={editing ? "Editing" : "Edit"} placement="right" arrow>
+          <IconButton
+            size="small"
+            aria-pressed={editing}
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen(true);
+              if (!editing && editor) editor();
+            }}
+            sx={{
+              color: open ? "#FFFFFF" : "#800000",
+              bgcolor: open ? "#800000" : "transparent",
+              position: "absolute",
+              // The accordion's 10px outer margin + centred in the 52px header.
+              top: 19,
+              right: 48,
+              zIndex: 1,
+              "&:hover": { bgcolor: open ? "#9a0000" : "rgba(128,0,0,0.08)" },
+            }}
+          >
+            <Edit fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      ) : null}
+    </Box>
   );
 };
 
