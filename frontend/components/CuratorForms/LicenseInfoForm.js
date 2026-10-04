@@ -46,7 +46,7 @@ const LicenseInfoForm = ({ editor }) => {
   });
 
   return (
-    <Drawer heading="Choose a License" defaultOpen={true} editing autoSave>
+    <Drawer heading="Choose a License" defaultOpen={true} editing autoSave unsaved>
       <form onSubmit={handleSubmit(onSubmit)}>
         <Grid container spacing={1} direction="column">
           <Grid>

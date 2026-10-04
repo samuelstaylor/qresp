@@ -15,6 +15,7 @@ import {
 } from "@mui/material";
 import { ArrowBack, Edit as EditIcon, UnfoldLess, UnfoldMore } from "@mui/icons-material";
 import { closeAllSections, expandAllSections } from "../Utils/sectionCollapse";
+import LoadedDraftSaver from "../components/CuratorElements/LoadedDraftSaver";
 import Link from "next/link";
 import { useRouter } from "next/router";
 
@@ -360,6 +361,7 @@ const curator = () => {
       autoResumeDraft={!editId && !draftId && autoResumeDraft}
     >
       <CuratorHelperState>
+        <LoadedDraftSaver />
         <SourceTreeState>
           <SEO title={"Qresp | Curator"} description={curatorDescription} />
           <FileTree />

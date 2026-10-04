@@ -89,3 +89,15 @@ describe("closing a section that is being edited", () => {
     expect(onAutoSave).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("the Not saved warning", () => {
+  it("shows on a section with unsaved changes, even when it is closed", () => {
+    render(<Drawer heading="Choose a License" editing unsaved>x</Drawer>);
+    expect(screen.getByTestId("section-unsaved")).toHaveTextContent(/not saved/i);
+  });
+
+  it("is absent once the section is saved", () => {
+    render(<Drawer heading="License" editor={() => {}}>x</Drawer>);
+    expect(screen.queryByTestId("section-unsaved")).toBeNull();
+  });
+});

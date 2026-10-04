@@ -87,6 +87,10 @@ const CuratorState = (props) => {
   // it -- never by remountForms -- so guided-setup progress and messages are
   // cleared exactly then.
   const [freshVersion, setFreshVersion] = useState(0);
+  // Bumped whenever a stored draft is loaded into the form (an account
+  // draft, the browser copy, or the way back from the preview). Sections use
+  // it to treat complete, loaded content as saved rather than unsaved.
+  const [loadVersion, setLoadVersion] = useState(0);
   // Runtime-only RCC analysis. It is deliberately outside `state`, so it is
   // never serialized into browser/account drafts, metadata exports or a
   // publish payload. Artifact sections share it to avoid crawling the same
@@ -208,7 +212,10 @@ const CuratorState = (props) => {
         setActiveDraftTitle(pick.title || "");
       }
       // Back from the preview (or resuming): the record opens tidy.
-      if (data !== null) collapseAllSections();
+      if (data !== null) {
+        setLoadVersion((version) => version + 1);
+        collapseAllSections();
+      }
     } catch (e) {
       // No storage, or nothing saved: resume without an account draft id.
     }
@@ -457,6 +464,7 @@ const CuratorState = (props) => {
     setFreshVersion((version) => version + 1);
     remountForms();
     // A loaded draft opens with every section closed.
+    setLoadVersion((version) => version + 1);
     collapseAllSections();
   };
 
@@ -472,6 +480,7 @@ const CuratorState = (props) => {
         setActiveDraftId(stored.id);
         setActiveDraftTitle(stored.title || "");
       }
+      setLoadVersion((version) => version + 1);
       collapseAllSections();
       // Same reason as applyServerDraft: the inputs re-seed only on remount.
       remountForms();
@@ -579,6 +588,7 @@ const CuratorState = (props) => {
         draftDirty,
         resetVersion,
         freshVersion,
+        loadVersion,
         remountForms,
         rccAnalysisCache,
         cacheRccAnalysis,

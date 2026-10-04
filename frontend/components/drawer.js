@@ -11,7 +11,7 @@ import {
   Tooltip,
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
-import { CheckCircle, Edit, ExpandMore } from "@mui/icons-material";
+import { CheckCircle, Edit, ExpandMore, WarningAmber } from "@mui/icons-material";
 
 import {
   cancelNextSectionClosed,
@@ -56,6 +56,9 @@ const Drawer = (props) => {
     // <form> inside it; `onAutoSave` is for a section that saves another way.
     autoSave = false,
     onAutoSave,
+    // This section has changes that are not saved yet; Publish refuses
+    // until it is. Shown in the header, so it is visible even closed.
+    unsaved = false,
   } = props;
   // Right after a draft load or a return from the preview, sections start
   // closed (see Utils/sectionCollapse).
@@ -138,6 +141,31 @@ const Drawer = (props) => {
         >
           {heading}
         </Typography>
+        {unsaved ? (
+          <Tooltip title="Save this section before publishing" placement="top" arrow>
+            <Box
+              component="span"
+              data-testid="section-unsaved"
+              sx={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 0.5,
+                px: 1,
+                py: 0.25,
+                borderRadius: 1,
+                bgcolor: "#FFF4E5",
+                color: "#B25E00",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+                whiteSpace: "nowrap",
+                flexShrink: 0,
+              }}
+            >
+              <WarningAmber sx={{ fontSize: 16 }} aria-hidden="true" />
+              Not saved
+            </Box>
+          </Tooltip>
+        ) : null}
         {/* ONE PENCIL ON EVERY EDITABLE SECTION, filled in while the
             section is open and plain while it is closed. On a saved
             section it switches to editing; on one being edited it opens
@@ -189,6 +217,7 @@ Drawer.propTypes = {
   editing: PropTypes.bool,
   autoSave: PropTypes.bool,
   onAutoSave: PropTypes.func,
+  unsaved: PropTypes.bool,
   status: PropTypes.oneOf(["complete", "incomplete", "optional"]),
   open: PropTypes.bool,
   onToggle: PropTypes.func,

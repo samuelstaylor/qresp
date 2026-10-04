@@ -307,7 +307,7 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
       // Storage unavailable: still saved for this visit.
     }
   };
-  const saved = !(editing && editing.workflowInfo) && Boolean(savedAt);
+  const saved = !(editing && editing.workflowInfo);
 
 
   const onSaveInDialog = () => {
@@ -348,6 +348,7 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
         // The same pencil as every section: pressed while there are unsaved
         // changes, and an Edit that opens it again once saved.
         editing={!saved}
+        unsaved={!saved}
         editor={() => setDrawerOpen(true)}
         // Closing it with unsaved changes saves it, like every section.
         onAutoSave={onSave}

@@ -9,11 +9,23 @@ import CuratorHelperContext from "../../Context/CuratorHelpers/curatorHelperCont
 import SwitchFade from "../switchFade";
 import { matchesSaved, rememberSaved, signatureOf } from "../../Utils/savedSection";
 
+const filled = (value) =>
+  Array.isArray(value) ? value.length > 0 : Boolean(String(value || "").trim());
+
+/** Every field the publication form requires has something in it. */
+export const isCompleteReference = (reference) => {
+  const r = reference || {};
+  return ["kind", "title", "authors", "publication", "abstract"].every((key) =>
+    filled(r[key])
+  );
+};
+
 const ReferenceInfoElement = () => {
   const { referenceInfo } = useContext(CuratorContext);
   const { editing, setEditing } = useContext(CuratorHelperContext);
 
   const signature = signatureOf(referenceInfo);
+
   // Opened only because the page loaded blank -- not by the curator's Edit.
   const openedForBlank = useRef(false);
 
