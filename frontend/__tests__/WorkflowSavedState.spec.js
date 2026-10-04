@@ -86,7 +86,9 @@ describe("the workflow's saved state", () => {
     const again = mount(WORKFLOW, { workflowInfo: false });
     expect(again.setEditing).toHaveBeenLastCalledWith("workflowInfo", false);
     expect(header()).toHaveAttribute("aria-expanded", "false");
-    expect(header()).toHaveTextContent(/saved at/i);
+    // Like every other saved section: an Edit pencil, no extra decoration.
+    expect(screen.getByRole("button", { name: /^edit$/i })).toBeInTheDocument();
+    expect(header()).not.toHaveTextContent(/saved at/i);
   });
 
   it("is unsaved again once the workflow changes", () => {

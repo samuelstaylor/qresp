@@ -2,7 +2,6 @@ import { useEffect, useContext, useRef, useState, Fragment } from "react";
 
 import {
   Box,
-  Button,
   Grid,
   Dialog,
   Typography,
@@ -12,7 +11,6 @@ import {
 } from "@mui/material";
 
 import { useForm } from "react-hook-form";
-import { Save } from "@mui/icons-material";
 
 import Drawer from "../drawer";
 import { RegularStyledButton } from "../button";
@@ -309,7 +307,7 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
     }
   };
   const saved = !(editing && editing.workflowInfo) && Boolean(savedAt);
-  const heading = saved ? `Build your workflow · saved at ${savedAt}` : "Build your workflow";
+
 
   const onSaveInDialog = () => {
     unsetAlert();
@@ -343,10 +341,12 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
     <Fragment>
       {dialogOnly ? null : (
       <Drawer
-        heading={heading}
+        heading="Build your workflow"
         open={drawerOpen}
         onToggle={setDrawerOpen}
-        status={saved ? "complete" : undefined}
+        // Saved and closed, it looks like every other saved section: the
+        // title and an Edit pencil that opens it again.
+        editor={saved && !drawerOpen ? () => setDrawerOpen(true) : undefined}
       >
         {/* The ordinary path is "Organize figures and resources" above: the
             figure is the root and the connections are made for you. This is
@@ -375,18 +375,15 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
         </Box>
         <Legend />
         <Graph workflow={workflow} data={data} manipulate={manipulate} />
-        <Box sx={{ my: 1 }}>
-          <Button
-            fullWidth
-            onClick={onSave}
-            variant="contained"
-            disableElevation
-            startIcon={<Save />}
-            data-testid="workflow-save"
-            sx={{ bgcolor: "#800000", "&:hover": { bgcolor: "#9a0000" } }}
-          >
-            Save workflow
-          </Button>
+        {/* The same Save every other section has. */}
+        <Box sx={{ mt: 1 }}>
+          <Grid container direction="row" spacing={1}>
+            <Grid size={{ xs: 6, sm: 2, md: 1 }}>
+              <RegularStyledButton fullWidth onClick={onSave} data-testid="workflow-save">
+                Save
+              </RegularStyledButton>
+            </Grid>
+          </Grid>
         </Box>
       </Drawer>
       )}
