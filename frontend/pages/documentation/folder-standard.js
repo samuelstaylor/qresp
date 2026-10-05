@@ -1,9 +1,7 @@
-import { Fragment } from "react";
-
 import NextLink from "next/link";
-import { Box, Container, Divider, Link as MuiLink, Typography } from "@mui/material";
+import { Box, Divider, Link as MuiLink, Typography } from "@mui/material";
 
-import SEO from "../../components/seo";
+import DocsLayout from "../../components/Docs/DocsLayout";
 import FolderStandardBody from "../../components/FolderStandard/FolderStandardBody";
 import { STANDARD_NAME } from "../../components/FolderStandard/content";
 
@@ -28,40 +26,39 @@ const description =
   "automatic record proposals from an RCC folder.";
 
 const FolderStandard = () => (
-  <Fragment>
-    <SEO title={`Qresp | ${STANDARD_NAME}`} description={description} />
-    <Container maxWidth="md">
-      <Box sx={{ my: 5 }}>
-        <Typography variant="body2" sx={{ mb: 1 }}>
-          <MuiLink
-            component={NextLink}
-            href="/documentation"
-            underline="hover"
-            data-testid="back-to-documentation"
-          >
-            ← Documentation
-          </MuiLink>
-        </Typography>
-        <Typography variant="h3" component="h1" gutterBottom>
-          <Box component="span" sx={{ fontWeight: "bold" }}>
-            {STANDARD_NAME}
-          </Box>
-        </Typography>
-        <Typography variant="body1" color="secondary" sx={{ mb: 4 }}>
-          This is Qresp&apos;s official folder structure, and the only one it
-          publishes — the layout its automatic analysis reads. You do not have
-          to follow it: Qresp curates the folder you already have, never
-          renames anything, and still recognizes older folder names. But a
-          folder that does follow it is proposed as records without anyone
-          having to answer questions about it first.
-        </Typography>
+  <DocsLayout
+    href="/documentation/folder-standard"
+    title={STANDARD_NAME}
+    description={description}
+  >
+    <Typography variant="body2" sx={{ mb: 1 }}>
+      <MuiLink
+        component={NextLink}
+        href="/documentation"
+        underline="hover"
+        data-testid="back-to-documentation"
+      >
+        ← Documentation
+      </MuiLink>
+    </Typography>
+    <Typography variant="h4" component="h1" sx={{ fontWeight: 700, mb: 2 }}>
+      {STANDARD_NAME}
+    </Typography>
+    <Typography variant="body1" color="text.secondary" sx={{ mb: 4, lineHeight: 1.75 }}>
+      This is Qresp&apos;s official folder structure, and the only one it
+      publishes — the layout its automatic analysis reads. You do not have
+      to follow it: Qresp curates the folder you already have, never
+      renames anything, and still recognizes older folder names. But a
+      folder that does follow it is proposed as records without anyone
+      having to answer questions about it first.
+    </Typography>
 
-        <Divider sx={{ mb: 3 }} />
+    <Divider sx={{ mb: 3 }} />
 
-        <FolderStandardBody headingLevel="h2" />
-      </Box>
-    </Container>
-  </Fragment>
+    <Box>
+      <FolderStandardBody headingLevel="h2" />
+    </Box>
+  </DocsLayout>
 );
 
 export default FolderStandard;

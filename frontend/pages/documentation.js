@@ -1,21 +1,21 @@
-import { Fragment } from "react";
-
 import NextLink from "next/link";
-import {
-  Box,
-  Container,
-  Divider,
-  Link as MuiLink,
-  Typography,
-} from "@mui/material";
+import { Box, Link as MuiLink, Typography } from "@mui/material";
 
-import SEO from "../components/seo";
+import DocsLayout from "../components/Docs/DocsLayout";
+import {
+  CardGrid,
+  Code,
+  ExternalLink,
+  P,
+  PageTitle,
+  Section,
+} from "../components/Docs/elements";
 
 // Qresp documentation, in the app.
 //
-// The reference documentation lives at qresp.org and still does — it is linked
-// below. What belongs HERE is the part a curator needs while they are
-// curating: how to lay a project out before pointing Qresp at it.
+// The reference manual published at qresp.org — about, download,
+// installation, the tutorial and the reference pages — lives here as well, so
+// it can be read beside the tool it describes. This index is its front page.
 //
 // There is exactly ONE folder layout on this site, and it is the Qresp Folder
 // Standard v1 at /documentation/folder-standard. This page used to carry a
@@ -33,119 +33,139 @@ import SEO from "../components/seo";
 
 const DOCUMENTATION_SITE = "https://qresp.org";
 const FOLDER_STANDARD_PATH = "/documentation/folder-standard";
+const EMAIL = "datadev@lists.uchicago.edu";
 
-// Shown once, so `rel="noopener noreferrer"` and the new-tab note cannot be
-// forgotten. `noopener` denies the opened page a handle on this one;
-// `noreferrer` keeps the referring URL out of the request.
-const ExternalLink = ({ href, children }) => (
-  <MuiLink href={href} target="_blank" rel="noopener noreferrer" underline="hover">
-    {children}
-    <Box
-      component="span"
-      sx={{
-        position: "absolute",
-        width: "1px",
-        height: "1px",
-        overflow: "hidden",
-        clip: "rect(0 0 0 0)",
-        clipPath: "inset(50%)",
-        whiteSpace: "nowrap",
-      }}
-    >
-      {" (opens in a new tab)"}
-    </Box>
-  </MuiLink>
-);
+const SECTIONS = [
+  {
+    href: "/documentation/about",
+    title: "About Qresp",
+    description:
+      "What Qresp is, and the four steps of curation and exploration: paper organization, metadata generation, metadata collection and paper exploration.",
+  },
+  {
+    href: "/documentation/curation-and-exploration",
+    title: "Curation & Exploration",
+    description:
+      "The Curator and the Explorer, and the ecosystem of public Qresp nodes connected by federated search.",
+  },
+  {
+    href: "/documentation/download",
+    title: "Download",
+    description:
+      "Qresp and Qresp Organizer releases, and every published version of the metadata JSON schema.",
+  },
+  {
+    href: "/documentation/installation",
+    title: "Installation",
+    description:
+      "Requirements, and how to install and configure Qresp and the Qresp Organizer.",
+  },
+  {
+    href: "/documentation/tutorial",
+    title: "Tutorial",
+    description:
+      "A walk through every part of the Qresp suite, from organizing paper content to exploring a curated paper.",
+  },
+  {
+    href: "/documentation/reference",
+    title: "Reference",
+    description:
+      "How to cite Qresp, related collaborations, and how to contribute to the project.",
+  },
+];
 
 const Documentation = () => (
-  <Fragment>
-    <SEO
-      title="Qresp | Documentation"
-      description="How to organize a research project before curating it with Qresp, following the Qresp Folder Standard v1."
-    />
+  <DocsLayout
+    href="/documentation"
+    title="Documentation"
+    description="The Qresp documentation: about, download, installation, tutorials and reference, and the Qresp Folder Standard v1."
+  >
+    <PageTitle eyebrow="Qresp documentation" title="Documentation">
+      The open source software Qresp &ldquo;Curation and Exploration of
+      Reproducible Scientific Papers&rdquo; facilitates the organization,
+      annotation and exploration of data presented in scientific papers.
+    </PageTitle>
 
-    <Container maxWidth="md">
-      <Box sx={{ my: 6 }}>
+    <CardGrid cards={SECTIONS} />
 
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 700, mb: 3 }}>
-          Documentation
-        </Typography>
+    <Section title="Organizing a research project">
+      <P>
+        Qresp curates whatever structure you already have, and never renames
+        anything on your file server. But there is one layout it{" "}
+        <strong>reads</strong>: the Qresp Folder Standard v1. A folder that
+        follows it is proposed as charts, datasets, scripts, and tools
+        automatically, instead of being left for you to sort out by hand.
+      </P>
+      <P sx={{ mb: 3 }}>
+        It is the recommended contract for accurate automatic analysis, not a
+        rule about where your files may live. Existing folders — including
+        ones using older names such as <Code>data</Code>,{" "}
+        <Code>Figures_Tables</Code>, or <Code>Plot_Scripts</Code> — keep
+        working exactly as they do today.
+      </P>
 
-        {/* Intro callout */}
-        <Box
-          sx={{
-            borderLeft: "4px solid #800000",
-            pl: 3,
-            py: 1.5,
-            mb: 5,
-            backgroundColor: "rgba(128,0,0,0.04)",
-            borderRadius: "0 8px 8px 0",
-          }}
-        >
-          <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.75 }}>
-            The full Qresp reference documentation is at{" "}
-            <ExternalLink href={DOCUMENTATION_SITE}>qresp.org</ExternalLink>. This
-            page covers the part that comes first: how to lay a project out
-            before you curate it.
+      <Box
+        sx={{ border: "2px solid #800000", borderRadius: 2, overflow: "hidden" }}
+        data-testid="folder-standard-callout"
+      >
+        <Box sx={{ backgroundColor: "#800000", px: 3, py: 2 }}>
+          <Typography variant="h6" component="h3" sx={{ color: "white", fontWeight: 700 }}>
+            Qresp Folder Standard v1
           </Typography>
         </Box>
-
-        {/* Section heading */}
-        <Typography
-          variant="h5"
-          component="h2"
-          sx={{ fontWeight: 700, color: "#800000", mb: 1 }}
-        >
-          Organizing a research project
-        </Typography>
-        <Divider sx={{ mb: 3 }} />
-
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 2, lineHeight: 1.75 }}>
-          Qresp curates whatever structure you already have, and never renames
-          anything on your file server. But there is one layout it{" "}
-          <strong>reads</strong>: the Qresp Folder Standard v1. A folder that
-          follows it is proposed as charts, datasets, scripts, and tools
-          automatically, instead of being left for you to sort out by hand.
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 5, lineHeight: 1.75 }}>
-          It is the recommended contract for accurate automatic analysis, not a
-          rule about where your files may live. Existing folders — including
-          ones using older names such as <code>data</code>,{" "}
-          <code>Figures_Tables</code>, or <code>Plot_Scripts</code> — keep
-          working exactly as they do today.
-        </Typography>
-
-        {/* Folder Standard callout — upgraded */}
-        <Box
-          sx={{ border: "2px solid #800000", borderRadius: 2, overflow: "hidden" }}
-          data-testid="folder-standard-callout"
-        >
-          <Box sx={{ backgroundColor: "#800000", px: 3, py: 2 }}>
-            <Typography variant="h6" component="h3" sx={{ color: "white", fontWeight: 700 }}>
-              Qresp Folder Standard v1
-            </Typography>
-          </Box>
-          <Box sx={{ px: 3, py: 2.5 }}>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
-              The full standard — the canonical folder tree, what each
-              sub-folder means to the analyzer, and a copyable version of the
-              structure you can drop into any project.
-            </Typography>
-            <MuiLink
-              component={NextLink}
-              href={FOLDER_STANDARD_PATH}
-              underline="hover"
-              data-testid="folder-standard-link"
-              sx={{ color: "#800000", fontWeight: 600, fontSize: "0.95rem" }}
-            >
-              Read the Qresp Folder Standard v1 →
-            </MuiLink>
-          </Box>
+        <Box sx={{ px: 3, py: 2.5 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.7 }}>
+            The full standard — the canonical folder tree, what each
+            sub-folder means to the analyzer, and a copyable version of the
+            structure you can drop into any project.
+          </Typography>
+          <MuiLink
+            component={NextLink}
+            href={FOLDER_STANDARD_PATH}
+            underline="hover"
+            data-testid="folder-standard-link"
+            sx={{ color: "#800000", fontWeight: 600, fontSize: "0.95rem" }}
+          >
+            Read the Qresp Folder Standard v1 →
+          </MuiLink>
         </Box>
-
       </Box>
-    </Container>
-  </Fragment>
+    </Section>
+
+    <Section title="Contact us">
+      <P>
+        You can{" "}
+        <MuiLink href={`mailto:${EMAIL}?subject=Qresp`} underline="hover">
+          email us
+        </MuiLink>{" "}
+        at <strong>{EMAIL}</strong> for support, or see the{" "}
+        <MuiLink component={NextLink} href="/contact" underline="hover">
+          Contact
+        </MuiLink>{" "}
+        page for the issue tracker and pull requests.
+      </P>
+    </Section>
+
+    <Section title="Partners and support">
+      <P>
+        The Qresp software is developed at the{" "}
+        <ExternalLink href="https://www.uchicago.edu/">University of Chicago</ExternalLink>{" "}
+        and{" "}
+        <ExternalLink href="https://www.anl.gov/">Argonne National Laboratory</ExternalLink>.
+      </P>
+      <P>
+        The development of Qresp is supported by{" "}
+        <ExternalLink href="http://miccom-center.org">MICCoM</ExternalLink>, as
+        part of the Computational Materials Sciences Program funded by the U.S.
+        Department of Energy, Office of Science, Office of Basic Energy
+        Sciences.
+      </P>
+      <Typography variant="caption" color="text.secondary" display="block">
+        This documentation is also published at{" "}
+        <ExternalLink href={DOCUMENTATION_SITE}>qresp.org</ExternalLink>.
+      </Typography>
+    </Section>
+  </DocsLayout>
 );
 
 export { DOCUMENTATION_SITE, FOLDER_STANDARD_PATH };
