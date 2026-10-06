@@ -13,6 +13,7 @@ import {
   Typography,
 } from "@mui/material";
 import Link from "next/link";
+import Router from "next/router";
 
 import AuthContext from "../../Context/Auth/authContext";
 
@@ -32,6 +33,10 @@ const PermissionNotice = ({ paperId, server }) => {
   const [activeOpen, setActiveOpen] = useState(false);
   const [activeMessage, setActiveMessage] = useState("");
   const [activeSaving, setActiveSaving] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleteMessage, setDeleteMessage] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   const fetchPermissions = useCallback(async () => {
     try {
@@ -98,6 +103,25 @@ const PermissionNotice = ({ paperId, server }) => {
       );
     }
     setActiveSaving(false);
+  };
+
+  // Permanent, unlike deactivation; the record page no longer exists after
+  // it, so the owner is sent back to their records list.
+  const deleteRecord = async () => {
+    setDeleting(true);
+    setDeleteMessage("");
+    try {
+      await axios.delete(`/api/paper/${encodeURIComponent(paperId)}`);
+      setDeleteOpen(false);
+      Router.push("/account/records");
+    } catch (err) {
+      const res = err.response;
+      setDeleteMessage(
+        (res && res.data && res.data.error) ||
+          "Deleting this record failed, please try again."
+      );
+      setDeleting(false);
+    }
   };
 
   let text;
@@ -180,6 +204,60 @@ const PermissionNotice = ({ paperId, server }) => {
                 disabled={activeSaving}
               >
                 {isActive ? "Deactivate" : "Reactivate"}
+              </Button>
+            </DialogActions>
+          </Dialog>
+          <Button
+            size="small"
+            variant="outlined"
+            color="error"
+            data-testid="paper-delete"
+            onClick={() => {
+              setDeleteConfirm("");
+              setDeleteMessage("");
+              setDeleteOpen(true);
+            }}
+          >
+            Delete
+          </Button>
+          <Dialog
+            open={deleteOpen}
+            onClose={() => setDeleteOpen(false)}
+            fullWidth
+            maxWidth="xs"
+          >
+            <DialogTitle>Delete this record permanently?</DialogTitle>
+            <DialogContent>
+              <Typography variant="body2" color="secondary" gutterBottom>
+                The record is removed from Qresp for good, along with its
+                favorites. This cannot be undone. To hide it but keep it, use
+                Deactivate instead.
+              </Typography>
+              <TextField
+                autoFocus
+                label='Type "delete" to confirm'
+                value={deleteConfirm}
+                onChange={(e) => setDeleteConfirm(e.target.value)}
+                fullWidth
+                margin="dense"
+                slotProps={{ htmlInput: { "data-testid": "paper-delete-confirm-input" } }}
+              />
+              {deleteMessage ? (
+                <Typography variant="body2" color="error">
+                  {deleteMessage}
+                </Typography>
+              ) : null}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setDeleteOpen(false)}>Cancel</Button>
+              <Button
+                onClick={deleteRecord}
+                variant="contained"
+                color="error"
+                data-testid="paper-delete-confirm"
+                disabled={deleting || deleteConfirm.trim().toLowerCase() !== "delete"}
+              >
+                Delete
               </Button>
             </DialogActions>
           </Dialog>

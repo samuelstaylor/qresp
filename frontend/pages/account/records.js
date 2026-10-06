@@ -18,6 +18,7 @@ import {
 import {
   Add,
   Article,
+  DeleteForever,
   Edit,
   OpenInNew,
   People,
@@ -74,6 +75,25 @@ const RecordsPage = () => {
       .catch(() => {
         setRecordError(active ? "Could not reactivate. Please try again." : "Could not deactivate. Please try again.");
         closeDialog();
+      });
+  };
+
+  // Permanent, unlike deactivation. The dialog asks for the word "delete"
+  // so a slipped click cannot remove a record.
+  const confirmDelete = () => {
+    const { id } = recordDialog;
+    setRecordSaving(true);
+    setRecordError("");
+    axios
+      .delete(`/api/paper/${encodeURIComponent(id)}`)
+      .then(() => {
+        setPapers((items) => (items || []).filter((p) => p.id !== id));
+        closeDialog();
+      })
+      .catch((err) => {
+        const msg = err?.response?.data?.error || "Could not delete. Please try again.";
+        setRecordSaving(false);
+        setRecordDialog((cur) => cur ? { ...cur, error: msg } : cur);
       });
   };
 
@@ -238,6 +258,20 @@ const RecordsPage = () => {
                           </Button>
                         )
                       )}
+                      {canManage && (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="error"
+                          data-testid="record-delete"
+                          startIcon={<DeleteForever fontSize="inherit" />}
+                          onClick={() =>
+                            setRecordDialog({ type: "delete", id: paper.id, title: paper.title || "this record", value: "" })
+                          }
+                        >
+                          Delete
+                        </Button>
+                      )}
                     </Box>
                   </Box>
                 </Paper>
@@ -291,6 +325,44 @@ const RecordsPage = () => {
               <DialogActions>
                 <Button onClick={closeDialog}>Cancel</Button>
                 <Button onClick={confirmSetEditors} variant="contained" disabled={recordSaving}>Save</Button>
+              </DialogActions>
+            </Fragment>
+          ) : recordDialog?.type === "delete" ? (
+            <Fragment>
+              <DialogTitle>Delete record permanently?</DialogTitle>
+              <DialogContent>
+                <Typography color="text.secondary" gutterBottom>
+                  &ldquo;{recordDialog.title}&rdquo; will be removed from Qresp for good, along with its
+                  favorites. This cannot be undone. To hide it but keep it, use Deactivate instead.
+                </Typography>
+                <TextField
+                  autoFocus
+                  label='Type "delete" to confirm'
+                  value={recordDialog.value || ""}
+                  onChange={(e) =>
+                    setRecordDialog((cur) => ({ ...cur, value: e.target.value }))
+                  }
+                  fullWidth
+                  margin="dense"
+                  slotProps={{ htmlInput: { "data-testid": "record-delete-confirm-input" } }}
+                />
+                {recordDialog.error && (
+                  <Typography variant="body2" color="error" sx={{ mt: 1 }}>
+                    {recordDialog.error}
+                  </Typography>
+                )}
+              </DialogContent>
+              <DialogActions>
+                <Button onClick={closeDialog}>Cancel</Button>
+                <Button
+                  onClick={confirmDelete}
+                  variant="contained"
+                  color="error"
+                  data-testid="record-delete-confirm"
+                  disabled={recordSaving || (recordDialog.value || "").trim().toLowerCase() !== "delete"}
+                >
+                  Delete
+                </Button>
               </DialogActions>
             </Fragment>
           ) : recordDialog ? (

@@ -12,7 +12,7 @@ from mongoengine.errors import DoesNotExist, NotUniqueError, ValidationError as 
 from project.auth import (can_edit_paper, can_manage_paper, csrf_protect,
                           get_current_user, is_admin, paper_role,
                           public_profile, stamp_owner)
-from project.models import CuratorDraft, Favorite
+from project.models import CuratorDraft, Favorite, RelatedResearchCache
 from project.paperdao import *
 from project.util import Dtree
 from project.workflow import WorkflowError, validate_workflow
@@ -441,6 +441,39 @@ def set_paper_active(id, body):
         **_audit_update_kwargs(user, "reactivate" if active else "deactivate")
     )
     return {"id": str(existing.id), "is_active": active, "success": True}, 200
+
+
+@csrf_protect
+def delete_paper(id):
+    """
+    Permanently delete a published record
+    Handler for DELETE: /api/paper/{id}
+
+    Owner/admin only (auth.can_manage_paper -- the same rule as deactivate;
+    editors are edit-only). Unlike deactivation this cannot be undone. The
+    record's favorites and cached related-research results go with it, so
+    nothing is left pointing at an id that no longer resolves. Recommendation
+    feedback is kept: it is an evaluation signal, not part of the record.
+    """
+    user = get_current_user()
+    try:
+        existing = Paper.objects.get(id=str(id))
+    except Exception as e:
+        msg = "Exception in delete paper api " + str(e)
+        print(msg)
+        return {"error": "Paper not found"}, 404
+
+    allowed, reason = can_manage_paper(existing, user)
+    if not allowed:
+        return {"error": reason}, 401 if user is None else 403
+
+    paper_id = str(existing.id)
+    Paper.objects(id=existing.id).delete()
+    Favorite.objects(paper_id=paper_id).delete()
+    RelatedResearchCache.objects(paper_id=paper_id).delete()
+    print("Paper {} deleted by {} ({})".format(
+        paper_id, (user or {}).get("email", ""), reason))
+    return {"id": paper_id, "deleted": True, "success": True}, 200
 
 
 @csrf_protect

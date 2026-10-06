@@ -215,6 +215,28 @@ paths:
           description: Only the record owner or an admin can edit
         404:
           description: Paper with this id does not exist
+    delete:
+      operationId: "project.api.delete_paper"
+      tags:
+        - "Paper details"
+      summary: "Permanently deletes a record (record owner or admin only)"
+      description: "Cannot be undone. Use PUT /paper/{id}/active to hide a
+        record reversibly instead."
+      parameters:
+        - in: path
+          name: id
+          type: string
+          required: true
+          description: Paper Id
+      responses:
+        200:
+          description: Record deleted
+        401:
+          description: Authentication required
+        403:
+          description: Only the record owner or an admin may delete it
+        404:
+          description: Paper with this id does not exist
   /workflow/{id}:
     get:
       operationId: "project.api.workflow"

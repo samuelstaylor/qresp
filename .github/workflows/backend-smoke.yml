@@ -75,6 +75,7 @@ jobs:
             project.tests.test_curation_ai \
             project.tests.test_curation_evidence \
             project.tests.test_deactivate \
+            project.tests.test_delete \
             project.tests.test_dependencies \
             project.tests.test_drafts \
             project.tests.test_edit_flow \

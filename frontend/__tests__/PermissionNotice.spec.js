@@ -2,7 +2,9 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 jest.mock("axios");
+jest.mock("next/router", () => ({ __esModule: true, default: { push: jest.fn() } }));
 import axios from "axios";
+import Router from "next/router";
 
 import AuthContext from "../Context/Auth/authContext";
 import PermissionNotice from "../components/Paper/PermissionNotice";
@@ -281,5 +283,40 @@ describe("PermissionNotice", () => {
     const { container } = renderNotice({ authenticated: false, loading: false });
     await new Promise((r) => setTimeout(r, 0));
     expect(container).toBeEmptyDOMElement();
+  });
+
+  describe("permanent delete", () => {
+    const owner = {
+      can_edit: true,
+      reason: "owner",
+      owner_email: "owner@example.com",
+      authenticated: true,
+      is_admin: false,
+      is_active: true,
+      can_manage: true,
+    };
+
+    it("deletes after the word is typed and returns to My Records", async () => {
+      mockPermissions(owner);
+      axios.delete.mockResolvedValue({ data: { id: "abc123", deleted: true } });
+      const user = userEvent.setup();
+      renderNotice({ authenticated: true, loading: false });
+      await user.click(await screen.findByTestId("paper-delete"));
+      const dialog = screen.getByRole("dialog");
+      expect(within(dialog).getByText(/cannot be undone/i)).toBeInTheDocument();
+      const confirm = within(dialog).getByTestId("paper-delete-confirm");
+      expect(confirm).toBeDisabled();
+      await user.type(within(dialog).getByTestId("paper-delete-confirm-input"), "delete");
+      await user.click(confirm);
+      expect(axios.delete).toHaveBeenCalledWith("/api/paper/abc123");
+      expect(Router.push).toHaveBeenCalledWith("/account/records");
+    });
+
+    it("is not offered to an editor", async () => {
+      mockPermissions({ ...owner, reason: "editor", role: "editor", can_manage: false });
+      renderNotice({ authenticated: true, loading: false });
+      await screen.findByText(/you can edit this record/i);
+      expect(screen.queryByTestId("paper-delete")).not.toBeInTheDocument();
+    });
   });
 });
