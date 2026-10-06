@@ -269,11 +269,11 @@ const search = ({
     return { url, label, menuLabel: `${fullName} (${key})` };
   });
 
-  // ONE list across every node that answered, with the same paper shown once.
+  // ONE list across every node that answered, with each RECORD shown once.
   //
-  // The Explorer now opens on the whole federation, so a paper published on
-  // both UChicago and Duke used to appear as two identical rows — searching,
-  // sorting and the record count all counted it twice. Merging by DOI is
+  // A record copied onto both UChicago and Duke would otherwise appear as two
+  // identical rows. Copies are merged on the record id -- never the DOI, so
+  // two curators' records of the same paper both stay listed. Merging is
   // done here, before anything downstream sees the rows, so search, filter,
   // sort and the empty state all operate on the same combined list.
   const rows = mergeRecordsByServer(papers, servernames, selectedservers);

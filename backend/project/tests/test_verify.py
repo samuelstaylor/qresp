@@ -59,6 +59,26 @@ class TestVerifyEndpoint(unittest.TestCase):
         self.assertEqual(first["id"], second.json()["id"])
         self.assertEqual(1, Paper.objects.count())
 
+    def test_two_links_for_the_same_paper_make_two_records(self):
+        """Two curators publishing the same paper (same title and DOI) each
+        get their own record; the first one is left exactly as it was."""
+        second_id = "PUBLISH_test_verify_second"
+        second_path = os.path.join(os.path.dirname(_queue_path()),
+                                   second_id + ".json")
+        try:
+            with open(second_path, 'w') as f:
+                json.dump(_fixture(), f, ensure_ascii=False)
+            first = self.client.get(f"/api/verify/{PUBLISH_ID}").json()
+            second = self.client.get(f"/api/verify/{second_id}")
+            self.assertEqual(200, second.status_code, second.text)
+            self.assertTrue(second.json()["id"])
+            self.assertNotEqual(first["id"], second.json()["id"])
+            self.assertEqual(2, Paper.objects.count())
+            self.assertIsNotNone(Paper.objects(id=first["id"]).first())
+        finally:
+            if os.path.exists(second_path):
+                os.remove(second_path)
+
     def test_unknown_link_returns_a_clear_404(self):
         response = self.client.get("/api/verify/PUBLISH_does_not_exist")
         self.assertEqual(404, response.status_code)

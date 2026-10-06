@@ -44,7 +44,7 @@ describe("one list across two repositories", () => {
     ]);
   });
 
-  it("shows a paper on both nodes once, with both tags", () => {
+  it("shows a record copied onto both nodes once, with both tags", () => {
     const shared = record("shared");
     const rows = mergeRecordsByServer(
       { [UCHICAGO]: [shared], [DUKE]: [{ ...shared }] },
@@ -58,7 +58,9 @@ describe("one list across two repositories", () => {
     ]);
   });
 
-  it("merges on the DOI however it was written", () => {
+  it("lists two records of the same paper separately, however the DOI was written", () => {
+    // Two curators can each curate one paper. A new record must never hide
+    // the existing one it shares a DOI with.
     const rows = mergeRecordsByServer(
       {
         [UCHICAGO]: [record("a", { _Search__doi: "10.1000/Shared" })],
@@ -69,23 +71,35 @@ describe("one list across two repositories", () => {
       NAMES,
       [UCHICAGO, DUKE]
     );
-    expect(rows).toHaveLength(1);
-    expect(rows[0].paper._Search__sources).toHaveLength(2);
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => row.paper._Search__id)).toEqual(["a", "b"]);
   });
 
-  it("never merges records that have no DOI", () => {
-    // Titles collide; showing two different papers as one is a worse failure
-    // than showing one paper twice.
+  it("lists two records of the same paper on one node separately", () => {
     const rows = mergeRecordsByServer(
       {
-        [UCHICAGO]: [record("a", { _Search__doi: "" })],
-        [DUKE]: [record("b", { _Search__doi: "" })],
+        [UCHICAGO]: [
+          record("a", { _Search__doi: "10.1000/shared", _Search__title: "Same" }),
+          record("b", { _Search__doi: "10.1000/shared", _Search__title: "Same" }),
+        ],
+      },
+      NAMES,
+      [UCHICAGO]
+    );
+    expect(rows).toHaveLength(2);
+  });
+
+  it("never merges records that have no id", () => {
+    const rows = mergeRecordsByServer(
+      {
+        [UCHICAGO]: [record("a", { _Search__id: "" })],
+        [DUKE]: [record("b", { _Search__id: "" })],
       },
       NAMES,
       [UCHICAGO, DUKE]
     );
     expect(rows).toHaveLength(2);
-    expect(recordIdentity({ _Search__doi: "" })).toBe("");
+    expect(recordIdentity({ _Search__id: "" })).toBe("");
   });
 
   it("keeps the first node's copy as the one that is linked to", () => {
@@ -227,17 +241,21 @@ describe("a record published on the reader's own node", () => {
     expect(rows[0].paper._Search__title).toBe("test1");
   });
 
-  it("is still de-duplicated against a remote copy of the same paper", () => {
-    // Merging is unchanged: same DOI on two nodes is still one row.
-    const shared = record("shared", { _Search__doi: "10.1000/shared" });
+  it("does not hide the remote record of the same paper", () => {
+    // The staging report: a record published locally with the same DOI as a
+    // paperstack record made the paperstack one disappear from Explore.
     const rows = mergeRecordsByServer(
-      { [LOCAL]: [shared], [UCHICAGO]: [{ ...shared }] },
+      {
+        [LOCAL]: [record("local-1", { _Search__doi: "10.1000/shared" })],
+        [UCHICAGO]: [record("remote-1", { _Search__doi: "10.1000/shared" })],
+      },
       NAMES,
       [LOCAL, UCHICAGO]
     );
-    expect(rows).toHaveLength(1);
-    expect(rows[0].paper._Search__sources).toHaveLength(2);
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => row.paper._Search__server)).toEqual([LOCAL, UCHICAGO]);
   });
+
 });
 
 // A Qresp node is shared federation and search infrastructure. Which node

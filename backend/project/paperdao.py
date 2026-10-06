@@ -133,23 +133,22 @@ class PaperDAO(MongoDBConnection, WorkflowObject):
         return allSearchobjects
 
     def insertIntoPapers(self, paperdata):
-        """ Inserts into collection"""
-        listoftitles = [paper.reference.title for paper in Paper.objects()]
-        if paperdata['reference']['title'] in listoftitles:
-            return None
+        """ Inserts a new record and returns its id.
+
+        Always a NEW record. Two curators can each curate the same paper
+        (same title, same DOI) and both records stand side by side; nothing
+        here looks up, replaces or refuses an existing one.
+        """
         paper = Paper(**paperdata)
         paper.save()
         return str(paper.id)
 
-    def getPaperIdByTitle(self, title):
-        """ Resolves an existing paper id by exact title (the same key
-        insertIntoPapers dedups on). Used to make re-verification idempotent.
-        :return: str id or None
-        """
-        if not title:
-            return None
-        existing = Paper.objects(reference__title=title).first()
-        return str(existing.id) if existing else None
+    def paperExists(self, id):
+        """ True when a record with this id is in the collection. """
+        try:
+            return Paper.objects(id=id).first() is not None
+        except Exception:
+            return False
 
     def insertDOI(self, id, doi):
         """ Inserts into collection"""

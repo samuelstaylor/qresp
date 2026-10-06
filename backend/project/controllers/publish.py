@@ -10,6 +10,11 @@ from project.paperdao import PaperDAO
 from project.config import Config
 
 
+# Written into a queue file once its link has been verified, so the same link
+# resolves to the same record however many times it is clicked.
+PUBLISHED_ID_KEY = '_published_id'
+
+
 def _truthy(value):
     return str(value or '').strip().lower() in ('1', 'true', 'yes', 'on')
 
@@ -52,20 +57,22 @@ class Publish:
         html error code, if error
         '''
         try:
-            with open("{}{}.json".format(self.dir_prefix, id), 'r') as f:
+            path = "{}{}.json".format(self.dir_prefix, id)
+            with open(path, 'r') as f:
                 paper = json.load(f)
             dao = PaperDAO()
+            # Idempotent per LINK, not per paper: a second click on the same
+            # verification link lands on the record that link created. The
+            # paper's title or DOI is never the key -- another curator's
+            # record of the same paper is a separate record, not this one.
+            published_id = paper.pop(PUBLISHED_ID_KEY, None)
+            if published_id and dao.paperExists(published_id):
+                return published_id
             new_id = dao.insertIntoPapers(paper)
-            if new_id:
-                return new_id
-            # Already published (same title): make the verify link idempotent
-            # so clicking it again just lands the user on the existing paper
-            # instead of showing a scary error.
-            existing_id = dao.getPaperIdByTitle(
-                (paper.get('reference') or {}).get('title'))
-            if existing_id:
-                return existing_id
-            return {"msg": "This paper has already been published.", "code": 409}
+            paper[PUBLISHED_ID_KEY] = new_id
+            with open(path, 'w') as f:
+                json.dump(paper, f, ensure_ascii=False)
+            return new_id
         except FileNotFoundError as e:
             print(e, file=stderr)
             return {"msg": "This verification link is invalid or has already been used. If you just published, your paper may already be in the database.", "code": 404}

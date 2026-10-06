@@ -141,15 +141,24 @@ class TestPaperDAO(unittest.TestCase):
 
     def test_insertIntoPapers(self):
         """
-        Insert Tests for all search Objects
+        A second record of an already-curated paper (same title, same DOI)
+        is a new record beside the first -- never refused, never a replacement.
         """
         dao = PaperDAO()
         __location__ = os.path.realpath(
             os.path.join(os.getcwd(), os.path.dirname(__file__)))
         with open(os.path.join(__location__, 'data.json')) as f:
             paperdata = json.load(f)
+        before = dao.getAllFilteredSearchObjects(
+            paperTitle=paperdata['reference']['title'])
         paperid = dao.insertIntoPapers(paperdata)
-        self.assertIsNone(paperid)
+        self.assertIsNotNone(paperid)
+        after = dao.getAllFilteredSearchObjects(
+            paperTitle=paperdata['reference']['title'])
+        self.assertEqual(len(before) + 1, len(after))
+        self.assertIn(paperid, [p['_Search__id'] for p in after])
+        for p in before:
+            self.assertIn(p['_Search__id'], [q['_Search__id'] for q in after])
 
     def test_insertDOI(self):
         """
