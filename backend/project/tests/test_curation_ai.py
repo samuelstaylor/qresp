@@ -501,3 +501,180 @@ class TestAiCurateEndpoint(AiTestBase):
             response = self.post("/api/curation/ai-curate", {"consent": False, "path": FOLDER})
         self.assertEqual(400, response.status_code)
         gemini.assert_not_called()
+
+
+REVIEW_EXISTING = {
+    "charts": [{"id": "c0", "imageFile": "/Figures/Figure1.pdf", "number": "", "caption": "x",
+                "properties": ["energy"]}],
+    "datasets": [{"id": "d0", "files": ["raw"], "readme": "raw"}],
+    "scripts": [{"id": "s0", "files": ["code/make_plots.py"], "readme": "", "keywords": []}],
+    "tools": [{"id": "t0", "packageName": "numpy", "version": "1.26"}],
+}
+
+
+class TestAiCurateFocusAndReview(AiTestBase):
+    def run_curate(self, answer, **extra):
+        self.login()
+        body = {"consent": True, "path": FOLDER, "paper": {"title": "T"}, "existing": REVIEW_EXISTING}
+        body.update(extra)
+        with mock.patch("project.curation_ai.walk_folder",
+                        return_value=(INVENTORY_FILES, INVENTORY_DIRS, [], False)), \
+                mock.patch("project.curation_ai._fetch_text_sized", return_value=("print(1)", False)), \
+                mock.patch("project.assist.call_gemini", return_value=(json.dumps(answer), None)) as gemini:
+            response = self.post("/api/curation/ai-curate", body)
+        self.assertEqual(200, response.status_code, response.text)
+        return response.json(), gemini
+
+    ANSWER = {
+        "charts": [{"key": "n1", "imageFile": "plots/fig_energy.png", "reason": "r"}],
+        "datasets": [{"key": "n2", "files": ["raw/run1"], "description": "Run 1.", "reason": "r"}],
+        "scripts": [], "tools": [], "links": [],
+        "edits": [
+            {"id": "c0", "field": "number", "value": "1", "reason": "Named Figure1."},
+            {"id": "c0", "field": "caption", "value": "Invented", "reason": "never allowed"},
+            {"id": "c0", "field": "keywords", "value": "Energy", "reason": "unchanged"},
+            {"id": "d0", "field": "description", "value": "Raw outputs of runs 1 and 2.", "reason": "Only repeated the name."},
+            {"id": "s0", "field": "keywords", "value": "plotting, band structure", "reason": "r"},
+            {"id": "t0", "field": "version", "value": "1.26", "reason": "unchanged"},
+            {"id": "s9", "field": "description", "value": "Unknown item.", "reason": "r"},
+            {"id": "c0", "field": "number", "value": "Figure one", "reason": "bad form"},
+        ],
+        "notes": ["Figure 3 is in the captions but has no image in the record.", ""],
+    }
+
+    def test_focus_returns_only_the_kinds_asked_for_and_no_review(self):
+        body, gemini = self.run_curate(self.ANSWER, focus=["charts"], review=True)
+        self.assertEqual(["plots/fig_energy.png"], [c["imageFile"] for c in body["proposal"]["charts"]])
+        self.assertEqual([], body["proposal"]["datasets"])
+        self.assertEqual([], body["edits"])
+        self.assertIn("ONLY for these kinds of new items: charts", gemini.call_args[0][2])
+
+    def test_review_keeps_only_real_changes_to_allowed_fields(self):
+        body, gemini = self.run_curate(self.ANSWER, review=True)
+        self.assertEqual(
+            [("c0", "number", "1"), ("d0", "readme", "Raw outputs of runs 1 and 2."),
+             ("s0", "keywords", ["plotting", "band structure"])],
+            [(e["id"], e["field"], e["value"]) for e in body["edits"]])
+        self.assertEqual("raw", body["edits"][1]["current"])
+        self.assertEqual(["Figure 3 is in the captions but has no image in the record."], body["notes"])
+        self.assertIn("REVIEW", gemini.call_args[0][2])
+        sent = gemini.call_args[0][1]["existing"]
+        self.assertEqual("raw", sent["datasets"][0]["description"])
+        self.assertEqual(["energy"], sent["charts"][0]["keywords"])
+
+    def test_no_review_unless_asked(self):
+        body, gemini = self.run_curate(self.ANSWER)
+        self.assertEqual([], body["edits"])
+        self.assertNotIn("REVIEW", gemini.call_args[0][2])
+
+
+class TestSuggestDescriptions(AiTestBase):
+    def body(self, **extra):
+        body = {
+            "consent": True, "path": FOLDER, "paper": {"title": "An NV center in MgO"},
+            "figures": FIGURES[:2],
+            "datasets": [{"id": "d0", "files": ["Data/energies.dat", "Data/big.h5"], "readme": ""}],
+            "scripts": [{"id": "s0", "files": ["/Scripts/ccd_qeff.py"], "readme": "old"}],
+            "existing_links": [{"from": "d0", "to": "c1"}, {"from": "x", "to": "c1"}],
+        }
+        body.update(extra)
+        return body
+
+    def test_reads_files_and_returns_descriptions_for_known_items(self):
+        self.login()
+        answer = json.dumps({"descriptions": [
+            {"id": "d0", "description": "Formation energies plotted in Figure 2.", "confidence": "High"},
+            {"id": "s0", "description": "Plots the configuration coordinate diagram.", "confidence": "odd"},
+            {"id": "d7", "description": "Not in the record.", "confidence": "high"},
+            {"id": "s0", "description": "A duplicate answer.", "confidence": "high"},
+        ]})
+        with mock.patch("project.curation_ai._fetch_text_sized",
+                        return_value=("# E (eV)  q\n1.0 0\n", False)) as fetch, \
+                mock.patch("project.assist.call_gemini", return_value=(answer, None)) as gemini:
+            response = self.post("/api/curation/suggest-descriptions", self.body())
+        self.assertEqual(200, response.status_code, response.text)
+        self.assertEqual(
+            [("d0", "high"), ("s0", "low")],
+            [(d["id"], d["confidence"]) for d in response.json()["descriptions"]])
+        fetched = [call[0][0] for call in fetch.call_args_list]
+        self.assertIn(FOLDER + "/Data/energies.dat", fetched)
+        self.assertNotIn(FOLDER + "/Data/big.h5", fetched)
+        sent = gemini.call_args[0][1]
+        self.assertEqual([{"from": "d0", "to": "c1"}], sent["links"])
+        self.assertEqual("old", sent["scripts"][0]["current_description"])
+        self.assertIn("E (eV)", sent["datasets"][0]["file_heads"][0]["head"])
+
+    def test_requires_consent_and_something_to_describe(self):
+        self.login()
+        with mock.patch("project.assist.call_gemini") as gemini:
+            self.assertEqual(400, self.post("/api/curation/suggest-descriptions",
+                                            self.body(consent=False)).status_code)
+            self.assertEqual(400, self.post("/api/curation/suggest-descriptions",
+                                            self.body(datasets=[], scripts=[])).status_code)
+            self.assertEqual(400, self.post("/api/curation/suggest-descriptions",
+                                            self.body(path="https://evil.example/files/x")).status_code)
+        gemini.assert_not_called()
+
+
+LATEX_FIGURES = [
+    {"kind": "figure", "number": "1", "graphics": ["fig1.pdf"], "caption": "Screening workflow.", "label": "fig:workflow"},
+    {"kind": "figure", "number": "2", "graphics": ["fig2.pdf"], "caption": "Band structure of the NV center.", "label": "fig:bands"},
+    {"kind": "table", "number": "1", "graphics": [], "caption": "Computed energies.", "label": ""},
+]
+
+
+class TestMatchCaptions(AiTestBase):
+    def test_returns_the_papers_caption_for_each_valid_match(self):
+        self.login()
+        answer = json.dumps({"matches": [
+            {"id": "c0", "figure": "f1", "reason": "Both about band structures.", "confidence": "medium"},
+            {"id": "c1", "figure": "f2", "reason": "Energies table.", "confidence": "high"},
+            {"id": "c0", "figure": "f0", "reason": "Duplicate.", "confidence": "high"},
+            {"id": "c5", "figure": "f0", "reason": "Unknown chart.", "confidence": "high"},
+            {"id": "c2", "figure": "f9", "reason": "Unknown figure.", "confidence": "high"},
+        ]})
+        with mock.patch("project.assist.call_gemini", return_value=(answer, None)) as gemini:
+            response = self.post("/api/curation/match-captions", {
+                "consent": True, "figures": LATEX_FIGURES,
+                "charts": [{"id": "c0", "imageFile": "plots/band_structure.png"},
+                           {"id": "c1", "imageFile": "plots/energies.png"},
+                           {"id": "c2", "imageFile": "plots/other.png"}]})
+        self.assertEqual(200, response.status_code, response.text)
+        matches = response.json()["matches"]
+        self.assertEqual(
+            [("c0", "Band structure of the NV center.", "2", "ai"),
+             ("c1", "Computed energies.", "Table 1", "ai")],
+            [(m["id"], m["caption"], m["number"], m["how"]) for m in matches])
+        sent = gemini.call_args[0][1]
+        self.assertEqual(["fig2.pdf"], sent["latex_figures"][1]["graphics"])
+        self.assertEqual("plots/band_structure.png", sent["record_figures"][0]["image"])
+
+    def test_requires_consent_and_something_to_match(self):
+        self.login()
+        with mock.patch("project.assist.call_gemini") as gemini:
+            self.assertEqual(400, self.post("/api/curation/match-captions", {
+                "consent": False, "figures": LATEX_FIGURES, "charts": [{"id": "c0"}]}).status_code)
+            self.assertEqual(400, self.post("/api/curation/match-captions", {
+                "consent": True, "figures": [], "charts": [{"id": "c0"}]}).status_code)
+        gemini.assert_not_called()
+
+
+class TestNewSchemas(unittest.TestCase):
+    def test_new_schemas_use_only_what_gemini_accepts(self):
+        TestSchemas.test_only_schema_features_gemini_accepts  # same rules
+        allowed = {"type", "properties", "items", "required", "maxItems", "maxLength"}
+
+        def walk(node):
+            if isinstance(node, dict):
+                self.assertTrue(set(node) - {"properties"} <= allowed, set(node) - allowed)
+                for key, value in node.items():
+                    children = value.values() if key == "properties" else [value]
+                    for child in children:
+                        if isinstance(child, (dict, list)):
+                            walk(child)
+            elif isinstance(node, list):
+                for item in node:
+                    walk(item)
+
+        for schema in (cai.DESCRIBE_SCHEMA, cai.MATCH_SCHEMA, cai.CURATE_SCHEMA):
+            walk(schema)

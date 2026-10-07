@@ -2577,7 +2577,8 @@ describe("Folder Analysis field contract", () => {
                      "dataset-0");
 
     expect(input(/^files/i)).toBeRequired();
-    expect(input(/^description/i)).toBeRequired();
+    // Optional: a dataset may be added and published without one.
+    expect(input(/^description/i)).not.toBeRequired();
     const keywords = input(/^keywords/i);
     expect(keywords).not.toBeRequired();
 
@@ -2594,9 +2595,9 @@ describe("Folder Analysis field contract", () => {
     renderWith();
     await openFields(user, null, /select figure1\.png/i, "chart-0");
 
-    expect(input(/^figure caption ?\*?$/i)).toBeRequired();
     expect(input(/^figure image ?\*?$/i)).toBeRequired();
     // Optional for a chart.
+    expect(input(/^figure caption ?\*?$/i)).not.toBeRequired();
     expect(input(/^reproduction notebook ?\*?$/i)).not.toBeRequired();
     expect(input(/^input \/ supporting files/i)).not.toBeRequired();
 
@@ -2628,7 +2629,7 @@ describe("Folder Analysis field contract", () => {
       /keyword\(s\) for what the figure shows/i,
     ].forEach((prose) => expect(fields.textContent).not.toMatch(prose));
     // The label, the value and the required marker all stay.
-    expect(input(/^figure caption ?\*?$/i)).toBeRequired();
+    expect(input(/^figure image ?\*?$/i)).toBeRequired();
     expect(input(/^figure image ?\*?$/i)).toHaveValue("figures/figure1.png");
   });
 
@@ -2658,12 +2659,12 @@ describe("Folder Analysis field contract", () => {
     // they are filled.
     await askToAdd(user);
     expect(screen.getByTestId("needs-input-chart-0")).toHaveTextContent(
-      "Needs Figure Number, Figure Caption, Keywords"
+      "Needs Figure Number, Keywords"
     );
-    await fill(user, input(/^figure caption ?\*?$/i), "Density of states");
+    await fill(user, input(/^figure number ?\*?$/i), "1");
     await waitFor(() =>
       expect(screen.getByTestId("needs-input-chart-0")).toHaveTextContent(
-        "Needs Figure Number, Keywords"
+        /^Needs Keywords$/
       )
     );
 
@@ -2708,7 +2709,7 @@ describe("Folder Analysis field contract", () => {
     ).toBeNull();
     // The marker itself is untouched: `required` still drives MUI's real
     // aria-required, which is what a screen reader acts on.
-    expect(input(/^figure caption ?\*?$/i)).toBeRequired();
+    expect(input(/^figure image ?\*?$/i)).toBeRequired();
   });
 
   it("keeps a real scan warning visible while the prose is trimmed", async () => {
@@ -2743,62 +2744,35 @@ describe("Folder Analysis field contract", () => {
     await openFields(user, /scripts \(1\)/i, /select plot_vdos\.py/i,
                      "script-0");
 
-    // readme is blank and required, so asking for it is refused...
-    await askToAdd(user);
-    expect(screen.getByTestId("needs-input-script-0")).toBeInTheDocument();
-
-    await fill(user, input(/^description ?\*?$/i), "Plots the VDOS");
-
-    // ...and it goes once the REQUIRED field is filled, even though Keywords
-    // and URLs are still empty.
-    await waitFor(() =>
-      expect(screen.queryByTestId("needs-input-script-0")).toBeNull()
-    );
+    // The description and keywords are blank, and both are optional: asking
+    // to add is not refused and nothing is flagged.
+    expect(input(/^description ?\*?$/i)).toHaveValue("");
+    expect(input(/^description ?\*?$/i)).not.toBeRequired();
     expect(input(/^keywords/i)).toHaveValue("");
     expect(screen.queryByLabelText(/^urls/i)).toBeNull();
+    await askToAdd(user);
+    expect(screen.queryByTestId("needs-input-script-0")).toBeNull();
+    expect(screen.queryByTestId("blocked-summary")).toBeNull();
   });
 
-  it("will not add a candidate whose required field is still blank",
+  it("adds a script whose optional description is still blank",
      async () => {
-    // This used to be the opposite test: import added the record anyway, and
-    // a Script with no description reached the Curator through the one door
-    // that did not ask. Manual entry has never allowed it.
+    // A description helps readers but is not required: the script is added
+    // as it is, and the curator can describe it later.
     const user = userEvent.setup();
     const { addMany } = renderWith();
     await openFields(user, /scripts \(1\)/i, /select plot_vdos\.py/i,
                      "script-0");
 
-    // The description is required and deliberately left blank. The card
-    // says nothing until the curator asks for it...
-    expect(screen.queryByTestId("needs-input-script-0")).toBeNull();
-    expect(
-      screen.getByRole("button", { name: /add selected items/i })
-    ).toBeEnabled();
-
-    // ...and then it is refused, once, in one sentence, with the fields
-    // named on the card they belong to.
     await askToAdd(user);
-    expect(addMany).not.toHaveBeenCalled();
-    expect(screen.getByTestId("blocked-summary")).toHaveTextContent(
-      "1 selected item needs details before it can be added. Nothing was added."
-    );
-    expect(screen.getByTestId("needs-input-script-0")).toHaveTextContent(
-      "Needs Description"
-    );
-
-    await fill(user, input(/^description ?\*?$/i), "Plots the VDOS");
-    await user.click(
-      screen.getByRole("button", { name: /add selected items/i })
-    );
-
+    expect(screen.queryByTestId("blocked-summary")).toBeNull();
     expect(addMany).toHaveBeenCalledTimes(1);
     const [kind, records] = addMany.mock.calls[0];
     expect(kind).toBe("script");
     expect(records).toHaveLength(1);
-    expect(records[0].readme).toBe("Plots the VDOS");
+    expect(records[0].readme).toBe("");
     // ...and it carries the separate keywords list. A brand-new record does
-    // not invent an empty legacy URLs array. Keywords are NOT required for a
-    // script, so a blank one never held the import back.
+    // not invent an empty legacy URLs array.
     expect(records[0].keywords).toEqual([]);
     expect(records[0]).not.toHaveProperty("URLs");
   });
@@ -2968,7 +2942,7 @@ describe("a card never contradicts itself about what a field holds", () => {
     );
     await askToAdd(user);
     expect(screen.getByTestId("needs-input-chart-0")).toHaveTextContent(
-      /Needs Figure Number, Figure Caption, Keywords/i
+      /Needs Figure Number, Keywords/i
     );
 
     await user.click(screen.getByTestId("ai-use-description-chart-0"));
@@ -3036,18 +3010,18 @@ describe("a card never contradicts itself about what a field holds", () => {
       screen.getByRole("checkbox", { name: /select figure1\.png/i })
     );
     await askToAdd(user);
-    await user.click(screen.getByTestId("ai-use-description-chart-0"));
+    await user.click(screen.getByTestId("ai-use-keywords-chart-0"));
+    expect(screen.getByTestId("needs-input-chart-0")).toHaveTextContent(
+      /^Needs Figure Number$/i
+    );
+
+    await user.clear(keywords());
     expect(screen.getByTestId("needs-input-chart-0")).toHaveTextContent(
       /Needs Figure Number, Keywords/i
     );
-
-    await user.clear(caption());
-    expect(screen.getByTestId("needs-input-chart-0")).toHaveTextContent(
-      /Needs Figure Number, Figure Caption, Keywords/i
-    );
     expectState("not applied");
     // The Use button comes back, because the field is free again.
-    expect(screen.getByTestId("ai-use-description-chart-0")).toBeEnabled();
+    expect(screen.getByTestId("ai-use-keywords-chart-0")).toBeEnabled();
   });
 
   it("is applied as soon as a description-only suggestion is used", async () => {
@@ -4067,7 +4041,8 @@ describe("typed import dialog ??readable by default", () => {
         // Answered on the card before it could be added: the layout work
         // did not change what an import is allowed to create.
         number: "1",
-        caption: "Density of states",
+        // Optional, so left as the folder had it.
+        caption: "",
         properties: ["dos"],
         files: [],
         notebookFile: "",
@@ -4621,16 +4596,16 @@ describe("an RCC import may not create what a curator could not type", () => {
     // The detail is on the card, next to the inputs that answer it -- and
     // the empty required inputs are marked, the optional ones are not.
     expect(screen.getByTestId("needs-input-chart-0")).toHaveTextContent(
-      "Needs Figure Number, Figure Caption, Keywords"
+      "Needs Figure Number, Keywords"
     );
     const errored = (field) =>
       within(screen.getByTestId(`field-group-chart-0-${field}`))
         .getByRole("textbox")
         .getAttribute("aria-invalid");
-    expect(errored("caption")).toBe("true");
     expect(errored("number")).toBe("true");
     expect(errored("properties")).toBe("true");
     // Optional, empty, and not marked.
+    expect(errored("caption")).toBe("false");
     expect(errored("notebookFile")).toBe("false");
     // The image the folder DID answer is not marked either.
     expect(errored("imageFile")).toBe("false");
@@ -4646,7 +4621,7 @@ describe("an RCC import may not create what a curator could not type", () => {
         ...complete,
         candidates: {
           ...complete.candidates,
-          // Two figures: one ready, one with no caption.
+          // Two figures: one ready, one with no keywords.
           charts: [
             complete.candidates.charts[0],
             {
@@ -4659,7 +4634,7 @@ describe("an RCC import may not create what a curator could not type", () => {
                 imageFile: "figures/figure2.png",
                 number: "2",
                 caption: "",
-                properties: ["dos"],
+                properties: [],
               },
             },
           ],
@@ -4689,7 +4664,7 @@ describe("an RCC import may not create what a curator could not type", () => {
 
     // ...and it is the incomplete one that is asked, not the ready one.
     expect(screen.getByTestId("needs-input-chart-1")).toHaveTextContent(
-      "Needs Figure Caption"
+      "Needs Keywords"
     );
     expect(screen.queryByTestId("needs-input-chart-0")).toBeNull();
 
@@ -4710,24 +4685,22 @@ describe("an RCC import may not create what a curator could not type", () => {
     const user = noDelayUser();
     const { addMany } = renderWith();
     await openAnalysis(user);
-    await user.click(screen.getByRole("tab", { name: /scripts \(1\)/i }));
     await user.click(
-      screen.getByRole("checkbox", { name: /select plot_vdos\.py/i })
+      screen.getByRole("checkbox", { name: /select figure1\.png/i })
     );
 
     await askToAdd(user);
     await askToAdd(user);
     expect(addMany).not.toHaveBeenCalled();
 
-    await fill(user, screen.getByLabelText(/^description ?\*?$/i),
-               "Plots the VDOS");
+    completeRequired();
     await askToAdd(user);
 
     expect(addMany).toHaveBeenCalledTimes(1);
     const [kind, records] = addMany.mock.calls[0];
-    expect(kind).toBe("script");
+    expect(kind).toBe("chart");
     expect(records).toHaveLength(1);
-    expect(records[0].readme).toBe("Plots the VDOS");
+    expect(records[0].properties).toEqual(["dos"]);
   });
 
   it("holds an AI suggestion to the same contract", async () => {

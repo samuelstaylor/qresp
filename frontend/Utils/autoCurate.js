@@ -2,7 +2,7 @@
 // Crossref record -> referenceInfo, and a folder analysis -> one importable
 // bundle of records and links. No React and no network here.
 
-import { toDraft, toRecord, missingRequired } from "./artifactFields";
+import { toDraft, toRecord, missingRequired, missingRecommended } from "./artifactFields";
 import { doiUtil } from "./doi";
 import { namesUtil, referenceUtil } from "./utils";
 
@@ -167,14 +167,16 @@ export const countByList = (items) => {
 };
 
 // The required fields still empty on records already in the form.
-export const recordsNeedingDetails = (state) => {
+// `recommended` also lists optional-but-recommended fields still empty (a
+// figure's caption, a resource's description), for surfaces that offer them.
+export const recordsNeedingDetails = (state, { recommended = false } = {}) => {
   const out = [];
   LISTS.forEach(({ key: list, type }) => {
     (state[list] || []).forEach((record) => {
       // Experiment tools have their own required fields, checked by the form.
       if (type === "tool" && record.kind && record.kind !== "software") return;
       const draft = toDraft(type, record);
-      const missing = missingRequired(type, draft);
+      const missing = recommended ? missingRecommended(type, draft) : missingRequired(type, draft);
       if (missing.length) out.push({ list, type, record, missing });
     });
   });

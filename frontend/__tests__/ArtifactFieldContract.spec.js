@@ -10,6 +10,8 @@ import {
   labelFor,
   missingRequired,
   requiredKeys,
+  recommendedKeys,
+  missingRecommended,
   toDraft,
   toRecord,
 } from "../Utils/artifactFields";
@@ -93,7 +95,9 @@ describe("the contract itself", () => {
         (field) => field.label === "Description"
       );
       expect(description.key).toBe("readme");
-      expect(description.required).toBe(true);
+      // Optional, but still offered by the guided setup.
+      expect(description.required).toBe(false);
+      expect(description.recommended).toBe(true);
     });
   });
 
@@ -110,14 +114,25 @@ describe("the contract itself", () => {
 
   it("marks exactly the required fields, per type", () => {
     expect(requiredKeys("chart").sort()).toEqual([
-      "caption", "imageFile", "number", "properties",
+      "imageFile", "number", "properties",
     ]);
-    expect(requiredKeys("dataset").sort()).toEqual(["files", "readme"]);
-    expect(requiredKeys("script").sort()).toEqual(["files", "readme"]);
+    expect(requiredKeys("dataset").sort()).toEqual(["files"]);
+    expect(requiredKeys("script").sort()).toEqual(["files"]);
     expect(requiredKeys("tool").sort()).toEqual(["packageName", "version"]);
     expect(
       TOOL_EXPERIMENT_FIELDS.filter((field) => field.required).map((f) => f.key)
     ).toEqual(["facilityName", "measurement"]);
+  });
+
+  it("recommends, but never requires, captions and descriptions", () => {
+    expect(recommendedKeys("chart")).toEqual(["caption"]);
+    expect(recommendedKeys("dataset")).toEqual(["readme"]);
+    expect(recommendedKeys("script")).toEqual(["readme"]);
+    expect(missingRecommended("dataset", { files: "a", readme: "" })).toEqual(["readme"]);
+    expect(missingRequired("dataset", { files: "a", readme: "" })).toEqual([]);
+    expect(
+      missingRecommended("chart", { imageFile: "", number: "1", caption: "", properties: "k" })
+    ).toEqual(["imageFile", "caption"]);
   });
 
   it("leaves the optional fields optional", () => {
@@ -177,8 +192,8 @@ describe("Needs input tracks required fields only", () => {
   });
 
   it("names a blank required field", () => {
-    expect(missingRequired("dataset", { files: "a.txt", readme: "" })).toEqual([
-      "readme",
+    expect(missingRequired("dataset", { files: "", readme: "r" })).toEqual([
+      "files",
     ]);
   });
 

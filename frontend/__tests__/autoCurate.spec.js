@@ -100,7 +100,8 @@ describe("buildImportPlan", () => {
     const chart = plan.items.find((item) => item.key === "cand:chart-0");
     expect(chart.value.number).toBe("2");
     expect(chart.value.properties).toEqual(["DFT", "spin defect"]);
-    expect(chart.missing).toEqual(["caption"]);
+    // The caption is optional, so nothing is missing.
+    expect(chart.missing).toEqual([]);
     expect(countByList(plan.items)).toEqual({ charts: 2, datasets: 1, scripts: 1, tools: 0 });
   });
 
@@ -173,7 +174,10 @@ describe("recordsNeedingDetails", () => {
       datasets: [{ id: "d0", files: ["Data/x"], readme: "" }],
       tools: [{ id: "t0", kind: "experiment", facilityName: "APS", measurement: "XRD" }],
     };
-    const needing = recordsNeedingDetails(state);
+    // Captions and descriptions are optional: nothing is required here...
+    expect(recordsNeedingDetails(state)).toEqual([]);
+    // ...but a surface that offers recommended fields still lists them.
+    const needing = recordsNeedingDetails(state, { recommended: true });
     expect(needing.map((n) => [n.record.id, n.missing])).toEqual([
       ["c0", ["caption"]],
       ["d0", ["readme"]],

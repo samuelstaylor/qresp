@@ -112,18 +112,24 @@ class TestKeywordsAreTheirOwnField(SchemaCase):
 
 class TestPublishRequiresWhatEachTypeNeeds(SchemaCase):
 
-    def test_a_chart_needs_caption_number_image_and_properties(self):
-        for field in ("caption", "number", "imageFile", "properties"):
+    def test_a_chart_needs_number_image_and_properties(self):
+        for field in ("number", "imageFile", "properties"):
             chart = dict(CHART)
             del chart[field]
             self.rejects(paper(charts=[chart]),
                          "publishing a chart with no %s" % field)
 
-    def test_a_dataset_or_script_needs_files_and_a_description(self):
+    def test_a_chart_caption_is_optional(self):
+        chart = dict(CHART)
+        del chart["caption"]
+        self.accepts(paper(charts=[chart]), "a chart with no caption")
+        self.accepts(paper(charts=[dict(CHART, caption="")]), "an empty caption")
+
+    def test_a_dataset_or_script_needs_files_but_its_description_is_optional(self):
         for section in ("datasets", "scripts"):
-            self.rejects(paper(**{section: [{"id": "x", "files": ["a"]}]}),
+            self.accepts(paper(**{section: [{"id": "x", "files": ["a"]}]}),
                          "%s with no description" % section)
-            self.rejects(paper(**{section: [
+            self.accepts(paper(**{section: [
                 {"id": "x", "files": ["a"], "readme": ""}]}),
                 "%s with an empty description" % section)
             self.rejects(paper(**{section: [{"id": "x", "readme": "r"}]}),

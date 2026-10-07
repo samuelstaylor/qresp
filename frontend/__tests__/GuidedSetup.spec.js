@@ -326,8 +326,8 @@ describe("GuidedSetup AI assistant", () => {
   it("does nothing until the curator consents", () => {
     axios.post.mockResolvedValue({ data: { found: false } });
     renderSetup({ state, auth });
-    expect(screen.getByRole("button", { name: /suggest keywords/i })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /suggest missing links/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^suggest keywords$/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^suggest missing links$/i })).toBeDisabled();
   });
 
   it("suggests and applies keywords, keeping hand-written ones unless chosen", async () => {
@@ -348,7 +348,7 @@ describe("GuidedSetup AI assistant", () => {
     );
     const curator = renderSetup({ state, auth });
     await user.click(screen.getByRole("checkbox", { name: /send the paper's title/i }));
-    await user.click(screen.getByRole("button", { name: /suggest keywords/i }));
+    await user.click(screen.getByRole("button", { name: /^suggest keywords$/i }));
     expect(axios.post).toHaveBeenCalledWith(
       "/api/curation/suggest-figure-keywords",
       expect.objectContaining({ consent: true })
@@ -378,7 +378,7 @@ describe("GuidedSetup AI assistant", () => {
     );
     const curator = renderSetup({ state, auth });
     await user.click(screen.getByRole("checkbox", { name: /send the paper's title/i }));
-    await user.click(screen.getByRole("button", { name: /suggest missing links/i }));
+    await user.click(screen.getByRole("button", { name: /^suggest missing links$/i }));
     expect(await screen.findByText("Plots the screening.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /add selected links/i }));
     // Low-confidence suggestions start unticked.
@@ -394,7 +394,7 @@ describe("GuidedSetup AI assistant", () => {
     );
     renderSetup({ state, auth });
     await user.click(screen.getByRole("checkbox", { name: /send the paper's title/i }));
-    await user.click(screen.getByRole("button", { name: /suggest keywords/i }));
+    await user.click(screen.getByRole("button", { name: /^suggest keywords$/i }));
     expect(await screen.findByText(/QRESP_GEMINI_ENABLED/)).toBeInTheDocument();
   });
 
@@ -407,7 +407,7 @@ describe("GuidedSetup AI assistant", () => {
     );
     renderSetup({ state, auth });
     await user.click(screen.getByRole("checkbox", { name: /send the paper's title/i }));
-    await user.click(screen.getByRole("button", { name: /suggest keywords/i }));
+    await user.click(screen.getByRole("button", { name: /^suggest keywords$/i }));
     expect(await screen.findByText("You have reached the AI usage limit.")).toBeInTheDocument();
   });
 });
@@ -475,7 +475,7 @@ describe("GuidedSetup AI folder curation", () => {
     );
     const curator = renderSetup({ state, auth });
     await user.click(screen.getByRole("checkbox", { name: /send the paper's title/i }));
-    await user.click(screen.getByRole("button", { name: /curate the whole folder with ai/i }));
+    await user.click(screen.getByRole("button", { name: /^curate the whole folder with ai$/i }));
     expect(axios.post).toHaveBeenCalledWith(
       "/api/curation/ai-curate",
       expect.objectContaining({
@@ -535,7 +535,7 @@ describe("GuidedSetup keyword apply keeps every change", () => {
       auth: { authenticated: true, user: { name: "Ada Lovelace", email: "ada@example.edu" } },
     });
     await user.click(screen.getByRole("checkbox", { name: /send the paper's title/i }));
-    await user.click(screen.getByRole("button", { name: /suggest keywords/i }));
+    await user.click(screen.getByRole("button", { name: /^suggest keywords$/i }));
     await user.click(await screen.findByRole("button", { name: /apply selected keywords/i }));
 
     // Nothing is written piecemeal that a later snapshot could undo.
@@ -584,8 +584,29 @@ describe("GuidedSetup ready-to-publish", () => {
     expect(await screen.findByText(/saved to your account drafts/i)).toBeInTheDocument();
   });
 
-  it("keeps required descriptions visible even after skipping", async () => {
+  it("offers descriptions as optional, so skipping them leaves the record ready", async () => {
     const user = userEvent.setup();
+    axios.post.mockResolvedValue({ data: { found: false } });
+    renderSetup({
+      state: {
+        ...blankState,
+        curatorInfo: { firstName: "Ada", middleName: "", lastName: "Lovelace", emailId: "ada@example.edu", affiliation: "" },
+        referenceInfo: { title: "T", abstract: "A" },
+        fileServerPath: "https://x/files/y",
+        paperInfo: { PIs: "A B", collections: ["c"], tags: ["t"] },
+        charts: [{ id: "c0", imageFile: "a.png", number: "1", caption: "Cap", properties: ["k"] }],
+        scripts: [{ id: "s0", files: ["plot.py"], readme: "" }],
+      },
+    });
+    expect(screen.queryByText(/required to publish/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/1 dataset or script has no description/i)).toBeInTheDocument();
+    expect(screen.getByLabelText("Description")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /skip, leave blank/i }));
+    expect(screen.queryByLabelText("Description")).not.toBeInTheDocument();
+    expect(screen.getByTestId("record-ready")).toBeInTheDocument();
+  });
+
+  it("still requires a resource's files", () => {
     axios.post.mockResolvedValue({ data: { found: false } });
     renderSetup({
       state: {
@@ -593,14 +614,10 @@ describe("GuidedSetup ready-to-publish", () => {
         referenceInfo: { title: "T", abstract: "A" },
         fileServerPath: "https://x/files/y",
         paperInfo: { PIs: "A B", collections: [], tags: [] },
-        charts: [{ id: "c0", imageFile: "a.png", number: "", caption: "", properties: [] }],
-        scripts: [{ id: "s0", files: ["plot.py"], readme: "" }],
+        datasets: [{ id: "d0", files: [], readme: "Raw data." }],
       },
     });
-    await user.click(screen.getByRole("button", { name: /skip, leave blank/i }));
-    expect(screen.getByText(/required to publish/i)).toBeInTheDocument();
-    expect(screen.getByLabelText("Description")).toBeInTheDocument();
-    expect(screen.queryByTestId("record-ready")).not.toBeInTheDocument();
+    expect(screen.getByText(/required to publish: 1 item is missing a required detail/i)).toBeInTheDocument();
   });
 
   it("saves a typed description with its Save button, once", async () => {
@@ -625,5 +642,217 @@ describe("GuidedSetup ready-to-publish", () => {
       "script",
       expect.objectContaining({ id: "s0", readme: "Plots figure 2." })
     );
+  });
+});
+
+
+describe("GuidedSetup AI backups and gap filling", () => {
+  afterEach(() => jest.resetAllMocks());
+
+  const ada = { firstName: "Ada", middleName: "", lastName: "Lovelace", emailId: "ada@example.edu", affiliation: "" };
+  const auth = { authenticated: true, user: { name: "Ada Lovelace", email: "ada@example.edu" } };
+  const folder = "https://notebook.rcc.uchicago.edu/files/x";
+
+  it("offers an AI search when the folder scan finds no figures or scripts, after consent", async () => {
+    const user = userEvent.setup();
+    axios.post.mockImplementation((url) => {
+      if (url === "/api/curation/analyze-folder") return Promise.resolve({ data: { candidates: {}, suggestions: {} } });
+      if (url === "/api/curation/ai-curate") {
+        return Promise.resolve({
+          data: {
+            proposal: {
+              charts: [{ key: "n1", imageFile: "plots/bands.png", number: "", keywords: [], reason: "A results figure." }],
+              datasets: [],
+              scripts: [{ key: "n2", files: ["code/plot_bands.py"], description: "Plots the bands.", reason: "Saves bands.png." }],
+              tools: [],
+            },
+            links: [{ from: "n2", to: "n1", type: "generates", confidence: "high", reason: "savefig('bands.png')" }],
+            edits: [],
+            notes: [],
+            models: ["gemini-test"],
+          },
+        });
+      }
+      return Promise.resolve({ data: { found: false } });
+    });
+    const curator = renderSetup({
+      state: { ...blankState, curatorInfo: ada, referenceInfo: { doi: "10.1/x", title: "T" }, fileServerPath: folder },
+      auth,
+    });
+    const find = await screen.findByRole("button", { name: /^find figures, datasets and scripts with ai$/i });
+    expect(screen.getByText(/the folder scan found no figures, datasets and scripts/i)).toBeInTheDocument();
+
+    // Consent is asked for before anything is sent.
+    await user.click(find);
+    expect(axios.post).not.toHaveBeenCalledWith("/api/curation/ai-curate", expect.anything());
+    await user.click(screen.getByRole("button", { name: /send and continue/i }));
+    expect(axios.post).toHaveBeenCalledWith(
+      "/api/curation/ai-curate",
+      expect.objectContaining({ consent: true, path: folder, focus: ["charts", "datasets", "scripts"] })
+    );
+    expect(await screen.findByText("A results figure.")).toBeInTheDocument();
+    // The consent dialog closes before the page is usable again.
+    await user.click(await screen.findByRole("button", { name: /^add selected$/i }));
+    const [records, links] = curator.importBundle.mock.calls[0];
+    expect(records.map((r) => r.list)).toEqual(["charts", "scripts"]);
+    expect(links).toEqual([{ from: "n2", to: "n1", type: "generates" }]);
+    expect(await screen.findByText(/added 2 items and 1 link/i)).toBeInTheDocument();
+  });
+
+  it("explains each AI button in a popover", async () => {
+    const user = userEvent.setup();
+    axios.post.mockResolvedValue({ data: { found: false } });
+    renderSetup({
+      state: {
+        ...blankState, curatorInfo: ada, referenceInfo: { doi: "10.1/x", title: "T" }, fileServerPath: folder,
+        charts: [{ id: "c0", imageFile: "a.png", number: "1", caption: "C", properties: ["k"] }],
+        datasets: [{ id: "d0", files: ["raw"], readme: "" }],
+      },
+      auth,
+    });
+    await user.click(screen.getByRole("button", { name: "About Suggest descriptions" }));
+    expect(await screen.findByText(/one- or two-sentence description for each dataset and script/i)).toBeInTheDocument();
+    expect(screen.getByText("What is sent")).toBeInTheDocument();
+    for (const name of ["Suggest keywords", "Suggest missing links", "Curate the whole folder with AI", "Find with AI"]) {
+      // The open popover hides the rest of the page from the a11y tree.
+      expect(screen.getByRole("button", { name: `About ${name}`, hidden: true })).toBeInTheDocument();
+    }
+  });
+
+  it("matches captions with AI when the LaTeX file names differ", async () => {
+    const user = userEvent.setup();
+    const figures = [
+      { kind: "figure", number: "1", graphics: ["fig1.pdf"], caption: "Band structure.", label: "fig:bands" },
+    ];
+    axios.post.mockImplementation((url) => {
+      if (url === "/api/curation/latex-captions") {
+        return Promise.resolve({ data: { source: "main.tex", figures, matches: [] } });
+      }
+      if (url === "/api/curation/match-captions") {
+        return Promise.resolve({
+          data: {
+            matches: [{ id: "c0", caption: "Band structure.", number: "1", how: "ai", confidence: "medium", reason: "Both show bands." }],
+            models: ["gemini-test"],
+          },
+        });
+      }
+      return Promise.resolve({ data: { found: false } });
+    });
+    const curator = renderSetup({
+      state: {
+        ...blankState, curatorInfo: ada, referenceInfo: { doi: "10.1/x", title: "T" }, fileServerPath: folder,
+        charts: [{ id: "c0", imageFile: "plots/bands.png", number: "", caption: "", properties: ["k"] }],
+      },
+      auth,
+    });
+    await user.type(screen.getByLabelText(/arxiv id or link/i), "2409.00246");
+    await user.click(screen.getByRole("button", { name: /get captions/i }));
+    expect(await screen.findByText(/none of them could be matched/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^match 1 remaining figure with ai$/i }));
+    await user.click(screen.getByRole("button", { name: /send and continue/i }));
+    expect(axios.post).toHaveBeenCalledWith("/api/curation/match-captions", {
+      consent: true,
+      figures,
+      charts: [{ id: "c0", imageFile: "plots/bands.png", number: "" }],
+    });
+    expect(await screen.findByText("Both show bands.")).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: /apply 1 caption/i }));
+    expect(curator.edit).toHaveBeenCalledWith(
+      "chart",
+      expect.objectContaining({ id: "c0", caption: "Band structure.", number: "1" })
+    );
+  });
+
+  it("suggests descriptions for datasets and scripts and applies them in one change", async () => {
+    const user = userEvent.setup();
+    axios.post.mockImplementation((url) =>
+      Promise.resolve({
+        data:
+          url === "/api/curation/suggest-descriptions"
+            ? {
+                descriptions: [
+                  { id: "d0", description: "Raw outputs of the runs.", confidence: "high" },
+                  { id: "s0", description: "Plots Figure 1.", confidence: "medium" },
+                ],
+                models: ["gemini-test"],
+              }
+            : { found: false },
+      })
+    );
+    const state = {
+      ...blankState, curatorInfo: ada, referenceInfo: { doi: "10.1/x", title: "T" }, fileServerPath: folder,
+      charts: [{ id: "c0", imageFile: "a.png", number: "1", caption: "C", properties: ["k"] }],
+      datasets: [{ id: "d0", files: ["raw"], readme: "" }],
+      scripts: [{ id: "s0", files: ["plot.py"], readme: "Written by hand." }],
+    };
+    const curator = renderSetup({ state, auth });
+    await user.click(screen.getByRole("checkbox", { name: /send the paper's title/i }));
+    await user.click(screen.getByRole("button", { name: /^suggest descriptions$/i }));
+    expect(axios.post).toHaveBeenCalledWith(
+      "/api/curation/suggest-descriptions",
+      expect.objectContaining({
+        consent: true,
+        path: folder,
+        datasets: [{ id: "d0", files: ["raw"], readme: "" }],
+        scripts: [{ id: "s0", files: ["plot.py"], readme: "Written by hand." }],
+      })
+    );
+    expect(await screen.findByText("Replaces: Written by hand.")).toBeInTheDocument();
+    // A hand-written description is kept unless chosen.
+    expect(screen.getByRole("checkbox", { name: /description for plot\.py/i })).not.toBeChecked();
+    await user.click(screen.getByRole("button", { name: /apply selected descriptions/i }));
+    const written = curator.setAll.mock.calls[0][0];
+    expect(written.datasets[0].readme).toBe("Raw outputs of the runs.");
+    expect(written.scripts[0].readme).toBe("Written by hand.");
+  });
+
+  it("reviews the whole record and applies the chosen improvements", async () => {
+    const user = userEvent.setup();
+    axios.post.mockImplementation((url) =>
+      Promise.resolve({
+        data:
+          url === "/api/curation/ai-curate"
+            ? {
+                proposal: { charts: [], datasets: [], scripts: [], tools: [] },
+                links: [],
+                edits: [
+                  { id: "c0", field: "number", value: "1", current: "", reason: "Named Figure1." },
+                  { id: "d0", field: "readme", value: "Raw outputs.", current: "raw", reason: "Only the name." },
+                ],
+                notes: ["Figure 3 has no image in the record."],
+                models: ["gemini-test"],
+              }
+            : { found: false },
+      })
+    );
+    const state = {
+      ...blankState, curatorInfo: ada, referenceInfo: { doi: "10.1/x", title: "T" }, fileServerPath: folder,
+      charts: [{ id: "c0", imageFile: "Figures/Figure1.png", number: "", caption: "C", properties: ["k"] }],
+      datasets: [{ id: "d0", files: ["raw"], readme: "raw" }],
+    };
+    const curator = renderSetup({ state, auth });
+    await user.click(screen.getByRole("checkbox", { name: /send the paper's title/i }));
+    await user.click(screen.getByRole("button", { name: /^curate the whole folder with ai$/i }));
+    expect(axios.post).toHaveBeenCalledWith(
+      "/api/curation/ai-curate",
+      expect.objectContaining({
+        review: true,
+        existing: expect.objectContaining({ datasets: [expect.objectContaining({ id: "d0", readme: "raw" })] }),
+      })
+    );
+    expect(await screen.findByText("Figure 3 has no image in the record.")).toBeInTheDocument();
+    expect(screen.getByText("Replaces: raw")).toBeInTheDocument();
+    // Filling an empty field starts ticked; replacing a value does not.
+    expect(screen.getByRole("checkbox", { name: /figure number for figure1\.png/i })).toBeChecked();
+    const replace = screen.getByRole("checkbox", { name: /description for raw/i });
+    expect(replace).not.toBeChecked();
+    await user.click(replace);
+    await user.click(screen.getByRole("button", { name: /^add selected$/i }));
+    const written = curator.setAll.mock.calls[0][0];
+    expect(written.charts[0].number).toBe("1");
+    expect(written.datasets[0].readme).toBe("Raw outputs.");
+    expect(curator.importBundle).not.toHaveBeenCalled();
+    expect(await screen.findByText(/updated 2 fields/i)).toBeInTheDocument();
   });
 });

@@ -28,6 +28,7 @@ import {
 import {
   AutoAwesome,
   CheckCircle,
+  InfoOutlined as InfoOutlinedIcon,
   Description,
   SaveOutlined,
   Visibility,
@@ -53,6 +54,16 @@ import { buildFileUrl, isPdfFile } from "../../Utils/fileServerUrl";
 import { initialsOf } from "../Profile/ProfileLinks";
 import { labelFor, toRecord } from "../../Utils/artifactFields";
 import {
+  AI_HELP,
+  AiConsentDialog,
+  AiInfoButton,
+  ProposalReview,
+  curateItemsOf,
+  defaultProposalSkip,
+  editKey,
+  proposalCount,
+} from "./AiAssist";
+import {
   LISTS,
   buildImportPlan,
   countByList,
@@ -77,6 +88,22 @@ const ModelNote = ({ models }) =>
   ) : null;
 
 const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
+
+// "figures", "figures and scripts", "figures, datasets and scripts"
+const joinWords = (words) =>
+  words.length <= 1 ? words.join("") : `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
+
+const LIST_OF_ID = { c: "charts", d: "datasets", s: "scripts", t: "tools" };
+const FIND_KINDS = ["charts", "datasets", "scripts"];
+const KIND_NOUN = { charts: "figures", datasets: "datasets", scripts: "scripts", tools: "tools" };
+
+// An AI button with its "what does this do" popover beside it.
+const AiAction = ({ help, children }) => (
+  <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.25 }}>
+    {children}
+    <AiInfoButton help={help} />
+  </Box>
+);
 
 const Summary = ({ children }) => (
   <Box
@@ -487,6 +514,110 @@ const GuidedSetup = () => {
 
   const showFolderEditor = editingFolder || (!fileServerPath && !locating);
 
+  // AI, shared by every step that offers it --------------------------------------
+  // One consent for the session: the checkbox in the AI assistant step, or
+  // the dialog any other AI button opens when it has not been given yet.
+  const [aiConsent, setAiConsent] = useState(false);
+  const [consentAsk, setConsentAsk] = useState(null);
+  const [aiBusy, setAiBusy] = useState("");
+  const askConsent = (run) => {
+    if (aiConsent) run();
+    else setConsentAsk(() => run);
+  };
+
+  const aiErrorFrom = (err) => {
+    const response = err && err.response;
+    const message = (response && response.data && response.data.error) || "";
+    if (response && response.status === 503 && /not configured/i.test(message)) {
+      return "AI suggestions are not set up on this server. An administrator can turn them on with QRESP_GEMINI_ENABLED and QRESP_GEMINI_API_KEY.";
+    }
+    if (response && response.status === 404) {
+      return "This Qresp server does not have AI suggestions yet. If it was just updated, the backend needs a restart.";
+    }
+    return (response && response.data && response.data.error) || "The AI suggestions could not be loaded.";
+  };
+
+  const paperForAi = () => ({
+    title: referenceInfo.title || "",
+    abstract: referenceInfo.abstract || "",
+    keywords: (paperInfo.tags || []).filter(Boolean),
+  });
+
+  // What the record already holds, for the AI to skip and to review.
+  const existingForAi = () => ({
+    charts: charts.map(({ id, imageFile, number, caption, properties }) => ({
+      id, imageFile, number, caption, properties: properties || [] })),
+    datasets: datasets.map(({ id, files, readme, keywords }) => ({
+      id, files: files || [], readme: readme || "", keywords: keywords || [] })),
+    scripts: scripts.map(({ id, files, readme, keywords }) => ({
+      id, files: files || [], readme: readme || "", keywords: keywords || [] })),
+    tools: tools.map(({ id, packageName, version, description }) => ({
+      id, packageName: packageName || "", version: version || "", description: description || "" })),
+  });
+
+  const existingLinks = () =>
+    ((metadata.workflow || {}).edges || [])
+      .map((edge) => (Array.isArray(edge) ? { from: edge[0], to: edge[1] } : { from: edge.from, to: edge.to }));
+
+  const recordLabel = (id) => {
+    const lists = { c: charts, s: scripts, d: datasets, t: tools };
+    const record = (lists[id[0]] || []).find((item) => item.id === id);
+    if (!record) return id;
+    if (id[0] === "c") {
+      const file = String(record.imageFile || id).split("/").filter(Boolean).pop();
+      return record.number ? `${file} (${/^Table/.test(record.number) ? record.number : `Figure ${record.number}`})` : file;
+    }
+    return String((record.files || [])[0] || record.packageName || id).split("/").filter(Boolean).pop();
+  };
+
+  // Apply the ticked part of an AI proposal: edits to existing items in one
+  // change (see applyKeywords), then the new items and links.
+  const applyProposal = (result, skip) => {
+    const chosen = curateItemsOf(result).filter((item) => !skip[item.key]);
+    const chosenKeys = new Set(chosen.map((item) => item.key));
+    const isExisting = (id) => /^[cdst]\d+$/.test(id);
+    const records = chosen.map((item) => {
+      let draft;
+      if (item.type === "chart") {
+        draft = { imageFile: item.imageFile, number: item.number || "", caption: "",
+                  properties: (item.keywords || []).join(", "), files: "", notebookFile: "" };
+      } else if (item.type === "tool") {
+        draft = { packageName: item.packageName, version: item.version, description: "" };
+      } else {
+        draft = { files: (item.files || []).join(", "), readme: item.description || "", keywords: "" };
+      }
+      return { key: item.key, list: item.list, value: toRecord(item.type, draft) };
+    });
+    const links = ((result && result.links) || []).filter(
+      (link) =>
+        !skip[`${link.from}>${link.to}`] &&
+        (chosenKeys.has(link.from) || isExisting(link.from)) &&
+        (chosenKeys.has(link.to) || isExisting(link.to))
+    );
+    const edits = ((result && result.edits) || []).filter((edit) => !skip[editKey(edit)]);
+    if (edits.length) {
+      const current = collectDraftState();
+      const patch = {};
+      edits.forEach((edit) => {
+        const list = LIST_OF_ID[edit.id[0]];
+        patch[list] = (patch[list] || current[list] || []).map((record) =>
+          record.id === edit.id ? { ...record, [edit.field]: edit.value } : record
+        );
+      });
+      apply(patch);
+    }
+    if (records.length || links.length) {
+      importBundle(records, links.map(({ from, to, type }) => ({ from, to, type })));
+    }
+    const parts = [
+      records.length && `added ${plural(records.length, "item", "items")}`,
+      links.length && `${records.length ? "" : "added "}${plural(links.length, "link", "links")}`,
+      edits.length && `updated ${plural(edits.length, "field", "fields")}`,
+    ].filter(Boolean);
+    const text = parts.length ? `${joinWords(parts)}.` : "nothing was selected.";
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  };
+
   // 4. Import ----------------------------------------------------------------
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState("");
@@ -535,6 +666,7 @@ const GuidedSetup = () => {
       locatedFor.current = "";
       setLocateResult(null);
       setDoi("");
+      setLatexSource(null);
     }
   }, [referenceInfo.doi]);
   // Scan once, automatically, as soon as there is a folder and nothing yet.
@@ -572,6 +704,54 @@ const GuidedSetup = () => {
     setReviewOpen(false);
   };
 
+  // AI backup for the scan: look for the kinds of item neither the record
+  // nor the scan has, or, once everything found is in, for anything missed.
+  const [findResult, setFindResult] = useState(null);
+  const [findSkip, setFindSkip] = useState({});
+  const [findError, setFindError] = useState("");
+  const [findNote, setFindNote] = useState("");
+  const recordLists = { charts, datasets, scripts, tools };
+  const pendingScan = Boolean(analysis) && !added;
+  const missingKinds = FIND_KINDS.filter(
+    (kind) => !recordLists[kind].length && !(pendingScan && counts[kind])
+  );
+  const scanned = Boolean(analysis) || artifactCount > 0;
+  // While scan results wait to be added, only kinds the scan did not find
+  // are asked for, so the AI never proposes the same files twice.
+  const canFind = Boolean(fileServerPath) && authenticated && scanned && !scanning &&
+    (missingKinds.length > 0 || !(pendingScan && chosen.length));
+  const findKinds = missingKinds.length ? missingKinds : [...FIND_KINDS, "tools"];
+  const findLabel = missingKinds.length
+    ? `Find ${joinWords(missingKinds.map((kind) => KIND_NOUN[kind]))} with AI`
+    : "Find anything the scan missed, with AI";
+
+  const findWithAi = () => {
+    setAiBusy("find");
+    setFindError("");
+    setFindNote("");
+    setFindResult(null);
+    axios
+      .post("/api/curation/ai-curate", {
+        consent: true,
+        path: fileServerPath,
+        paper: paperForAi(),
+        existing: existingForAi(),
+        focus: findKinds,
+      })
+      .then((res) => {
+        const data = res.data || {};
+        setFindResult(data);
+        setFindSkip(defaultProposalSkip(data));
+      })
+      .catch((err) => setFindError(aiErrorFrom(err)))
+      .finally(() => setAiBusy(""));
+  };
+
+  const applyFound = () => {
+    setFindNote(applyProposal(findResult, findSkip));
+    setFindResult(null);
+  };
+
   // 5. Captions from the paper's LaTeX ------------------------------------------
   const [srcMode, setSrcMode] = useState("arxiv");
   const [arxivInput, setArxivInput] = useState("");
@@ -580,6 +760,11 @@ const GuidedSetup = () => {
   const [latexResult, setLatexResult] = useState(null);
   const [captionSkip, setCaptionSkip] = useState({});
   const [captionsApplied, setCaptionsApplied] = useState(null);
+  // The source's figures outlive the review, so figures still without a
+  // caption can be matched with AI after the exact matches are applied.
+  const [latexSource, setLatexSource] = useState(null);
+  const [matchError, setMatchError] = useState("");
+  const [matchNote, setMatchNote] = useState("");
   const arxivSearchedFor = useRef("");
 
   // Look the paper up on arXiv once its title is known, and offer the id.
@@ -617,6 +802,9 @@ const GuidedSetup = () => {
           apply({ referenceInfo: { ...current.referenceInfo, abstract: data.abstract } });
         }
         setLatexResult({ ...data, abstractFilled });
+        setLatexSource({ source: data.source, figures: data.figures || [] });
+        setMatchError("");
+        setMatchNote("");
         const skip = {};
         (data.matches || []).forEach((match) => {
           const record = charts.find((chart) => chart.id === match.id);
@@ -674,6 +862,51 @@ const GuidedSetup = () => {
     setLatexResult(null);
   };
 
+  // Figures with no caption that no exact match covers: when the source has
+  // captions, the names probably differ and the AI can match them.
+  const pendingMatchIds = new Set(((latexResult && latexResult.matches) || []).map((match) => match.id));
+  const matchCandidates = charts.filter(
+    (chart) => !String(chart.caption || "").trim() && !pendingMatchIds.has(chart.id)
+  );
+  const canAiMatch = Boolean(
+    latexSource && (latexSource.figures || []).some((figure) => figure.caption) && matchCandidates.length
+  );
+
+  const matchWithAi = () => {
+    setAiBusy("match");
+    setMatchError("");
+    setMatchNote("");
+    axios
+      .post("/api/curation/match-captions", {
+        consent: true,
+        figures: (latexSource.figures || []).slice(0, 150)
+          .map(({ kind, number, graphics, caption, label }) => ({ kind, number, graphics, caption, label })),
+        charts: matchCandidates.map(({ id, imageFile, number }) => ({ id, imageFile, number })),
+      })
+      .then((res) => {
+        const found = (res.data || {}).matches || [];
+        if (!found.length) {
+          setMatchNote("The AI could not match any more figures to the paper's captions with confidence.");
+          return;
+        }
+        setCaptionsApplied(null);
+        setLatexResult((prev) => ({
+          ...(prev || { source: latexSource.source, figures: latexSource.figures, matches: [] }),
+          matches: [...((prev && prev.matches) || []), ...found],
+          models: (res.data || {}).models || [],
+        }));
+        setCaptionSkip((skip) => {
+          const next = { ...skip };
+          found.forEach((match) => {
+            if (match.confidence === "low") next[match.id] = true;
+          });
+          return next;
+        });
+      })
+      .catch((err) => setMatchError(aiErrorFrom(err)))
+      .finally(() => setAiBusy(""));
+  };
+
   const chartFileName = (id) => {
     const record = charts.find((chart) => chart.id === id);
     return String((record && record.imageFile) || id).split("/").filter(Boolean).pop();
@@ -681,8 +914,6 @@ const GuidedSetup = () => {
   const uncaptioned = charts.filter((chart) => !String(chart.caption || "").trim()).length;
 
   // 6. AI assistant (optional) --------------------------------------------------
-  const [aiConsent, setAiConsent] = useState(false);
-  const [aiBusy, setAiBusy] = useState("");
   const [aiError, setAiError] = useState("");
   const [kwResult, setKwResult] = useState(null);
   const [kwSkip, setKwSkip] = useState({});
@@ -690,23 +921,6 @@ const GuidedSetup = () => {
   const [linkSkip, setLinkSkip] = useState({});
   const [aiApplied, setAiApplied] = useState("");
 
-  const aiErrorFrom = (err) => {
-    const response = err && err.response;
-    const message = (response && response.data && response.data.error) || "";
-    if (response && response.status === 503 && /not configured/i.test(message)) {
-      return "AI suggestions are not set up on this server. An administrator can turn them on with QRESP_GEMINI_ENABLED and QRESP_GEMINI_API_KEY.";
-    }
-    if (response && response.status === 404) {
-      return "This Qresp server does not have AI suggestions yet. If it was just updated, the backend needs a restart.";
-    }
-    return (response && response.data && response.data.error) || "The AI suggestions could not be loaded.";
-  };
-
-  const paperForAi = () => ({
-    title: referenceInfo.title || "",
-    abstract: referenceInfo.abstract || "",
-    keywords: (paperInfo.tags || []).filter(Boolean),
-  });
   const sameList = (a, b) =>
     (a || []).map((x) => String(x).toLowerCase()).join("|") ===
     (b || []).map((x) => String(x).toLowerCase()).join("|");
@@ -782,8 +996,7 @@ const GuidedSetup = () => {
         figures: charts.map(({ id, number, caption }) => ({ id, number, caption })),
         scripts: scripts.map((record) => ({ id: record.id, files: record.files || [], description: record.readme || "" })),
         datasets: datasets.map((record) => ({ id: record.id, name: name(record), files: record.files || [] })),
-        existing_links: ((metadata.workflow || {}).edges || [])
-          .map((edge) => (Array.isArray(edge) ? { from: edge[0], to: edge[1] } : { from: edge.from, to: edge.to })),
+        existing_links: existingLinks(),
       })
       .then((res) => {
         const data = res.data || {};
@@ -807,19 +1020,60 @@ const GuidedSetup = () => {
     setLinkResult(null);
   };
 
-  const recordLabel = (id) => {
-    const lists = { c: charts, s: scripts, d: datasets, t: tools };
-    const record = (lists[id[0]] || []).find((item) => item.id === id);
-    if (!record) return id;
-    if (id[0] === "c") {
-      const file = String(record.imageFile || id).split("/").filter(Boolean).pop();
-      return record.number ? `${file} (${/^Table/.test(record.number) ? record.number : `Figure ${record.number}`})` : file;
-    }
-    return String((record.files || [])[0] || record.packageName || id).split("/").filter(Boolean).pop();
+  // Descriptions for datasets and scripts.
+  const [descResult, setDescResult] = useState(null);
+  const [descSkip, setDescSkip] = useState({});
+  const resourceById = (id) => (id[0] === "d" ? datasets : scripts).find((item) => item.id === id);
+
+  const suggestDescriptions = () => {
+    setAiBusy("descriptions");
+    setAiError("");
+    setAiApplied("");
+    setDescResult(null);
+    const resource = ({ id, files, readme }) => ({ id, files: files || [], readme: readme || "" });
+    axios
+      .post("/api/curation/suggest-descriptions", {
+        consent: aiConsent,
+        path: fileServerPath,
+        paper: paperForAi(),
+        figures: charts.map(({ id, number, caption }) => ({ id, number, caption })),
+        datasets: datasets.map(resource),
+        scripts: scripts.map(resource),
+        existing_links: existingLinks(),
+      })
+      .then((res) => {
+        const data = res.data || {};
+        setDescResult(data);
+        const skip = {};
+        // A description the curator wrote is only replaced on request.
+        (data.descriptions || []).forEach(({ id }) => {
+          const record = resourceById(id);
+          if (record && String(record.readme || "").trim()) skip[id] = true;
+        });
+        setDescSkip(skip);
+      })
+      .catch((err) => setAiError(aiErrorFrom(err)))
+      .finally(() => setAiBusy(""));
+  };
+
+  const applyDescriptions = () => {
+    const chosen = {};
+    ((descResult && descResult.descriptions) || []).forEach(({ id, description }) => {
+      if (!descSkip[id] && description) chosen[id] = description;
+    });
+    const current = collectDraftState();
+    const fill = (list) =>
+      (current[list] || []).map((record) =>
+        chosen[record.id] ? { ...record, readme: chosen[record.id] } : record
+      );
+    apply({ datasets: fill("datasets"), scripts: fill("scripts") });
+    setAiApplied(`Added ${plural(Object.keys(chosen).length, "description", "descriptions")}.`);
+    setDescResult(null);
   };
 
   // Whole-folder AI curation: what Qresp's own pass missed, or the whole
-  // paper when the folder is not organised the Qresp way.
+  // paper when the folder is not organised the Qresp way, plus a review of
+  // what the record already holds.
   const [curateResult, setCurateResult] = useState(null);
   const [curateSkip, setCurateSkip] = useState({});
 
@@ -833,87 +1087,38 @@ const GuidedSetup = () => {
         consent: aiConsent,
         path: fileServerPath,
         paper: paperForAi(),
-        existing: {
-          charts: charts.map(({ id, imageFile, number, caption }) => ({ id, imageFile, number, caption })),
-          datasets: datasets.map(({ id, files }) => ({ id, files: files || [] })),
-          scripts: scripts.map(({ id, files }) => ({ id, files: files || [] })),
-          tools: tools.map(({ id, packageName }) => ({ id, packageName: packageName || "" })),
-        },
+        existing: existingForAi(),
+        review: true,
       })
       .then((res) => {
         const data = res.data || {};
         setCurateResult(data);
-        const skip = {};
-        (data.links || []).forEach((link) => {
-          if (link.confidence === "low") skip[`${link.from}>${link.to}`] = true;
-        });
-        setCurateSkip(skip);
+        setCurateSkip(defaultProposalSkip(data));
       })
       .catch((err) => setAiError(aiErrorFrom(err)))
       .finally(() => setAiBusy(""));
   };
 
-  const CURATE_GROUPS = [
-    { key: "charts", list: "charts", type: "chart", title: "Figures" },
-    { key: "datasets", list: "datasets", type: "dataset", title: "Datasets" },
-    { key: "scripts", list: "scripts", type: "script", title: "Scripts" },
-    { key: "tools", list: "tools", type: "tool", title: "Tools" },
-  ];
-  const curateItems = curateResult
-    ? CURATE_GROUPS.flatMap(({ key, list, type }) =>
-        ((curateResult.proposal || {})[key] || []).map((item) => ({ ...item, list, type })))
-    : [];
-  const curateLabel = (item) =>
-    item.type === "chart"
-      ? `${String(item.imageFile).split("/").pop()}${item.number ? ` (${/^Table/.test(item.number) ? item.number : `Figure ${item.number}`})` : ""}`
-      : item.type === "tool"
-      ? `${item.packageName} ${item.version}`
-      : (item.files || []).join(", ");
-  const curateLabels = Object.fromEntries(curateItems.map((item) => [item.key, curateLabel(item)]));
-  const endLabel = (id) => curateLabels[id] || recordLabel(id);
-
   const applyCuration = () => {
-    const chosen = curateItems.filter((item) => !curateSkip[item.key]);
-    const chosenKeys = new Set(chosen.map((item) => item.key));
-    const isExisting = (id) => /^[cdst]\d+$/.test(id);
-    const records = chosen.map((item) => {
-      let draft;
-      if (item.type === "chart") {
-        draft = { imageFile: item.imageFile, number: item.number || "", caption: "",
-                  properties: (item.keywords || []).join(", "), files: "", notebookFile: "" };
-      } else if (item.type === "tool") {
-        draft = { packageName: item.packageName, version: item.version, description: "" };
-      } else {
-        draft = { files: (item.files || []).join(", "), readme: item.description || "", keywords: "" };
-      }
-      return { key: item.key, list: item.list, value: toRecord(item.type, draft) };
-    });
-    const links = ((curateResult && curateResult.links) || []).filter(
-      (link) =>
-        !curateSkip[`${link.from}>${link.to}`] &&
-        (chosenKeys.has(link.from) || isExisting(link.from)) &&
-        (chosenKeys.has(link.to) || isExisting(link.to))
-    );
-    importBundle(records, links.map(({ from, to, type }) => ({ from, to, type })));
-    setAiApplied(
-      `Added ${plural(records.length, "item", "items")}${links.length ? ` and ${plural(links.length, "link", "links")}` : ""}. Captions for new figures can be filled from the LaTeX in step 5.`
-    );
+    const note = applyProposal(curateResult, curateSkip);
+    setAiApplied(`${note} Captions for new figures can be filled from the LaTeX in step 5.`);
     setCurateResult(null);
   };
 
   const figuresWithoutKeywords = charts.filter((chart) => !(chart.properties || []).length).length;
 
   // 7. Finish ----------------------------------------------------------------
-  // What publishing actually requires: every dataset and script needs a
-  // description (and its files). A figure's caption, number and keywords may
-  // be empty, so those are optional here and can be skipped.
+  // What publishing actually requires: a figure's image, a dataset's or
+  // script's files, a tool's name and version. Captions, figure numbers,
+  // keywords and descriptions may be empty, so those are optional here and
+  // can be skipped.
   const REQUIRED_TO_PUBLISH = {
     chart: ["imageFile"],
-    dataset: ["files", "readme"],
-    script: ["files", "readme"],
+    dataset: ["files"],
+    script: ["files"],
     tool: ["packageName", "version"],
   };
-  const allNeeding = recordsNeedingDetails(metadata);
+  const allNeeding = recordsNeedingDetails(metadata, { recommended: true });
   const splitNeeding = (wantRequired) =>
     allNeeding
       .map((entry) => ({
@@ -925,6 +1130,8 @@ const GuidedSetup = () => {
       .filter((entry) => entry.missing.length);
   const requiredNeeding = splitNeeding(true);
   const optionalNeeding = splitNeeding(false);
+  const optionalFigures = optionalNeeding.filter((entry) => entry.type === "chart").length;
+  const optionalResources = optionalNeeding.length - optionalFigures;
   const missingPI = !(
     paperInfo.PIs && String(paperInfo.PIs).trim() &&
     (!Array.isArray(paperInfo.PIs) || paperInfo.PIs.length)
@@ -933,8 +1140,8 @@ const GuidedSetup = () => {
     !(paperInfo.collections && paperInfo.collections.length) && "collections",
     !(paperInfo.tags && paperInfo.tags.length) && "keywords",
   ].filter(Boolean);
-  // Collections, keywords, captions and figure numbers may publish empty; a
-  // P.I. and the dataset/script descriptions may not.
+  // Collections, keywords, captions, figure numbers and descriptions may
+  // publish empty; a P.I. may not.
   const [skipOptional, setSkipOptional] = useState(false);
   const optionalLeft = !skipOptional && (missingOptional.length > 0 || optionalNeeding.length > 0);
   const recordReady = artifactCount > 0 && !missingPI && requiredNeeding.length === 0 && !optionalLeft;
@@ -1414,7 +1621,7 @@ const GuidedSetup = () => {
                     </Typography>
                     <Typography variant="caption" color="text.secondary" component="div">
                       Folder not organised the Qresp way, or something missing? Step 6 can
-                      curate the whole folder with AI.
+                      review and curate the whole folder with AI.
                     </Typography>
                   </Box>
                 )
@@ -1439,6 +1646,65 @@ const GuidedSetup = () => {
                   Scan the project folder
                 </Button>
               )}
+
+              {canFind && (
+                <Box
+                  data-testid="ai-find"
+                  sx={{ mt: 1.5, p: 1.5, borderRadius: 2, border: "1px dashed", borderColor: "divider" }}
+                >
+                  <AiAction help={AI_HELP.find}>
+                    <Button
+                      variant={missingKinds.length ? "contained" : "outlined"}
+                      disableElevation
+                      size="small"
+                      onClick={() => askConsent(findWithAi)}
+                      disabled={Boolean(aiBusy)}
+                      startIcon={aiBusy === "find" ? <CircularProgress size={14} color="inherit" /> : <AutoAwesome />}
+                      sx={{ textTransform: "none" }}
+                    >
+                      {findLabel}
+                    </Button>
+                  </AiAction>
+                  <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.5 }}>
+                    {missingKinds.length
+                      ? `The folder scan found no ${joinWords(missingKinds.map((kind) => KIND_NOUN[kind]))}. As a backup, the AI can read the folder and look for them itself.`
+                      : "A backup to the folder scan: the AI reads the folder and proposes anything it missed."}
+                  </Typography>
+                  {aiBusy === "find" && (
+                    <Box sx={{ mt: 1 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        Reading the folder and asking the AI… this can take a minute.
+                      </Typography>
+                      <LinearProgress sx={{ mt: 0.5 }} />
+                    </Box>
+                  )}
+                  {findError && <Alert severity="warning" sx={{ mt: 1 }}>{findError}</Alert>}
+                  {findNote && <Alert severity="success" sx={{ mt: 1 }}>{findNote}</Alert>}
+                  {findResult && (
+                    <Box sx={{ mt: 1.5 }}>
+                      <ProposalReview
+                        result={findResult}
+                        skip={findSkip}
+                        setSkip={setFindSkip}
+                        recordLabel={recordLabel}
+                        intro={`The AI proposes ${plural(curateItemsOf(findResult).length, "item", "items")}${(findResult.links || []).length ? ` and ${plural(findResult.links.length, "link", "links")}` : ""}. Untick anything that is wrong.`}
+                        emptyText={`The AI found no ${joinWords(findKinds.map((kind) => KIND_NOUN[kind]))} in this folder that are not already in the record.`}
+                      />
+                      <ModelNote models={findResult.models} />
+                      <Box sx={{ display: "flex", gap: 1, mt: 1.5 }}>
+                        {proposalCount(findResult) > 0 && (
+                          <Button variant="contained" disableElevation onClick={applyFound} sx={{ textTransform: "none", fontWeight: 600 }}>
+                            Add selected
+                          </Button>
+                        )}
+                        <Button onClick={() => setFindResult(null)} sx={{ textTransform: "none" }}>
+                          {proposalCount(findResult) > 0 ? "Cancel" : "Close"}
+                        </Button>
+                      </Box>
+                    </Box>
+                  )}
+                </Box>
+              )}
             </StepContent>
           </Step>
 
@@ -1460,9 +1726,10 @@ const GuidedSetup = () => {
                     Your paper's LaTeX already contains every figure's caption.
                     Point Qresp at the source and it copies each{" "}
                     <Box component="code" sx={{ fontSize: "0.85em" }}>\caption{"{…}"}</Box>{" "}
-                    onto the matching figure: the paper's exact words, no AI,
-                    and nothing is stored. If the DOI lookup found no abstract,
-                    the abstract is taken from the source too.
+                    onto the matching figure: the paper's exact words, and
+                    nothing is stored. If the DOI lookup found no abstract, the
+                    abstract is taken from the source too. When the file names
+                    differ, an AI backup can match the rest.
                   </Typography>
 
                   <ToggleButtonGroup
@@ -1590,9 +1857,21 @@ const GuidedSetup = () => {
                                     <Typography variant="body2" fontWeight={600} sx={{ overflowWrap: "anywhere" }}>
                                       {`${chartFileName(match.id)} · ${/^Table/.test(match.number) ? match.number : `Figure ${match.number}`}`}
                                       <Typography component="span" variant="caption" color="text.secondary">
-                                        {match.how === "file" ? "  · matched by file name" : "  · matched by number"}
+                                        {match.how === "file"
+                                          ? "  · matched by file name"
+                                          : match.how === "ai"
+                                          ? "  · matched by AI"
+                                          : "  · matched by number"}
                                       </Typography>
+                                      {match.how === "ai" && match.confidence && (
+                                        <Chip size="small" label={match.confidence} variant="outlined" sx={{ ml: 1, height: 18 }} />
+                                      )}
                                     </Typography>
+                                    {match.how === "ai" && match.reason && (
+                                      <Typography variant="caption" color="text.secondary" component="div" sx={{ fontStyle: "italic" }}>
+                                        {match.reason}
+                                      </Typography>
+                                    )}
                                     <Typography
                                       variant="caption"
                                       color="text.secondary"
@@ -1610,6 +1889,7 @@ const GuidedSetup = () => {
                               );
                             })}
                           </Box>
+                          <ModelNote models={latexResult.models} />
                           <Box sx={{ display: "flex", gap: 1, mt: 1.5 }}>
                             <Button
                               variant="contained"
@@ -1628,6 +1908,31 @@ const GuidedSetup = () => {
                       )}
                     </Box>
                   )}
+
+                  {canAiMatch && (
+                    <Box
+                      data-testid="ai-match"
+                      sx={{ mt: 1.5, p: 1.5, borderRadius: 2, border: "1px dashed", borderColor: "divider" }}
+                    >
+                      <AiAction help={AI_HELP.match}>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => askConsent(matchWithAi)}
+                          disabled={Boolean(aiBusy)}
+                          startIcon={aiBusy === "match" ? <CircularProgress size={14} /> : <AutoAwesome />}
+                          sx={{ textTransform: "none" }}
+                        >
+                          {`Match ${plural(matchCandidates.length, "remaining figure", "remaining figures")} with AI`}
+                        </Button>
+                      </AiAction>
+                      <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.5 }}>
+                        {`${plural(matchCandidates.length, "figure has", "figures have")} no caption and could not be matched by file name or number, probably because the names in the LaTeX differ from the folder's. The AI can match them; the caption applied is still the paper's own text.`}
+                      </Typography>
+                    </Box>
+                  )}
+                  {matchError && <Alert severity="warning" sx={{ mt: 1.5 }}>{matchError}</Alert>}
+                  {matchNote && <Alert severity="info" sx={{ mt: 1.5 }}>{matchNote}</Alert>}
                 </Box>
               )}
             </StepContent>
@@ -1635,11 +1940,11 @@ const GuidedSetup = () => {
 
           {/* 6. AI assistant */}
           <Step completed={steps.ai} expanded>
-            {stepLabel("ai", "AI assistant (optional)", "Keywords, and links Qresp could not find on its own")}
+            {stepLabel("ai", "AI assistant (optional)", "Fill the gaps: keywords, descriptions, links and a review of the record")}
             <StepContent>
-              {!charts.length ? (
+              {!artifactCount ? (
                 <Typography variant="body2" color="text.secondary">
-                  Available once figures are in the record.
+                  Available once figures, datasets or scripts are in the record.
                 </Typography>
               ) : !authenticated ? (
                 <Typography variant="body2" color="text.secondary">
@@ -1650,9 +1955,12 @@ const GuidedSetup = () => {
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                     Qresp has already matched everything it can from file names,
                     folders and the paper's LaTeX. The AI assistant fills the
-                    gaps: keywords for each figure, and which scripts and data
-                    produced which figures. Every suggestion comes with a reason
-                    and nothing is applied until you choose it.
+                    gaps: keywords for each figure, descriptions for each dataset
+                    and script, which scripts and data produced which figures,
+                    and a review of the whole record. Every suggestion comes with
+                    a reason and nothing is applied until you choose it. Use the{" "}
+                    <InfoOutlinedIcon sx={{ fontSize: "1rem", verticalAlign: "text-bottom" }} />{" "}
+                    beside a button to see exactly what it does.
                   </Typography>
                   <FormControlLabel
                     control={<Checkbox size="small" checked={aiConsent} onChange={(e) => setAiConsent(e.target.checked)} />}
@@ -1665,37 +1973,54 @@ const GuidedSetup = () => {
                     }
                     sx={{ alignItems: "flex-start", mb: 1, "& .MuiCheckbox-root": { pt: 0.25 } }}
                   />
-                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-                    <Button
-                      variant="contained"
-                      disableElevation
-                      onClick={suggestKeywords}
-                      disabled={!aiConsent || Boolean(aiBusy) || !charts.some((chart) => String(chart.caption || "").trim())}
-                      startIcon={aiBusy === "keywords" ? <CircularProgress size={16} color="inherit" /> : <Psychology />}
-                      sx={{ textTransform: "none" }}
-                    >
-                      Suggest keywords
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      onClick={curateFolder}
-                      disabled={!aiConsent || Boolean(aiBusy) || !fileServerPath}
-                      startIcon={aiBusy === "curate" ? <CircularProgress size={16} /> : <AutoAwesome />}
-                      sx={{ textTransform: "none" }}
-                    >
-                      Curate the whole folder with AI
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      onClick={suggestLinks}
-                      disabled={!aiConsent || Boolean(aiBusy) || !(scripts.length || datasets.length)}
-                      startIcon={aiBusy === "links" ? <CircularProgress size={16} /> : <Psychology />}
-                      sx={{ textTransform: "none" }}
-                    >
-                      Suggest missing links
-                    </Button>
+                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
+                    <AiAction help={AI_HELP.keywords}>
+                      <Button
+                        variant="contained"
+                        disableElevation
+                        onClick={suggestKeywords}
+                        disabled={!aiConsent || Boolean(aiBusy) || !charts.some((chart) => String(chart.caption || "").trim())}
+                        startIcon={aiBusy === "keywords" ? <CircularProgress size={16} color="inherit" /> : <Psychology />}
+                        sx={{ textTransform: "none" }}
+                      >
+                        Suggest keywords
+                      </Button>
+                    </AiAction>
+                    <AiAction help={AI_HELP.descriptions}>
+                      <Button
+                        variant="outlined"
+                        onClick={suggestDescriptions}
+                        disabled={!aiConsent || Boolean(aiBusy) || !fileServerPath || !(scripts.length || datasets.length)}
+                        startIcon={aiBusy === "descriptions" ? <CircularProgress size={16} /> : <Psychology />}
+                        sx={{ textTransform: "none" }}
+                      >
+                        Suggest descriptions
+                      </Button>
+                    </AiAction>
+                    <AiAction help={AI_HELP.links}>
+                      <Button
+                        variant="outlined"
+                        onClick={suggestLinks}
+                        disabled={!aiConsent || Boolean(aiBusy) || !charts.length || !(scripts.length || datasets.length)}
+                        startIcon={aiBusy === "links" ? <CircularProgress size={16} /> : <Psychology />}
+                        sx={{ textTransform: "none" }}
+                      >
+                        Suggest missing links
+                      </Button>
+                    </AiAction>
+                    <AiAction help={AI_HELP.curate}>
+                      <Button
+                        variant="outlined"
+                        onClick={curateFolder}
+                        disabled={!aiConsent || Boolean(aiBusy) || !fileServerPath}
+                        startIcon={aiBusy === "curate" ? <CircularProgress size={16} /> : <AutoAwesome />}
+                        sx={{ textTransform: "none" }}
+                      >
+                        Curate the whole folder with AI
+                      </Button>
+                    </AiAction>
                   </Box>
-                  {!charts.some((chart) => String(chart.caption || "").trim()) && (
+                  {charts.length > 0 && !charts.some((chart) => String(chart.caption || "").trim()) && (
                     <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.75 }}>
                       Keywords are suggested from captions, so add the captions first.
                     </Typography>
@@ -1704,10 +2029,12 @@ const GuidedSetup = () => {
                   {aiError && <Alert severity="warning" sx={{ mt: 1.5 }}>{aiError}</Alert>}
                   {aiApplied && <Alert severity="success" sx={{ mt: 1.5 }}>{aiApplied}</Alert>}
 
-                  {aiBusy === "curate" && (
+                  {(aiBusy === "curate" || aiBusy === "descriptions") && (
                     <Box sx={{ mt: 1.5 }}>
                       <Typography variant="body2" color="text.secondary" gutterBottom>
-                        Reading the folder and asking the AI… this can take a minute.
+                        {aiBusy === "curate"
+                          ? "Reading the folder and the record, and asking the AI… this can take a minute."
+                          : "Reading the datasets and scripts and asking the AI…"}
                       </Typography>
                       <LinearProgress />
                     </Box>
@@ -1715,83 +2042,87 @@ const GuidedSetup = () => {
 
                   {curateResult && (
                     <Box sx={{ mt: 1.5 }}>
-                      {curateItems.length === 0 ? (
+                      <ProposalReview
+                        result={curateResult}
+                        skip={curateSkip}
+                        setSkip={setCurateSkip}
+                        recordLabel={recordLabel}
+                        intro={(() => {
+                          const items = curateItemsOf(curateResult).length;
+                          const links = (curateResult.links || []).length;
+                          const edits = (curateResult.edits || []).length;
+                          const parts = [
+                            items && `${plural(items, "item", "items")} that Qresp did not find`,
+                            links && plural(links, "link", "links"),
+                            edits && plural(edits, "improvement", "improvements"),
+                          ].filter(Boolean);
+                          return parts.length
+                            ? `The AI proposes ${joinWords(parts)}. Untick anything that is wrong.`
+                            : "";
+                        })()}
+                        emptyText="The AI found nothing more to add or improve: the record already covers the folder."
+                      />
+                      <ModelNote models={curateResult.models} />
+                      <Box sx={{ display: "flex", gap: 1, mt: 1.5 }}>
+                        {proposalCount(curateResult) > 0 && (
+                          <Button variant="contained" disableElevation onClick={applyCuration} sx={{ textTransform: "none", fontWeight: 600 }}>
+                            Add selected
+                          </Button>
+                        )}
+                        <Button onClick={() => setCurateResult(null)} sx={{ textTransform: "none" }}>
+                          {proposalCount(curateResult) > 0 ? "Cancel" : "Close"}
+                        </Button>
+                      </Box>
+                    </Box>
+                  )}
+
+                  {descResult && (
+                    <Box sx={{ mt: 1.5 }}>
+                      {(descResult.descriptions || []).length === 0 ? (
                         <Box>
                           <Typography variant="body2" color="text.secondary">
-                            The AI found nothing more to add: the record already covers the folder.
+                            The AI could not describe any dataset or script from the evidence in the folder.
                           </Typography>
-                          <ModelNote models={curateResult.models} />
+                          <ModelNote models={descResult.models} />
                         </Box>
                       ) : (
                         <Box>
-                          <Typography variant="body2" sx={{ mb: 1 }}>
-                            {`The AI proposes ${plural(curateItems.length, "item", "items")} that Qresp did not find${(curateResult.links || []).length ? `, and ${plural(curateResult.links.length, "link", "links")}` : ""}. Untick anything that is wrong.`}
-                          </Typography>
-                          <Box sx={{ maxHeight: 420, overflowY: "auto", border: "1px solid", borderColor: "divider", borderRadius: 2, p: 1 }}>
-                            {CURATE_GROUPS.map(({ key, type, title }) => {
-                              const group = curateItems.filter((item) => item.type === type);
-                              if (!group.length) return null;
+                          <Box sx={{ maxHeight: 340, overflowY: "auto", border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
+                            {descResult.descriptions.map(({ id, description, confidence }) => {
+                              const current = String((resourceById(id) || {}).readme || "").trim();
                               return (
-                                <Box key={key} sx={{ mb: 1 }}>
-                                  <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                                    {title}
-                                  </Typography>
-                                  {group.map((item) => (
-                                    <Box key={item.key} sx={{ display: "flex", gap: 0.5, alignItems: "flex-start" }}>
-                                      <Checkbox
-                                        size="small"
-                                        checked={!curateSkip[item.key]}
-                                        onChange={(e) => setCurateSkip((x) => ({ ...x, [item.key]: !e.target.checked }))}
-                                        slotProps={{ input: { "aria-label": curateLabel(item) } }}
-                                      />
-                                      <Box sx={{ minWidth: 0 }}>
-                                        <Typography variant="body2" fontWeight={600} sx={{ overflowWrap: "anywhere" }}>
-                                          {curateLabel(item)}
-                                        </Typography>
-                                        {item.description && (
-                                          <Typography variant="caption" component="div">{item.description}</Typography>
-                                        )}
-                                        <Typography variant="caption" color="text.secondary" component="div">{item.reason}</Typography>
-                                      </Box>
-                                    </Box>
-                                  ))}
+                                <Box key={id} sx={{ display: "flex", gap: 0.5, alignItems: "flex-start", px: 1, py: 0.75, borderBottom: "1px solid", borderColor: "divider", "&:last-child": { borderBottom: 0 } }}>
+                                  <Checkbox
+                                    size="small"
+                                    checked={!descSkip[id]}
+                                    onChange={(e) => setDescSkip((x) => ({ ...x, [id]: !e.target.checked }))}
+                                    slotProps={{ input: { "aria-label": `Description for ${recordLabel(id)}` } }}
+                                  />
+                                  <Box sx={{ minWidth: 0 }}>
+                                    <Typography variant="body2" fontWeight={600} sx={{ overflowWrap: "anywhere" }}>
+                                      {recordLabel(id)}
+                                      <Typography component="span" variant="caption" color="text.secondary">
+                                        {id[0] === "d" ? "  · dataset" : "  · script"}
+                                      </Typography>
+                                      <Chip size="small" label={confidence} variant="outlined" sx={{ ml: 1, height: 18 }} />
+                                    </Typography>
+                                    <Typography variant="body2">{description}</Typography>
+                                    {current && (
+                                      <Typography variant="caption" color="warning.main" component="div">
+                                        {`Replaces: ${current}`}
+                                      </Typography>
+                                    )}
+                                  </Box>
                                 </Box>
                               );
                             })}
-                            {(curateResult.links || []).length > 0 && (
-                              <Box>
-                                <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                                  Links
-                                </Typography>
-                                {curateResult.links.map((link) => {
-                                  const id = `${link.from}>${link.to}`;
-                                  return (
-                                    <Box key={id} sx={{ display: "flex", gap: 0.5, alignItems: "flex-start" }}>
-                                      <Checkbox
-                                        size="small"
-                                        checked={!curateSkip[id]}
-                                        onChange={(e) => setCurateSkip((x) => ({ ...x, [id]: !e.target.checked }))}
-                                        slotProps={{ input: { "aria-label": `${endLabel(link.from)} to ${endLabel(link.to)}` } }}
-                                      />
-                                      <Box sx={{ minWidth: 0 }}>
-                                        <Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>
-                                          {`${endLabel(link.from)} → ${endLabel(link.to)}`}
-                                          <Chip size="small" label={link.confidence} variant="outlined" sx={{ ml: 1, height: 18 }} />
-                                        </Typography>
-                                        <Typography variant="caption" color="text.secondary">{link.reason}</Typography>
-                                      </Box>
-                                    </Box>
-                                  );
-                                })}
-                              </Box>
-                            )}
                           </Box>
-                          <ModelNote models={curateResult.models} />
+                          <ModelNote models={descResult.models} />
                           <Box sx={{ display: "flex", gap: 1, mt: 1.5 }}>
-                            <Button variant="contained" disableElevation onClick={applyCuration} sx={{ textTransform: "none", fontWeight: 600 }}>
-                              Add selected
+                            <Button variant="contained" disableElevation onClick={applyDescriptions} sx={{ textTransform: "none", fontWeight: 600 }}>
+                              Apply selected descriptions
                             </Button>
-                            <Button onClick={() => setCurateResult(null)} sx={{ textTransform: "none" }}>Cancel</Button>
+                            <Button onClick={() => setDescResult(null)} sx={{ textTransform: "none" }}>Cancel</Button>
                           </Box>
                         </Box>
                       )}
@@ -1943,7 +2274,7 @@ const GuidedSetup = () => {
                   {requiredNeeding.length > 0 && (
                     <>
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {`Required to publish: ${plural(requiredNeeding.length, "item needs", "items need")} a description.`}
+                        {`Required to publish: ${plural(requiredNeeding.length, "item is", "items are")} missing a required detail.`}
                       </Typography>
                       <FinishDetails
                         needing={requiredNeeding}
@@ -1966,12 +2297,18 @@ const GuidedSetup = () => {
                       >
                         {[
                           missingOptional.length ? `The paper has no ${missingOptional.join(" or ")}` : "",
-                          optionalNeeding.length
-                            ? `${plural(optionalNeeding.length, "figure is", "figures are")} missing a caption, number or keywords`
+                          optionalFigures
+                            ? `${plural(optionalFigures, "figure is", "figures are")} missing a caption, number or keywords`
+                            : "",
+                          optionalResources
+                            ? `${plural(optionalResources, "dataset or script has", "datasets and scripts have")} no description`
                             : "",
                         ]
                           .filter(Boolean)
                           .join("; ") + ". These are optional: they help readers, but you can publish without them."}
+                        {optionalResources > 0 && authenticated
+                          ? " Suggest descriptions in step 6 can draft the descriptions for you."
+                          : ""}
                       </Alert>
                       {optionalNeeding.length > 0 && (
                         <FinishDetails
@@ -2045,6 +2382,16 @@ const GuidedSetup = () => {
           </Step>
         </Stepper>
       </Box>
+      <AiConsentDialog
+        open={Boolean(consentAsk)}
+        onCancel={() => setConsentAsk(null)}
+        onConfirm={() => {
+          const run = consentAsk;
+          setAiConsent(true);
+          setConsentAsk(null);
+          if (run) run();
+        }}
+      />
     </Paper>
   );
 };

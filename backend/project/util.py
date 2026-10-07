@@ -200,12 +200,13 @@ class WorkflowObject:
         """
         tooltip = ""
         if "d" in workflowtype:
-            tooltip = "<p><b>Dataset " + node.id + "</b>: <i>" + node.readme + "</i>"
+            # Descriptions and captions are optional and may be absent.
+            tooltip = "<p><b>Dataset " + node.id + "</b>: <i>" + (node.readme or "") + "</i>"
         elif "s" in workflowtype:
-            tooltip = "<p><b>Script " + node.id + "</b>: <i>" + node.readme + "</i>"
+            tooltip = "<p><b>Script " + node.id + "</b>: <i>" + (node.readme or "") + "</i>"
         elif "c" in workflowtype:
             tooltip = "<p><img src='" + fileServerPath + "/" + node.imageFile + "' class='img-responsive img-thumbnail'></p><p><b>" \
-                      + node.number + ": </b><i>" + node.caption + "</i></p>"
+                      + node.number + ": </b><i>" + (node.caption or "") + "</i></p>"
         return tooltip
 
     def _getExtraFields(self, node):

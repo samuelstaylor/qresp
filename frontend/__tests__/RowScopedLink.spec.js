@@ -272,7 +272,8 @@ describe("LINK -> From RCC", () => {
   it("creates nothing while a required field is missing", async () => {
     analysisResponse = analysisWith([
       datasetCandidate({
-        proposal: { files: ["data/short_traj"], readme: "", URLs: [],
+        // Files are required; a description is optional.
+        proposal: { files: [], readme: "Short trajectory", URLs: [],
                     extraFields: [] },
       }),
     ]);

@@ -63,7 +63,8 @@ const DatasetsInfoForm = ({ hideTrigger = false }) => {
 
   const schema = Yup.object({
     files: Yup.string().required("Required"),
-    readme: Yup.string().required("Required"),
+    // Optional: a curator may publish without describing every resource.
+    readme: Yup.string(),
     // Descriptive tags, in their own field. The input that used to sit here
     // was labelled "Keywords" and wrote to URLs, so a curator's keywords were
     // stored as links. URLs is no longer offered on any surface; an existing
@@ -219,7 +220,6 @@ const DatasetsInfoForm = ({ hideTrigger = false }) => {
                   error={errors.readme}
                   register={register}
                   defaultValue={def && def.readme}
-                  required
                 />
               </Grid>
               <Grid>

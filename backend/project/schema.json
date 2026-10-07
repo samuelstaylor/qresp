@@ -59,7 +59,7 @@
         "$id": "#/properties/charts/items",
         "type": "object",
         "title": "The Items Schema",
-        "required": ["caption", "id", "imageFile", "number", "properties"],
+        "required": ["id", "imageFile", "number", "properties"],
         "properties": {
           "caption": {
             "$id": "#/properties/charts/items/properties/caption",
@@ -263,7 +263,6 @@
           "readme": {
             "$id": "#/properties/datasets/items/properties/readme",
             "type": ["string"],
-            "minLength": 1,
             "title": "The Readme Schema",
             "default": "",
             "examples": [
@@ -272,7 +271,7 @@
             "pattern": "^(.*)$"
           }
         },
-        "required": ["files", "id", "readme"]
+        "required": ["files", "id"]
       }
     },
     "heads": {
@@ -722,7 +721,6 @@
           "readme": {
             "$id": "#/properties/scripts/items/properties/readme",
             "type": ["string"],
-            "minLength": 1,
             "title": "The Readme Schema",
             "default": "",
             "examples": [
@@ -731,7 +729,7 @@
             "pattern": "^(.*)$"
           }
         },
-        "required": ["files", "id", "readme"]
+        "required": ["files", "id"]
       }
     },
     "tags": {

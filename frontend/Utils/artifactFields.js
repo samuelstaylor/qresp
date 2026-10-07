@@ -24,8 +24,9 @@ const CHART = [
   { key: "number", label: "Figure Number", required: true,
     help: "The figure's number in the paper (e.g. 2, S1). Qresp never " +
       "guesses it." },
-  { key: "caption", label: "Figure Caption", required: true,
-    ai: "description",
+  // Optional, but recommended: the guided setup still offers to fill it.
+  { key: "caption", label: "Figure Caption", required: false,
+    recommended: true, ai: "description",
     help: "Use the paper's caption for this figure. If the figure has no " +
       "published caption, write a concise description of what it shows." },
   { key: "properties", label: "Keywords", required: true, list: true,
@@ -45,7 +46,9 @@ const CHART = [
 // surface and is never confused with keywords again.
 const DATA = [
   { key: "files", label: "Files", required: true, list: true },
-  { key: "readme", label: "Description", required: true, ai: "description" },
+  // Optional, but recommended: a resource may publish without one.
+  { key: "readme", label: "Description", required: false, recommended: true,
+    ai: "description" },
   { key: "keywords", label: "Keywords", required: false, list: true,
     ai: "keywords" },
 ];
@@ -149,12 +152,25 @@ export const toRecord = (kind, draft = {}) => {
 
 // Only a MISSING REQUIRED field needs the curator, and `required` is per
 // KIND -- there is no field that is optional everywhere. A chart's Keywords
-// (`properties`) ARE required, alongside Figure Image, Figure Number and
-// Figure Caption; a dataset's or script's Keywords are not. Genuinely
-// optional, and never flagged: a chart's Input / Supporting Files and its
-// Reproduction Notebook.
+// (`properties`) ARE required, alongside Figure Image and Figure Number; a
+// dataset's or script's Keywords are not. A figure's caption and a dataset's
+// or script's description are optional but RECOMMENDED: never blocking, but
+// offered by the guided setup. Genuinely optional, and never flagged: a
+// chart's Input / Supporting Files and its Reproduction Notebook.
 export const missingRequired = (kind, draft = {}) =>
   requiredKeys(kind).filter((key) => !String(draft[key] || "").trim());
+
+export const recommendedKeys = (kind) =>
+  fieldsOf(kind)
+    .filter((field) => field.recommended)
+    .map((field) => field.key);
+
+// Required and recommended fields still empty, in contract order.
+export const missingRecommended = (kind, draft = {}) =>
+  fieldsOf(kind)
+    .filter((field) => field.required || field.recommended)
+    .map((field) => field.key)
+    .filter((key) => !String(draft[key] || "").trim());
 
 // ---------------------------------------------------------------------------
 // What a field currently IS.

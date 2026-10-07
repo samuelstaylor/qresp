@@ -102,7 +102,8 @@ const ChartsInfoForm = ({ hideTrigger = false }) => {
   );
 
   const schema = Yup.object({
-    caption: Yup.string().required("Required"),
+    // Optional: the paper may have no caption to copy.
+    caption: Yup.string(),
     number: Yup.number().required("Required"),
     imageFile: Yup.string().required("Required"),
     properties: Yup.string().required("Required"),
@@ -285,7 +286,6 @@ const ChartsInfoForm = ({ hideTrigger = false }) => {
                   error={errors.caption}
                   register={register}
                   defaultValue={def && def.caption}
-                  required
                 />
               </Grid>
               <Grid>

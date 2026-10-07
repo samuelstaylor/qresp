@@ -1346,11 +1346,111 @@ paths:
                 type: object
               existing:
                 type: object
+              focus:
+                type: array
+                maxItems: 4
+                items:
+                  type: string
+                  enum: ["charts", "datasets", "scripts", "tools"]
+              review:
+                type: boolean
       responses:
         200:
           description: Proposals with reasons (nothing is stored)
         400:
           description: No consent or invalid folder
+        401:
+          description: Not authenticated
+        429:
+          description: Daily AI limit reached
+        503:
+          description: AI not configured
+  /curation/suggest-descriptions:
+    post:
+      operationId: "project.curation_ai.suggest_descriptions"
+      tags:
+        - "Curation"
+      summary: "Opt-in AI descriptions for the record's datasets and scripts"
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+              - consent
+              - path
+            properties:
+              consent:
+                type: boolean
+              path:
+                type: string
+                maxLength: 1000
+              paper:
+                type: object
+              figures:
+                type: array
+                maxItems: 200
+                items:
+                  type: object
+              datasets:
+                type: array
+                maxItems: 200
+                items:
+                  type: object
+              scripts:
+                type: array
+                maxItems: 100
+                items:
+                  type: object
+              existing_links:
+                type: array
+                maxItems: 1000
+                items:
+                  type: object
+      responses:
+        200:
+          description: Suggested descriptions (nothing is stored)
+        400:
+          description: No consent, nothing to describe or invalid folder
+        401:
+          description: Not authenticated
+        429:
+          description: Daily AI limit reached
+        503:
+          description: AI not configured
+  /curation/match-captions:
+    post:
+      operationId: "project.curation_ai.match_captions"
+      tags:
+        - "Curation"
+      summary: "Opt-in AI matching of LaTeX figures to record figures whose names differ"
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+              - consent
+            properties:
+              consent:
+                type: boolean
+              figures:
+                type: array
+                maxItems: 500
+                items:
+                  type: object
+              charts:
+                type: array
+                maxItems: 500
+                items:
+                  type: object
+      responses:
+        200:
+          description: Matches with reasons; captions are the paper's own text
+        400:
+          description: No consent or nothing to match
         401:
           description: Not authenticated
         429:

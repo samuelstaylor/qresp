@@ -97,10 +97,12 @@ describe("a failed Save goes to the first missing field", () => {
 
     await save(user);
 
-    // Figure Caption is the first control in the form, and four fields are
-    // required — only the first one is touched.
-    const caption = screen.getByPlaceholderText(/enter the figure caption/i);
-    await waitFor(() => expect(caption).toHaveFocus());
+    // Figure Caption comes first in the form but is optional; Figure Number
+    // is prefilled, so the topmost missing required field is the Figure
+    // Image -- only that one is touched.
+    const image = screen.getByPlaceholderText(/enter chart image file name/i);
+    await waitFor(() => expect(image).toHaveFocus());
+    expect(screen.getByPlaceholderText(/enter the figure caption/i)).not.toHaveFocus();
     expect(scrollSpy).toHaveBeenCalledTimes(1);
     expect(scrollSpy).toHaveBeenCalledWith(
       expect.objectContaining({ block: "center" })
@@ -114,24 +116,19 @@ describe("a failed Save goes to the first missing field", () => {
     const user = userEvent.setup({ delay: null });
     renderForm("chart");
 
+    // The caption is optional and Figure Number is prefilled from the
+    // record count, so the first gap is the Figure Image...
     await save(user);
-    const caption = screen.getByPlaceholderText(/enter the figure caption/i);
-    await waitFor(() => expect(caption).toHaveFocus());
-
-    await user.type(caption, "Density of states");
-    await save(user);
-
-    // Figure Number is prefilled from the record count, so the next gap is
-    // the Figure Image.
     const image = screen.getByPlaceholderText(/enter chart image file name/i);
     await waitFor(() => expect(image).toHaveFocus());
-    expect(scrollSpy).toHaveBeenCalledTimes(2);
+    expect(scrollSpy).toHaveBeenCalledTimes(1);
 
+    // ...and the next one the Keywords.
     await user.type(image, "figures/f1.png");
     await save(user);
     const keywords = screen.getByPlaceholderText(/enter keywords/i);
     await waitFor(() => expect(keywords).toHaveFocus());
-    expect(scrollSpy).toHaveBeenCalledTimes(3);
+    expect(scrollSpy).toHaveBeenCalledTimes(2);
   });
 
   it("saves normally, and scrolls nothing, once the form is complete",
@@ -393,18 +390,18 @@ describe("only one thing moves the focus", () => {
     renderForm("chart");
 
     await save(user);
-    const caption = screen.getByPlaceholderText(/enter the figure caption/i);
-    await waitFor(() => expect(caption).toHaveFocus());
+    const image = screen.getByPlaceholderText(/enter chart image file name/i);
+    await waitFor(() => expect(image).toHaveFocus());
 
-    expect(focusSpy.on(caption)).toBe(1);
+    expect(focusSpy.on(image)).toBe(1);
     expect(scrollSpy).toHaveBeenCalledTimes(1);
 
     // react-hook-form's own focus runs after the invalid callback, and MUI
     // transitions settle on a timer; neither may add a second one.
     await new Promise((resolve) => setTimeout(resolve, 150));
-    expect(focusSpy.on(caption)).toBe(1);
+    expect(focusSpy.on(image)).toBe(1);
     expect(scrollSpy).toHaveBeenCalledTimes(1);
-    expect(caption).toHaveFocus();
+    expect(image).toHaveFocus();
 
     focusSpy.restore();
   });
@@ -416,11 +413,11 @@ describe("only one thing moves the focus", () => {
     renderForm("chart");
 
     await save(user);
-    const caption = screen.getByPlaceholderText(/enter the figure caption/i);
-    await waitFor(() => expect(caption).toHaveFocus());
+    const image = screen.getByPlaceholderText(/enter chart image file name/i);
+    await waitFor(() => expect(image).toHaveFocus());
 
-    // Every other invalid field is left alone: one jump, one field.
-    ["enter chart image file name", "enter keywords"].forEach((placeholder) => {
+    // Every other field is left alone: one jump, one field.
+    ["enter the figure caption", "enter keywords"].forEach((placeholder) => {
       const other = screen.getByPlaceholderText(new RegExp(placeholder, "i"));
       expect(focusSpy.on(other)).toBe(0);
       expect(other).not.toHaveFocus();
