@@ -37,7 +37,11 @@ const normalizeDoi = (raw) => {
   value = value.replace(/^doi:\s*/i, "");
   value = value.replace(/^(?:https?:\/\/)?(?:dx\.)?doi\.org\//i, "");
   // Trailing sentence punctuation survives copy/paste from prose.
-  return value.trim().replace(/[.,;]+$/, "");
+  value = value.trim().replace(/[.,;]+$/, "");
+  // DataCite answers 10.48550/ARXIV.<id>: one paper, one spelling.
+  const arxivDoi = value.match(/^10\.48550\/arxiv\.(.+)$/i);
+  if (arxivDoi && arxivIdOf(arxivDoi[1])) return `${ARXIV_DOI_PREFIX}${arxivIdOf(arxivDoi[1])}`;
+  return value;
 };
 
 // Crossref serves abstracts as JATS-tagged XML. The printed words are kept
@@ -73,7 +77,19 @@ const doiUtil = {
         if (!record) throw new Error("No metadata for this DOI.");
         return record;
       });
-    if (isArxivDoi(doi)) return csl();
+    // An arXiv paper: doi.org (DataCite) first, then Qresp's server, which
+    // asks DataCite itself and falls back to arXiv's own API -- a brand-new
+    // preprint is on arXiv days before DataCite registers its DOI.
+    if (isArxivDoi(doi)) {
+      const id = String(doi).replace(/^10\.48550\/arxiv\./i, "");
+      return csl().catch(() =>
+        axios.get("/api/curation/arxiv-record", { params: { id } }).then((res) => {
+          const record = asRecord({ data: res && res.data && res.data.record });
+          if (!record) throw new Error("No metadata for this arXiv paper.");
+          return record;
+        })
+      );
+    }
     return axios
       .get(doiUtil.url(doi), { headers: doiUtil.headers })
       .then((res) => asRecord(res) || csl(), () => csl());

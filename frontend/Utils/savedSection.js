@@ -43,3 +43,24 @@ export const matchesSaved = (section, signature) => {
   const entry = savedEntry(section);
   return Boolean(entry) && entry.signature === signature;
 };
+
+// CHANGES THE GUIDED SETUP MAKES COUNT AS SAVED.
+//
+// The setup fills a section from the DOI, the folder or the paper's LaTeX,
+// and the curator reviewed that before choosing it there. A section that
+// sees its content change while this window is open treats the change as a
+// Save rather than flagging it "Not saved". The window is short so it never
+// covers the curator's own later edits.
+const GUIDED_WINDOW_MS = 4000;
+let guidedUntil = 0;
+
+export const acceptGuidedChanges = () => {
+  guidedUntil = Date.now() + GUIDED_WINDOW_MS;
+};
+
+export const guidedChangesAccepted = () => Date.now() < guidedUntil;
+
+// For tests.
+export const resetGuidedChanges = () => {
+  guidedUntil = 0;
+};

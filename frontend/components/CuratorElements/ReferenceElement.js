@@ -7,7 +7,12 @@ import CuratorContext from "../../Context/Curator/curatorContext";
 import CuratorHelperContext from "../../Context/CuratorHelpers/curatorHelperContext";
 
 import SwitchFade from "../switchFade";
-import { matchesSaved, rememberSaved, signatureOf } from "../../Utils/savedSection";
+import {
+  guidedChangesAccepted,
+  matchesSaved,
+  rememberSaved,
+  signatureOf,
+} from "../../Utils/savedSection";
 
 const filled = (value) =>
   Array.isArray(value) ? value.length > 0 : Boolean(String(value || "").trim());
@@ -34,6 +39,13 @@ const ReferenceInfoElement = () => {
     // saved after the page remounts (e.g. coming back from the preview).
     if (!editing.referenceInfo && referenceInfo.title) {
       rememberSaved("referenceInfo", signature);
+      return;
+    }
+    // Filled in by the guided setup (the DOI or arXiv lookup, the abstract
+    // from the LaTeX): saved, once every required field has something in it.
+    if (editing.referenceInfo && guidedChangesAccepted() && isCompleteReference(referenceInfo)) {
+      openedForBlank.current = false;
+      setEditing("referenceInfo", false);
       return;
     }
     // A blank new record starts in edit mode.

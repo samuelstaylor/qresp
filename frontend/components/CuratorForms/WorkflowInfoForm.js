@@ -33,6 +33,7 @@ import {
 } from "../../Utils/workflowGraph";
 import { changedUrlProblem } from "../../Utils/externalData";
 import { sectionsCollapsing } from "../../Utils/sectionCollapse";
+import { guidedChangesAccepted } from "../../Utils/savedSection";
 
 import AlertContext from "../../Context/Alert/alertContext";
 import CuratorContext from "../../Context/Curator/curatorContext";
@@ -122,12 +123,26 @@ const WorkflowInfoForm = ({ dialogOnly = false }) => {
   // Save. A change made elsewhere does not pop it open.
   const [drawerOpen, setDrawerOpen] = useState(() => !sectionsCollapsing());
 
-  // Unsaved only when the workflow differs from the one last saved.
+  // Unsaved only when the workflow differs from the one last saved. A
+  // change the guided setup made counts as saved (see savedSection), unless
+  // it closes a loop, which the curator confirms on Save.
   useEffect(() => {
     const saved = readSaved();
     if (saved && saved.signature === workflowSignature(workflow)) {
       setEditing("workflowInfo", false);
       setSavedAt(saved.at || "");
+    } else if (guidedChangesAccepted() && (workflow.nodes || []).length && !isGraph.cyclic(workflow)) {
+      const at = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+      try {
+        window.sessionStorage.setItem(
+          WORKFLOW_SAVED_KEY,
+          JSON.stringify({ signature: workflowSignature(workflow), at })
+        );
+      } catch (e) {
+        // Storage unavailable: still saved for this visit.
+      }
+      setEditing("workflowInfo", false);
+      setSavedAt(at);
     } else {
       setEditing("workflowInfo", true);
     }

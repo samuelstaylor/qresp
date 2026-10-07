@@ -245,3 +245,59 @@ class AbstractTest(unittest.TestCase):
 
     def test_no_abstract(self):
         self.assertEqual("", L.extract_abstract(TEXTS))
+
+
+ATOM_ENTRY = b"""<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <id>http://arxiv.org/abs/2409.00246v2</id>
+    <published>2024-08-30T17:00:00Z</published>
+    <title>An NV- center in magnesium
+      oxide</title>
+    <summary>  Recent predictions suggest. </summary>
+    <author><name>Vrindaa Somjit</name></author>
+    <author><name>Giulia Galli</name></author>
+  </entry>
+</feed>"""
+
+
+class ArxivRecordTest(CurationTestBase):
+    def response(self, status, json_body=None, content=b""):
+        r = mock.Mock(status_code=status, content=content)
+        r.json.return_value = json_body
+        r.raise_for_status.return_value = None
+        return r
+
+    def test_datacite_first(self):
+        record = {"title": "From DataCite", "DOI": "10.48550/ARXIV.2409.00246"}
+        with mock.patch.object(L.requests, "get", return_value=self.response(200, record)) as get:
+            res = self.client.get("/api/curation/arxiv-record", params={"id": "https://arxiv.org/abs/2409.00246v2"})
+        self.assertEqual(200, res.status_code, res.text)
+        self.assertEqual("datacite", res.json()["source"])
+        self.assertEqual("https://doi.org/10.48550/arXiv.2409.00246", get.call_args[0][0])
+
+    def test_falls_back_to_the_arxiv_api_for_an_unregistered_preprint(self):
+        with mock.patch.object(L.requests, "get", side_effect=[
+                self.response(404), self.response(200, content=ATOM_ENTRY)]):
+            res = self.client.get("/api/curation/arxiv-record", params={"id": "2409.00246"})
+        self.assertEqual(200, res.status_code, res.text)
+        record = res.json()["record"]
+        self.assertEqual("arxiv", res.json()["source"])
+        self.assertEqual("An NV- center in magnesium oxide", record["title"])
+        self.assertEqual([{"given": "Vrindaa", "family": "Somjit"}, {"given": "Giulia", "family": "Galli"}],
+                         record["author"])
+        self.assertEqual([[2024]], record["issued"]["date-parts"])
+        self.assertEqual("10.48550/arXiv.2409.00246", record["DOI"])
+        self.assertEqual("Recent predictions suggest.", record["abstract"])
+
+    def test_unknown_paper_and_bad_input(self):
+        error_feed = (b'<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>Error</title>'
+                      b'</entry></feed>')
+        with mock.patch.object(L.requests, "get", side_effect=[
+                self.response(404), self.response(200, content=error_feed)]):
+            res = self.client.get("/api/curation/arxiv-record", params={"id": "2409.99999"})
+        self.assertEqual(404, res.status_code)
+        with mock.patch.object(L.requests, "get") as get:
+            res = self.client.get("/api/curation/arxiv-record", params={"id": "https://evil.example/abs/1"})
+        self.assertEqual(400, res.status_code)
+        get.assert_not_called()

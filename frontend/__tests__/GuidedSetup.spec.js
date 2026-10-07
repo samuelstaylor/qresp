@@ -856,3 +856,45 @@ describe("GuidedSetup AI backups and gap filling", () => {
     expect(await screen.findByText(/updated 2 fields/i)).toBeInTheDocument();
   });
 });
+
+
+describe("GuidedSetup paper lookup", () => {
+  afterEach(() => jest.resetAllMocks());
+
+  it("looks a paper up from its arXiv link, fills the P.I. and counts it as saved", async () => {
+    const { guidedChangesAccepted, resetGuidedChanges } = require("../Utils/savedSection");
+    resetGuidedChanges();
+    const user = userEvent.setup();
+    axios.get.mockResolvedValue({
+      data: {
+        type: "article",
+        title: "An NV- center in magnesium oxide",
+        DOI: "10.48550/ARXIV.2409.00246",
+        publisher: "arXiv",
+        URL: "https://arxiv.org/abs/2409.00246",
+        issued: { "date-parts": [[2024]] },
+        abstract: "Recent predictions suggest...",
+        author: [
+          { given: "Vrindaa", family: "Somjit" },
+          { given: "Giulia", family: "Galli" },
+        ],
+      },
+    });
+    axios.post.mockResolvedValue({ data: { found: false } });
+    const curator = renderSetup({
+      auth: { authenticated: true, user: { name: "Ada Lovelace", email: "ada@example.edu" } },
+    });
+    await user.type(screen.getByLabelText(/paper doi or arxiv link/i), "https://arxiv.org/abs/2409.00246v2");
+    await user.click(screen.getByRole("button", { name: /look up/i }));
+
+    await screen.findByRole("button", { name: /look up/i });
+    expect(axios.get.mock.calls[0][0]).toBe("https://dx.doi.org/10.48550/arXiv.2409.00246");
+    const written = curator.setAll.mock.calls[0][0];
+    expect(written.referenceInfo).toEqual(
+      expect.objectContaining({ title: "An NV- center in magnesium oxide", kind: "preprint", doi: "10.48550/arXiv.2409.00246" })
+    );
+    expect(written.paperInfo.PIs).toBe("Giulia Galli");
+    expect(guidedChangesAccepted()).toBe(true);
+    expect(axios.post).toHaveBeenCalledWith("/api/curation/locate-folder", { doi: "10.48550/arXiv.2409.00246" });
+  });
+});

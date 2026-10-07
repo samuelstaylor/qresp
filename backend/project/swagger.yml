@@ -1208,6 +1208,25 @@ paths:
           description: The source could not be read
         401:
           description: Not authenticated
+  /curation/arxiv-record:
+    get:
+      operationId: "project.latex.arxiv_record"
+      tags:
+        - "Curation"
+      summary: "An arXiv paper's citation record, from DataCite or arXiv"
+      parameters:
+        - in: query
+          name: id
+          required: true
+          type: string
+          maxLength: 300
+      responses:
+        200:
+          description: CSL-JSON record
+        400:
+          description: Not an arXiv identifier
+        404:
+          description: No such paper
   /curation/find-arxiv:
     post:
       operationId: "project.latex.find_arxiv"

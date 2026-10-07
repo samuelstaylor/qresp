@@ -60,6 +60,27 @@ describe("looking a DOI up", () => {
     expect(axios.get).toHaveBeenCalledTimes(2);
   });
 
+  it("asks Qresp's server when doi.org has no record for a new preprint", async () => {
+    axios.get
+      .mockRejectedValueOnce(new Error("404"))
+      .mockResolvedValueOnce({ data: { record: ARXIV_RECORD, source: "arxiv" } });
+    const record = await doiUtil.get(normalizeDoi("https://arxiv.org/abs/2409.00246v2"));
+    expect(record.title).toMatch(/NV- center/);
+    expect(axios.get).toHaveBeenLastCalledWith("/api/curation/arxiv-record", {
+      params: { id: "2409.00246" },
+    });
+  });
+
+  it("fails cleanly when neither has the paper", async () => {
+    axios.get.mockRejectedValue(new Error("404"));
+    await expect(doiUtil.get("10.48550/arXiv.2409.99999")).rejects.toThrow();
+  });
+
+  it("stores DataCite's upper-case arXiv DOI in the one canonical spelling", () => {
+    expect(normalizeDoi("10.48550/ARXIV.2409.00246")).toBe("10.48550/arXiv.2409.00246");
+    expect(referenceFromCrossref(ARXIV_RECORD, {}).doi).toBe("10.48550/arXiv.2409.00246");
+  });
+
   it("fills an arXiv record in as a preprint on arXiv", () => {
     const reference = referenceFromCrossref(ARXIV_RECORD, {});
     expect(reference.kind).toBe("preprint");

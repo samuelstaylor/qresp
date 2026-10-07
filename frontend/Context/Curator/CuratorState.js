@@ -145,7 +145,9 @@ const CuratorState = (props) => {
     scripts: [],
     heads: [],
     workflow: { nodes: [], edges: [] },
-    license: "",
+    // A new record starts under CC BY 4.0, the usual choice for open data;
+    // the curator can change it in Choose a License.
+    license: "cc_by",
   };
 
   const [state, dispatch] = useReducer(CuratorReducer, initialState);

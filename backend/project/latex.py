@@ -246,6 +246,82 @@ def find_arxiv(body):
             if ident else {"found": False}), 200
 
 
+# ---- an arXiv paper's citation record ---------------------------------------------
+#
+# Every arXiv paper has the DOI 10.48550/arXiv.<id>, registered with DataCite.
+# The browser looks it up through doi.org itself; this is the fallback for when
+# that fails -- DataCite has not registered a new preprint yet, or the
+# browser's request does not get through. It answers in CSL-JSON, the shape
+# the browser already reads, from DataCite or else from arXiv's own API.
+
+CSL_ACCEPT = "application/vnd.citationstyles.csl+json"
+RECORD_TIMEOUT = 15
+
+
+def _datacite_record(ident):
+    response = requests.get("https://doi.org/10.48550/arXiv." + ident,
+                            headers=dict(ARXIV_HEADERS, Accept=CSL_ACCEPT),
+                            timeout=RECORD_TIMEOUT)
+    if response.status_code != 200:
+        return None
+    try:
+        record = response.json()
+    except ValueError:
+        return None
+    return record if isinstance(record, dict) and record.get("title") else None
+
+
+def _person(name):
+    parts = re.sub(r"\s+", " ", str(name or "")).strip().rsplit(" ", 1)
+    return {"given": parts[0], "family": parts[1]} if len(parts) == 2 else {"given": "", "family": parts[0]}
+
+
+def _arxiv_api_record(ident):
+    response = requests.get(ARXIV_API, params={"id_list": ident, "max_results": 1},
+                            headers=ARXIV_HEADERS, timeout=RECORD_TIMEOUT)
+    response.raise_for_status()
+    feed = ElementTree.fromstring(response.content)
+    entry = feed.find(_ATOM + "entry")
+    if entry is None:
+        return None
+    title = re.sub(r"\s+", " ", entry.findtext(_ATOM + "title") or "").strip()
+    # An unknown id comes back as an entry titled "Error".
+    if not title or title.lower() == "error":
+        return None
+    year = (entry.findtext(_ATOM + "published") or "")[:4]
+    return {
+        "type": "article",
+        "title": title,
+        "author": [_person(a.findtext(_ATOM + "name"))
+                   for a in entry.findall(_ATOM + "author")],
+        "issued": {"date-parts": [[int(year)]]} if year.isdigit() else {},
+        "abstract": re.sub(r"\s+", " ", entry.findtext(_ATOM + "summary") or "").strip(),
+        "DOI": "10.48550/arXiv." + ident,
+        "URL": "https://arxiv.org/abs/" + ident,
+        "publisher": "arXiv",
+    }
+
+
+def arxiv_record(id):
+    """
+    An arXiv paper's citation record (CSL-JSON)
+    Handler for GET: /api/curation/arxiv-record
+    """
+    ident = arxiv_id(id)
+    if not ident:
+        return {"error": "That is not an arXiv identifier or arxiv.org link."}, 400
+    ident = re.sub(r"v\d+$", "", ident)
+    for source, lookup in (("datacite", _datacite_record), ("arxiv", _arxiv_api_record)):
+        try:
+            record = lookup(ident)
+        except Exception as e:
+            print("arXiv record: %s lookup failed (%s)" % (source, type(e).__name__))
+            continue
+        if record:
+            return {"record": record, "source": source}, 200
+    return {"error": "No arXiv paper was found with that identifier."}, 404
+
+
 # ---- parsing --------------------------------------------------------------------
 
 def strip_comments(text):

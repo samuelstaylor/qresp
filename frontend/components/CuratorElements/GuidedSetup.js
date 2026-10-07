@@ -53,6 +53,7 @@ import { arxivIdOf, doiUtil } from "../../Utils/doi";
 import { buildFileUrl, isPdfFile } from "../../Utils/fileServerUrl";
 import { initialsOf } from "../Profile/ProfileLinks";
 import { labelFor, toRecord } from "../../Utils/artifactFields";
+import { acceptGuidedChanges } from "../../Utils/savedSection";
 import {
   AI_HELP,
   AiConsentDialog,
@@ -328,7 +329,6 @@ const GuidedSetup = () => {
     collectDraftState,
     setAll,
     remountForms,
-    importBundle,
     cacheRccAnalysis,
     edit,
     resetVersion,
@@ -340,9 +340,16 @@ const GuidedSetup = () => {
 
   // Apply programmatic changes without losing anything typed into open
   // forms: snapshot every open form, merge, then remount so they re-seed.
+  // What the setup fills in counts as saved: the sections it changes do not
+  // then say "Not saved" (see Utils/savedSection).
   const apply = (patch) => {
+    acceptGuidedChanges();
     setAll({ ...collectDraftState(), ...patch });
     remountForms();
+  };
+  const importBundle = (records, links) => {
+    acceptGuidedChanges();
+    ctx.importBundle(records, links);
   };
 
   // 1. You -------------------------------------------------------------------
@@ -380,7 +387,22 @@ const GuidedSetup = () => {
       .get(bare)
       .then((record) => {
         const current = collectDraftState();
-        apply({ referenceInfo: referenceFromCrossref(record, { ...current.referenceInfo, doi: bare }) });
+        const referenceInfo = referenceFromCrossref(record, { ...current.referenceInfo, doi: bare });
+        const patch = { referenceInfo };
+        // The last author is, by convention, the P.I.; it fills an empty P.I.
+        // field and can be changed in Qresp Curation Information.
+        const pis = (current.paperInfo || {}).PIs;
+        const last = String(referenceInfo.authors || "")
+          .split(",")
+          .map((name) => name.replace(/\s+/g, " ").trim())
+          .filter(Boolean)
+          .pop();
+        // A person's name only: a collaboration ("ATLAS") is not a P.I.
+        if (last && last.includes(" ") &&
+            !(Array.isArray(pis) ? pis.filter(Boolean).length : String(pis || "").trim())) {
+          patch.paperInfo = { ...current.paperInfo, PIs: last };
+        }
+        apply(patch);
         // An arXiv paper's LaTeX is on arXiv: offer it for the captions step.
         const arxiv = arxivIdOf(bare.replace(/^10\.48550\/arxiv\./i, ""));
         if (arxiv) setArxivInput((was) => was || arxiv);
@@ -1291,8 +1313,8 @@ const GuidedSetup = () => {
                   <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start", flexWrap: "wrap" }}>
                     <TextField
                       size="small"
-                      label="Paper DOI"
-                      placeholder="10.1038/s41524-025-01558-w"
+                      label="Paper DOI or arXiv link"
+                      placeholder="10.1038/s41524-025-01558-w or https://arxiv.org/abs/2409.00246"
                       value={doi}
                       onChange={(e) => setDoi(e.target.value)}
                       onKeyDown={(e) => {
@@ -1322,7 +1344,8 @@ const GuidedSetup = () => {
                   </Box>
                   {doiError && <Alert severity="warning" sx={{ mt: 1 }}>{doiError}</Alert>}
                   <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.75 }}>
-                    Fills in title, authors, journal, year and abstract. No DOI?{" "}
+                    Fills in title, authors, journal, year and abstract. A preprint?
+                    Paste its arXiv link or ID. No DOI?{" "}
                     <SectionLink target="curate-reference">Enter the details by hand</SectionLink>
                   </Typography>
                 </Box>
