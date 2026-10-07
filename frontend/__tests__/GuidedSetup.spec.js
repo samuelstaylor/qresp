@@ -898,3 +898,93 @@ describe("GuidedSetup paper lookup", () => {
     expect(axios.post).toHaveBeenCalledWith("/api/curation/locate-folder", { doi: "10.48550/arXiv.2409.00246" });
   });
 });
+
+
+describe("GuidedSetup when a step cannot be finished", () => {
+  afterEach(() => jest.resetAllMocks());
+
+  const ada = { firstName: "Ada", middleName: "", lastName: "Lovelace", emailId: "ada@example.edu", affiliation: "" };
+  const auth = { authenticated: true, user: { name: "Ada Lovelace", email: "ada@example.edu" } };
+  const folder = "https://notebook.rcc.uchicago.edu/files/x";
+
+  it("lets missing captions be skipped for now and goes to the AI assistant", async () => {
+    const user = userEvent.setup();
+    const scroll = jest.fn();
+    Element.prototype.scrollIntoView = scroll;
+    axios.post.mockResolvedValue({ data: { found: false } });
+    renderSetup({
+      state: {
+        ...blankState, curatorInfo: ada, referenceInfo: { doi: "10.1/x", title: "T" }, fileServerPath: folder,
+        charts: [{ id: "c0", imageFile: "plots/bands.png", number: "1", caption: "", properties: ["k"] }],
+      },
+      auth,
+    });
+    expect(screen.getByText(/1 figure has no caption yet/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /skip for now — go to the ai assistant/i }));
+    expect(scroll).toHaveBeenCalled();
+    expect(screen.getByText(/skipped for now — you can come back to it/i)).toBeInTheDocument();
+  });
+
+  it("offers the AI assistant with only a folder, when the scan failed", async () => {
+    axios.post.mockImplementation((url) =>
+      url === "/api/curation/analyze-folder"
+        ? Promise.reject({ response: { data: { error: "The folder could not be read." } } })
+        : Promise.resolve({ data: { found: false } })
+    );
+    renderSetup({
+      state: { ...blankState, curatorInfo: ada, referenceInfo: { doi: "10.1/x", title: "T" }, fileServerPath: folder },
+      auth,
+    });
+    expect(await screen.findByText("The folder could not be read.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /skip for now — go to the ai assistant/i })).toBeInTheDocument();
+    // The AI can still look, both in this step and in the AI assistant.
+    expect(screen.getByRole("button", { name: /^find figures, datasets and scripts with ai$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^curate the whole folder with ai$/i })).toBeInTheDocument();
+  });
+
+  it("drafts a description for a figure with no caption, written where its caption goes", async () => {
+    const user = userEvent.setup();
+    axios.post.mockImplementation((url) =>
+      Promise.resolve({
+        data:
+          url === "/api/curation/suggest-descriptions"
+            ? { descriptions: [{ id: "c0", description: "Band structure of the defect.", confidence: "medium" }], models: [] }
+            : { found: false },
+      })
+    );
+    const curator = renderSetup({
+      state: {
+        ...blankState, curatorInfo: ada, referenceInfo: { doi: "10.1/x", title: "T" }, fileServerPath: folder,
+        charts: [{ id: "c0", imageFile: "plots/bands.png", number: "1", caption: "", properties: ["k"] }],
+      },
+      auth,
+    });
+    await user.click(screen.getByRole("checkbox", { name: /send the paper's title/i }));
+    await user.click(screen.getByRole("button", { name: /^suggest descriptions$/i }));
+    expect(axios.post).toHaveBeenCalledWith(
+      "/api/curation/suggest-descriptions",
+      expect.objectContaining({
+        figures: [{ id: "c0", number: "1", caption: "", imageFile: "plots/bands.png" }],
+      })
+    );
+    expect(await screen.findByText(/ai-drafted description, not the paper's caption/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /apply selected descriptions/i }));
+    expect(curator.setAll.mock.calls[0][0].charts[0].caption).toBe("Band structure of the defect.");
+  });
+
+  it("shows the figure number at full width in the finish step", () => {
+    axios.post.mockResolvedValue({ data: { found: false } });
+    renderSetup({
+      state: {
+        ...blankState, referenceInfo: { title: "T" }, fileServerPath: folder,
+        paperInfo: { PIs: "A B", collections: [], tags: [] },
+        charts: [{ id: "c0", imageFile: "a.png", number: "", caption: "C", properties: ["k"] }],
+      },
+    });
+    const field = screen.getByLabelText("Figure Number");
+    expect(field.closest(".MuiTextField-root")).toHaveClass("MuiFormControl-fullWidth");
+    // Not squeezed into a narrow first column beside another field.
+    const grid = field.closest(".MuiTextField-root").parentElement.parentElement.parentElement;
+    expect(getComputedStyle(grid).gridTemplateColumns).toBe("1fr");
+  });
+});

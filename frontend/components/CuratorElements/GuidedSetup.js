@@ -38,6 +38,7 @@ import {
   InsertPhoto,
   PictureAsPdf,
   Search,
+  SkipNext,
 } from "@mui/icons-material";
 
 import Router from "next/router";
@@ -263,24 +264,12 @@ const FinishDetails = ({ needing, fileServerPath, paperTags, edit }) => {
                     .pop()}
                 </Typography>
               </Box>
-              <Box
-                sx={{
-                  display: "grid",
-                  gap: 1,
-                  gridTemplateColumns: { xs: "1fr", sm: type === "chart" ? "110px 1fr" : "1fr" },
-                }}
-              >
+              {/* One full-width field per row, so every label is readable. */}
+              <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: "1fr" }}>
                 {missing
                   .filter((field) => field !== "imageFile" && field !== "files")
                   .map((field) => (
-                    <Box
-                      key={field}
-                      sx={
-                        field === "caption" || field === "readme" || field === "properties"
-                          ? { gridColumn: { sm: "1 / -1" } }
-                          : undefined
-                      }
-                    >
+                    <Box key={field}>
                       <DetailField
                         record={record}
                         field={field}
@@ -737,7 +726,8 @@ const GuidedSetup = () => {
   const missingKinds = FIND_KINDS.filter(
     (kind) => !recordLists[kind].length && !(pendingScan && counts[kind])
   );
-  const scanned = Boolean(analysis) || artifactCount > 0;
+  // A scan that failed still leaves the AI, which reads the folder its own way.
+  const scanned = Boolean(analysis) || artifactCount > 0 || Boolean(scanError);
   // While scan results wait to be added, only kinds the scan did not find
   // are asked for, so the AI never proposes the same files twice.
   const canFind = Boolean(fileServerPath) && authenticated && scanned && !scanning &&
@@ -1045,7 +1035,12 @@ const GuidedSetup = () => {
   // Descriptions for datasets and scripts.
   const [descResult, setDescResult] = useState(null);
   const [descSkip, setDescSkip] = useState({});
-  const resourceById = (id) => (id[0] === "d" ? datasets : scripts).find((item) => item.id === id);
+  const resourceById = (id) =>
+    ({ c: charts, d: datasets, s: scripts }[id[0]] || []).find((item) => item.id === id);
+  const currentDescription = (id) => {
+    const record = resourceById(id) || {};
+    return String((id[0] === "c" ? record.caption : record.readme) || "").trim();
+  };
 
   const suggestDescriptions = () => {
     setAiBusy("descriptions");
@@ -1058,7 +1053,8 @@ const GuidedSetup = () => {
         consent: aiConsent,
         path: fileServerPath,
         paper: paperForAi(),
-        figures: charts.map(({ id, number, caption }) => ({ id, number, caption })),
+        // Figures without a caption get a drafted description too.
+        figures: charts.map(({ id, number, caption, imageFile }) => ({ id, number, caption, imageFile })),
         datasets: datasets.map(resource),
         scripts: scripts.map(resource),
         existing_links: existingLinks(),
@@ -1069,8 +1065,7 @@ const GuidedSetup = () => {
         const skip = {};
         // A description the curator wrote is only replaced on request.
         (data.descriptions || []).forEach(({ id }) => {
-          const record = resourceById(id);
-          if (record && String(record.readme || "").trim()) skip[id] = true;
+          if (currentDescription(id)) skip[id] = true;
         });
         setDescSkip(skip);
       })
@@ -1084,11 +1079,16 @@ const GuidedSetup = () => {
       if (!descSkip[id] && description) chosen[id] = description;
     });
     const current = collectDraftState();
-    const fill = (list) =>
+    const fill = (list, field) =>
       (current[list] || []).map((record) =>
-        chosen[record.id] ? { ...record, readme: chosen[record.id] } : record
+        chosen[record.id] ? { ...record, [field]: chosen[record.id] } : record
       );
-    apply({ datasets: fill("datasets"), scripts: fill("scripts") });
+    // A figure's drafted description goes where its caption would.
+    apply({
+      charts: fill("charts", "caption"),
+      datasets: fill("datasets", "readme"),
+      scripts: fill("scripts", "readme"),
+    });
     setAiApplied(`Added ${plural(Object.keys(chosen).length, "description", "descriptions")}.`);
     setDescResult(null);
   };
@@ -1199,6 +1199,29 @@ const GuidedSetup = () => {
   };
 
   // ---- status ----
+  // A step that could not be finished (no captions found, the folder could
+  // not be read) can be skipped for now; the AI assistant may fill the gap.
+  const [skipped, setSkipped] = useState({});
+  const skipToAi = (key) => {
+    setSkipped((was) => ({ ...was, [key]: true }));
+    scrollToSection("guided-ai");
+  };
+  const SkipToAi = ({ step, note }) => (
+    <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", mt: 1.5 }}>
+      <Button
+        size="small"
+        variant="text"
+        endIcon={<SkipNext />}
+        onClick={() => skipToAi(step)}
+        sx={{ textTransform: "none" }}
+      >
+        Skip for now — go to the AI assistant
+      </Button>
+      {note && (
+        <Typography variant="caption" color="text.secondary">{note}</Typography>
+      )}
+    </Box>
+  );
   const steps = {
     you: curatorIsComplete(curatorInfo),
     paper: Boolean(referenceInfo.title),
@@ -1210,11 +1233,15 @@ const GuidedSetup = () => {
   };
   const done = Object.values(steps).filter(Boolean).length;
   const STEP_KEYS = ["you", "paper", "folder", "import", "captions", "ai", "finish"];
-  const firstOpen = STEP_KEYS.findIndex((k) => !steps[k]);
+  const firstOpen = STEP_KEYS.findIndex((k) => !steps[k] && !skipped[k]);
 
   const stepLabel = (key, title, subtitle) => (
     <StepLabel
-      optional={<Typography variant="caption" color="text.secondary">{subtitle}</Typography>}
+      optional={
+        <Typography variant="caption" color="text.secondary">
+          {skipped[key] && !steps[key] ? "Skipped for now — you can come back to it" : subtitle}
+        </Typography>
+      }
       slotProps={{ label: { sx: { fontWeight: 700 } } }}
     >
       {title}
@@ -1516,12 +1543,15 @@ const GuidedSetup = () => {
                   <LinearProgress />
                 </Box>
               ) : scanError ? (
-                <Alert
-                  severity="warning"
-                  action={<Button size="small" onClick={scan}>Try again</Button>}
-                >
-                  {scanError}
-                </Alert>
+                <Box>
+                  <Alert
+                    severity="warning"
+                    action={<Button size="small" onClick={scan}>Try again</Button>}
+                  >
+                    {scanError}
+                  </Alert>
+                  <SkipToAi step="import" />
+                </Box>
               ) : added ? (
                 <Alert severity="success" icon={<CheckCircle fontSize="inherit" />}>
                   {`Added ${LISTS.map(({ key, noun, plural: many }) =>
@@ -1533,10 +1563,13 @@ const GuidedSetup = () => {
                 </Alert>
               ) : analysis ? (
                 plan.items.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary">
-                    Nothing importable was found in this folder.{" "}
-                    <SectionLink target="curate-figures">Add items by hand</SectionLink>
-                  </Typography>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Nothing importable was found in this folder.{" "}
+                      <SectionLink target="curate-figures">Add items by hand</SectionLink>, or let the AI look for them below.
+                    </Typography>
+                    <SkipToAi step="import" />
+                  </Box>
                 ) : (
                   <Box>
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
@@ -1956,18 +1989,24 @@ const GuidedSetup = () => {
                   )}
                   {matchError && <Alert severity="warning" sx={{ mt: 1.5 }}>{matchError}</Alert>}
                   {matchNote && <Alert severity="info" sx={{ mt: 1.5 }}>{matchNote}</Alert>}
+                  {uncaptioned > 0 && !latexBusy && (
+                    <SkipToAi
+                      step="captions"
+                      note={`${plural(uncaptioned, "figure has", "figures have")} no caption yet. The AI assistant can draft a description for ${uncaptioned === 1 ? "it" : "them"}.`}
+                    />
+                  )}
                 </Box>
               )}
             </StepContent>
           </Step>
 
           {/* 6. AI assistant */}
-          <Step completed={steps.ai} expanded>
+          <Step completed={steps.ai} expanded id="guided-ai" sx={{ scrollMarginTop: 96 }}>
             {stepLabel("ai", "AI assistant (optional)", "Fill the gaps: keywords, descriptions, links and a review of the record")}
             <StepContent>
-              {!artifactCount ? (
+              {!artifactCount && !fileServerPath ? (
                 <Typography variant="body2" color="text.secondary">
-                  Available once figures, datasets or scripts are in the record.
+                  Available once the project folder is set.
                 </Typography>
               ) : !authenticated ? (
                 <Typography variant="body2" color="text.secondary">
@@ -2013,7 +2052,7 @@ const GuidedSetup = () => {
                       <Button
                         variant="outlined"
                         onClick={suggestDescriptions}
-                        disabled={!aiConsent || Boolean(aiBusy) || !fileServerPath || !(scripts.length || datasets.length)}
+                        disabled={!aiConsent || Boolean(aiBusy) || !fileServerPath || !(scripts.length || datasets.length || uncaptioned)}
                         startIcon={aiBusy === "descriptions" ? <CircularProgress size={16} /> : <Psychology />}
                         sx={{ textTransform: "none" }}
                       >
@@ -2043,9 +2082,14 @@ const GuidedSetup = () => {
                       </Button>
                     </AiAction>
                   </Box>
-                  {charts.length > 0 && !charts.some((chart) => String(chart.caption || "").trim()) && (
+                  {uncaptioned > 0 && (
                     <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.75 }}>
-                      Keywords are suggested from captions, so add the captions first.
+                      {`${plural(uncaptioned, "figure has", "figures have")} no caption. Suggest descriptions can draft one for ${uncaptioned === 1 ? "it" : "each"}; keywords are suggested from captions, so do that first.`}
+                    </Typography>
+                  )}
+                  {!artifactCount && (
+                    <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.75 }}>
+                      Nothing is in the record yet: Curate the whole folder with AI can propose the figures, data and scripts.
                     </Typography>
                   )}
 
@@ -2112,7 +2156,7 @@ const GuidedSetup = () => {
                         <Box>
                           <Box sx={{ maxHeight: 340, overflowY: "auto", border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
                             {descResult.descriptions.map(({ id, description, confidence }) => {
-                              const current = String((resourceById(id) || {}).readme || "").trim();
+                              const current = currentDescription(id);
                               return (
                                 <Box key={id} sx={{ display: "flex", gap: 0.5, alignItems: "flex-start", px: 1, py: 0.75, borderBottom: "1px solid", borderColor: "divider", "&:last-child": { borderBottom: 0 } }}>
                                   <Checkbox
@@ -2125,11 +2169,16 @@ const GuidedSetup = () => {
                                     <Typography variant="body2" fontWeight={600} sx={{ overflowWrap: "anywhere" }}>
                                       {recordLabel(id)}
                                       <Typography component="span" variant="caption" color="text.secondary">
-                                        {id[0] === "d" ? "  · dataset" : "  · script"}
+                                        {id[0] === "d" ? "  · dataset" : id[0] === "s" ? "  · script" : "  · figure"}
                                       </Typography>
                                       <Chip size="small" label={confidence} variant="outlined" sx={{ ml: 1, height: 18 }} />
                                     </Typography>
                                     <Typography variant="body2">{description}</Typography>
+                                    {id[0] === "c" && (
+                                      <Typography variant="caption" color="text.secondary" component="div" sx={{ fontStyle: "italic" }}>
+                                        AI-drafted description, not the paper's caption. Check it, or replace it with the caption later.
+                                      </Typography>
+                                    )}
                                     {current && (
                                       <Typography variant="caption" color="warning.main" component="div">
                                         {`Replaces: ${current}`}

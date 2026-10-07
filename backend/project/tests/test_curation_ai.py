@@ -604,6 +604,25 @@ class TestSuggestDescriptions(AiTestBase):
         self.assertEqual("old", sent["scripts"][0]["current_description"])
         self.assertIn("E (eV)", sent["datasets"][0]["file_heads"][0]["head"])
 
+    def test_drafts_descriptions_for_figures_without_a_caption(self):
+        self.login()
+        answer = json.dumps({"descriptions": [
+            {"id": "c2", "description": "Likely the configuration coordinate diagram.", "confidence": "medium"},
+            {"id": "c0", "description": "Has a caption already.", "confidence": "high"},
+        ]})
+        figures = FIGURES + [dict(FIGURES[2], id="c3")]
+        figures[2] = dict(FIGURES[2], imageFile="/plots/ccd.png")
+        with mock.patch("project.curation_ai._fetch_text_sized", return_value=("x", False)), \
+                mock.patch("project.assist.call_gemini", return_value=(answer, None)) as gemini:
+            response = self.post("/api/curation/suggest-descriptions",
+                                 self.body(figures=figures, datasets=[], scripts=[]))
+        self.assertEqual(200, response.status_code, response.text)
+        self.assertEqual(["c2"], [d["id"] for d in response.json()["descriptions"]])
+        sent = gemini.call_args[0][1]
+        self.assertEqual(["c2", "c3"], [f["id"] for f in sent["figures_to_describe"]])
+        self.assertEqual("plots/ccd.png", sent["figures_to_describe"][0]["image"])
+        self.assertEqual(["c0", "c1"], [f["id"] for f in sent["figures"]])
+
     def test_requires_consent_and_something_to_describe(self):
         self.login()
         with mock.patch("project.assist.call_gemini") as gemini:

@@ -46,8 +46,8 @@ export const AI_HELP = {
   },
   descriptions: {
     title: "Suggest descriptions",
-    what: "Writes a one- or two-sentence description for each dataset and script: what it contains or does, and which figure it is for.",
-    uses: "Each dataset's file names and the first lines of small text files, the start of each script, the figure captions and the links between them.",
+    what: "Writes a one- or two-sentence description for each dataset and script: what it contains or does, and which figure it is for. Figures whose caption could not be found get a short drafted description too, marked as AI-written so it is never mistaken for the paper's caption.",
+    uses: "Each dataset's file names and the first lines of small text files, the start of each script, the figure image names and captions, the paper's abstract and the links between them.",
     result: "A description per item, with a confidence. Descriptions you already wrote are only replaced if you tick them.",
   },
   links: {

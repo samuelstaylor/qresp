@@ -855,6 +855,8 @@ def ai_curate(body):
 DESCRIBE_OUTPUT_TOKENS = 6144
 MAX_DESCRIBE_DATASETS = 30
 MAX_DESCRIBE_SCRIPTS = 25
+MAX_DESCRIBE_FIGURES = 30
+MAX_FIGURE_DESCRIPTION_CHARS = 300
 MAX_DESCRIPTION_CHARS = 300
 MAX_DATA_PEEKS = 20
 MAX_DATA_PEEK_CHARS = 600
@@ -866,7 +868,7 @@ DESCRIBE_SCHEMA = {
     "properties": {
         "descriptions": {
             "type": "array",
-            "maxItems": MAX_DESCRIBE_DATASETS + MAX_DESCRIBE_SCRIPTS,
+            "maxItems": MAX_DESCRIBE_DATASETS + MAX_DESCRIBE_SCRIPTS + MAX_DESCRIBE_FIGURES,
             "items": {
                 "type": "object",
                 "properties": {
@@ -896,7 +898,15 @@ DESCRIBE_PROMPT = (
     "never invent numbers, methods or software that the evidence does not "
     "show, and do not start with \"This dataset\" or \"This script\". "
     "`confidence` is exactly high, medium or low. Skip an item rather than "
-    "guess. Respond with ONLY JSON of the form "
+    "guess.\n"
+    "`figures_to_describe` are figures with NO caption (the paper's caption "
+    "could not be found). For each one you can describe, give ONE sentence "
+    "(at most 30 words) saying what the figure most likely shows, from its "
+    "image path and number, the scripts and data linked to it (their code "
+    "excerpts say what they plot) and the paper's title and abstract. Stay "
+    "general where the evidence is thin; never state numerical results. Use "
+    "the figure's id (c..).\n"
+    "Respond with ONLY JSON of the form "
     '{"descriptions": [{"id": "...", "description": "...", "confidence": "..."}]} '
     "using ids exactly as given."
 )
@@ -942,8 +952,14 @@ def suggest_descriptions(body):
     body = body or {}
     datasets = _ids("d", body.get("datasets"), MAX_DESCRIBE_DATASETS)
     scripts = _ids("s", body.get("scripts"), MAX_DESCRIBE_SCRIPTS)
-    if not (datasets or scripts):
-        return {"error": "Add datasets or scripts to the record first."}, 400
+    # Figures with no caption get an AI-drafted description instead.
+    uncaptioned = [{"id": ident, "number": _clip(item.get("number"), 20),
+                    "image": _clip(item.get("imageFile"), 300).lstrip("/")}
+                   for ident, item in _ids("c", body.get("figures"), MAX_FIGURES)
+                   if not _clip(item.get("caption"), 10)][:MAX_DESCRIBE_FIGURES]
+    if not (datasets or scripts or uncaptioned):
+        return {"error": "Add datasets or scripts to the record first, or "
+                         "figures that still need a caption."}, 400
     try:
         resolve_folder_url(body.get("path"))
     except FolderError as e:
@@ -962,7 +978,8 @@ def suggest_descriptions(body):
 
     figures = [{"id": ident, "number": _clip(item.get("number"), 20),
                 "caption": _clip(item.get("caption"), 400)}
-               for ident, item in _ids("c", body.get("figures"), MAX_FIGURES)]
+               for ident, item in _ids("c", body.get("figures"), MAX_FIGURES)
+               if _clip(item.get("caption"), 10)]
     data_info = [{"id": ident,
                   "files": [_clip(f, 200).lstrip("/") for f in (item.get("files") or [])[:15]],
                   "current_description": _clip(item.get("readme"), 300),
@@ -972,9 +989,11 @@ def suggest_descriptions(body):
         script_info[ident]["files"] = [_clip(f, 200).lstrip("/") for f in (item.get("files") or [])[:10]]
         script_info[ident]["current_description"] = _clip(item.get("readme"), 300)
         script_info[ident].pop("description", None)
-    known = {f["id"] for f in figures} | set(script_info) | {d["id"] for d in data_info}
+    known = ({f["id"] for f in figures} | {f["id"] for f in uncaptioned}
+             | set(script_info) | {d["id"] for d in data_info})
     payload = {"paper": _paper(body), "figures": figures, "datasets": data_info,
-               "scripts": list(script_info.values()), "links": _links_from(body, known)}
+               "scripts": list(script_info.values()),
+               "figures_to_describe": uncaptioned, "links": _links_from(body, known)}
     answer, error = assist.call_gemini(cfg, payload, DESCRIBE_PROMPT, DESCRIBE_SCHEMA,
                                        max_output_tokens=DESCRIBE_OUTPUT_TOKENS)
     data = _parse(answer) if not error else None
@@ -982,7 +1001,8 @@ def suggest_descriptions(body):
         _refund(email, 1)
         return _provider_failure(error)
 
-    wanted = {ident for ident, _item in datasets} | set(script_info)
+    wanted = ({ident for ident, _item in datasets} | set(script_info)
+              | {f["id"] for f in uncaptioned})
     out, seen = [], set()
     for entry in data.get("descriptions") or []:
         ident = str((entry or {}).get("id") or "")
@@ -994,8 +1014,8 @@ def suggest_descriptions(body):
         out.append({"id": ident, "description": text,
                     "confidence": confidence if confidence in CONFIDENCE else "low"})
     model = getattr(answer, "model", "") or cfg.get("MODEL", "")
-    print("AI descriptions: datasets=%d scripts=%d suggested=%d model=%s"
-          % (len(datasets), len(scripts), len(out), model))
+    print("AI descriptions: datasets=%d scripts=%d figures=%d suggested=%d model=%s"
+          % (len(datasets), len(scripts), len(uncaptioned), len(out), model))
     return {"descriptions": out, "models": [model] if model else []}, 200
 
 
