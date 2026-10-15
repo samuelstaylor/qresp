@@ -128,12 +128,47 @@ class TestVisibilityManagement(PrivateTestBase):
 class TestPrivateRecordAccess(PrivateTestBase):
     """Who can read a private record, and where it is hidden."""
 
-    def test_private_record_hidden_from_search(self):
+    def search_flags(self):
+        response = self.client.get("/api/search")
+        assert response.status_code == 200, response.text
+        return {item["_Search__id"]: item["_Search__is_private"]
+                for item in response.json()}
+
+    def test_private_record_hidden_from_search_for_others(self):
         self.assertIn(self.owned_id, self.search_ids())
         self.make_private_as_owner()
-        # Hidden even from the owner: search is the public explore surface.
+        self.login(OTHER)
         self.assertNotIn(self.owned_id, self.search_ids())
         self.assertIn(self.ownerless_id, self.search_ids())
+        self.logout()
+        self.assertNotIn(self.owned_id, self.search_ids())
+
+    def test_private_record_listed_and_flagged_for_those_who_can_open_it(self):
+        self.make_private_as_owner()
+        Paper.objects(id=self.owned_id).update(set__editor_emails=[EDITOR])
+        for email in (OWNER, VIEWER, EDITOR, ADMIN):
+            self.login(email, is_admin=(email == ADMIN))
+            flags = self.search_flags()
+            self.assertTrue(flags.get(self.owned_id), email)
+            self.assertFalse(flags[self.ownerless_id], email)
+
+    def test_deactivated_private_record_never_listed(self):
+        self.make_private_as_owner()
+        Paper.objects(id=self.owned_id).update(set__is_active=False)
+        self.login(VIEWER)
+        self.assertNotIn(self.owned_id, self.search_ids())
+
+    def test_filtered_search_respects_visibility(self):
+        self.make_private_as_owner()
+        tag = Paper.objects.get(id=self.owned_id).tags[0]
+        self.login(OTHER)
+        ids = {i["_Search__id"] for i in self.client.get(
+            "/api/search", params={"tags": tag}).json()}
+        self.assertNotIn(self.owned_id, ids)
+        self.login(VIEWER)
+        ids = {i["_Search__id"] for i in self.client.get(
+            "/api/search", params={"tags": tag}).json()}
+        self.assertIn(self.owned_id, ids)
 
     def test_private_record_hidden_from_facets(self):
         Paper.objects(id=self.ownerless_id).delete()

@@ -246,6 +246,9 @@ class Search(object):
         # Optional, record-level -- see project.models.Paper.institution.
         # Absent on records published before the field existed.
         self.institution = ""
+        # Private records are listed only to sessions that can open them;
+        # the flag lets the explorer badge them.
+        self.is_private = False
 
     @property
     def id(self):
@@ -374,6 +377,14 @@ class Search(object):
     @institution.setter
     def institution(self, val):
         self.__institution = val
+
+    @property
+    def is_private(self):
+        return self.__is_private
+
+    @is_private.setter
+    def is_private(self, val):
+        self.__is_private = val
 
     def __hash__(self):
         return hash(self.__title)

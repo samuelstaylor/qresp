@@ -2,8 +2,8 @@ import { useContext } from "react";
 import PropTypes from "prop-types";
 
 import Link from "next/link";
-import { Chip, Typography, Box } from "@mui/material";
-import { OpenInNew } from "@mui/icons-material";
+import { Chip, Tooltip, Typography, Box } from "@mui/material";
+import { LockOutlined, OpenInNew } from "@mui/icons-material";
 
 import Tag from "../tag";
 import FavoriteButton from "../FavoriteButton";
@@ -16,6 +16,7 @@ const Summary = ({ rowdata }) => {
     _Search__doi,
     _Search__id,
     _Search__institution,
+    _Search__is_private,
     _Search__publication,
     _Search__tags,
     _Search__title,
@@ -58,6 +59,21 @@ const Summary = ({ rowdata }) => {
             {_Search__title}
           </Typography>
         </Box>
+        {/* The backend lists a private record only to sessions that may
+            open it (owner, editors, collaborators, admins), so the badge
+            tells them this card is not visible to the public. */}
+        {_Search__is_private ? (
+          <Tooltip title="Private: only you and the people it is shared with can see this record">
+            <Chip
+              icon={<LockOutlined />}
+              label="Private"
+              size="small"
+              variant="outlined"
+              data-testid="record-private-badge"
+              sx={{ flexShrink: 0, mt: 0.25 }}
+            />
+          </Tooltip>
+        ) : null}
         <FavoriteButton
           paperId={_Search__id}
           server={_Search__server}

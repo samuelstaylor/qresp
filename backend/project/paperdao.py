@@ -155,17 +155,37 @@ class PaperDAO(MongoDBConnection, WorkflowObject):
         paper = Paper.objects(id=id).update(info__doi=doi)
         return paper
 
+    @staticmethod
+    def __visibleToSession():
+        """Query matching the records the current session may list: public
+        ones, plus private ones it can open (see auth.can_view_paper)."""
+        from flask import has_request_context
+        from project.auth import get_current_user, is_admin
+        # Outside a request (scripts, DAO unit tests) there is no session:
+        # treat it as anonymous, i.e. public records only.
+        user = get_current_user() if has_request_context() else None
+        if is_admin(user):
+            return Q()
+        visible = Q(is_private__ne=True)
+        email = ((user or {}).get("email") or "").strip().lower()
+        if email:
+            visible = visible | Q(owner_email=email) | Q(
+                editor_emails=email) | Q(viewer_emails=email)
+        return visible
+
     def __filtersearchedPaper(self, filteredPaper):
         """ Produces search results after filter
         :return: list filteredSearchobjects: filtered search objects
         """
         filteredSearchobjects = []
-        # Deactivated and private records never appear in public
-        # search/explorer results. All search entry points funnel through
-        # here, so this is the single gate. The `__ne` forms keep legacy
-        # records that predate the flags (fields absent => active, public).
-        filteredPaper = filteredPaper.filter(is_active__ne=False,
-                                             is_private__ne=True)
+        # All search entry points funnel through here, so this is the single
+        # gate. Deactivated records never appear. Private records appear
+        # only for sessions allowed to open them (owner, editor, the
+        # accounts they are shared with, admins) -- anonymous and federated
+        # readers never see them. The `__ne` forms keep legacy records that
+        # predate the flags (fields absent => active, public).
+        filteredPaper = filteredPaper.filter(is_active__ne=False)
+        filteredPaper = filteredPaper.filter(self.__visibleToSession())
         for paper in filteredPaper:
             search = Search()
             search.id = str(paper.id)
@@ -192,6 +212,7 @@ class PaperDAO(MongoDBConnection, WorkflowObject):
             search.notebookFile = paper.info.notebookFile
             search.year = int(paper.reference.year)
             search.institution = getattr(paper, 'institution', '') or ''
+            search.is_private = getattr(paper, 'is_private', None) is True
             filteredSearchobjects.append(search.__dict__)
         return filteredSearchobjects
 
