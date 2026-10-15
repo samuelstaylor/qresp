@@ -26,7 +26,7 @@ const card = (overrides) =>
     </AuthContext.Provider>
   );
 
-describe("private badge on an explorer card", () => {
+describe("private and role badges on an explorer card", () => {
   it("marks a private record the reader can open", () => {
     card({ _Search__is_private: true });
     expect(screen.getByTestId("record-private-badge")).toHaveTextContent("Private");
@@ -35,5 +35,21 @@ describe("private badge on an explorer card", () => {
   it("shows nothing on a public record or one from an older server", () => {
     card({ _Search__is_private: false });
     expect(screen.queryByTestId("record-private-badge")).not.toBeInTheDocument();
+  });
+
+  it("labels the reader's own record", () => {
+    card({ _Search__my_role: "owner" });
+    expect(screen.getByTestId("record-role-badge")).toHaveTextContent("Your record");
+  });
+
+  it("labels records the reader edits or was shared", () => {
+    card({ _Search__my_role: "viewer", _Search__is_private: true });
+    expect(screen.getByTestId("record-role-badge")).toHaveTextContent("Shared with you");
+    expect(screen.getByTestId("record-private-badge")).toBeInTheDocument();
+  });
+
+  it("shows no role label to anyone else", () => {
+    card({ _Search__my_role: "" });
+    expect(screen.queryByTestId("record-role-badge")).not.toBeInTheDocument();
   });
 });

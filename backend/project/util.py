@@ -249,6 +249,9 @@ class Search(object):
         # Private records are listed only to sessions that can open them;
         # the flag lets the explorer badge them.
         self.is_private = False
+        # The requesting session's role on the record ('owner', 'editor',
+        # 'viewer' or ''), so the explorer can label the reader's own records.
+        self.my_role = ""
 
     @property
     def id(self):
@@ -385,6 +388,14 @@ class Search(object):
     @is_private.setter
     def is_private(self, val):
         self.__is_private = val
+
+    @property
+    def my_role(self):
+        return self.__my_role
+
+    @my_role.setter
+    def my_role(self, val):
+        self.__my_role = val
 
     def __hash__(self):
         return hash(self.__title)

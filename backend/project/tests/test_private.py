@@ -239,6 +239,36 @@ class TestPrivateRecordAccess(PrivateTestBase):
         self.assertEqual([], papers)
 
 
+class TestSearchRoleLabels(PrivateTestBase):
+    """Each search result says how the REQUESTING session relates to it."""
+
+    def roles(self):
+        return {i["_Search__id"]: i["_Search__my_role"]
+                for i in self.client.get("/api/search").json()}
+
+    def test_anonymous_gets_no_roles(self):
+        self.assertEqual({""}, set(self.roles().values()))
+
+    def test_owner_editor_viewer_are_labelled(self):
+        self.make_private_as_owner()
+        Paper.objects(id=self.owned_id).update(set__editor_emails=[EDITOR])
+        for email, role in ((OWNER, "owner"), (EDITOR, "editor"),
+                            (VIEWER, "viewer")):
+            self.login(email)
+            roles = self.roles()
+            self.assertEqual(role, roles[self.owned_id], email)
+            self.assertEqual("", roles[self.ownerless_id], email)
+
+    def test_admin_is_not_labelled_owner(self):
+        self.login(ADMIN, is_admin=True)
+        self.assertEqual({""}, set(self.roles().values()))
+
+    def test_stale_viewer_entry_on_public_record_is_not_labelled(self):
+        Paper.objects(id=self.owned_id).update(set__viewer_emails=[VIEWER])
+        self.login(VIEWER)
+        self.assertEqual("", self.roles()[self.owned_id])
+
+
 class TestAccountSharedRecords(PrivateTestBase):
     def test_shared_record_listed_for_viewer_without_share_lists(self):
         self.make_private_as_owner()

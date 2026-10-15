@@ -3,12 +3,27 @@ import PropTypes from "prop-types";
 
 import Link from "next/link";
 import { Chip, Tooltip, Typography, Box } from "@mui/material";
-import { LockOutlined, OpenInNew } from "@mui/icons-material";
+import {
+  EditOutlined,
+  LockOutlined,
+  OpenInNew,
+  PeopleOutlined,
+  PersonOutlined,
+} from "@mui/icons-material";
 
 import Tag from "../tag";
 import FavoriteButton from "../FavoriteButton";
 
 import { TableSearchContext } from "../Table/TableSearch";
+
+// How the signed-in reader relates to a listed record. The backend fills
+// _Search__my_role for the requesting session only, so these labels are
+// never shown to anyone else.
+const ROLE_LABELS = {
+  owner: { label: "Your record", icon: <PersonOutlined />, color: "primary" },
+  editor: { label: "Editor", icon: <EditOutlined />, color: "default" },
+  viewer: { label: "Shared with you", icon: <PeopleOutlined />, color: "default" },
+};
 
 const Summary = ({ rowdata }) => {
   const {
@@ -17,6 +32,7 @@ const Summary = ({ rowdata }) => {
     _Search__id,
     _Search__institution,
     _Search__is_private,
+    _Search__my_role,
     _Search__publication,
     _Search__tags,
     _Search__title,
@@ -25,6 +41,7 @@ const Summary = ({ rowdata }) => {
   } = rowdata;
 
   const { setQuery } = useContext(TableSearchContext);
+  const role = ROLE_LABELS[_Search__my_role];
 
   // `_Search__sources` is still built and still carried on the row -- it is
   // what dedupe uses to merge a paper published on two nodes into one line,
@@ -62,6 +79,17 @@ const Summary = ({ rowdata }) => {
         {/* The backend lists a private record only to sessions that may
             open it (owner, editors, collaborators, admins), so the badge
             tells them this card is not visible to the public. */}
+        {role ? (
+          <Chip
+            icon={role.icon}
+            label={role.label}
+            size="small"
+            variant="outlined"
+            color={role.color}
+            data-testid="record-role-badge"
+            sx={{ flexShrink: 0, mt: 0.25 }}
+          />
+        ) : null}
         {_Search__is_private ? (
           <Tooltip title="Private: only you and the people it is shared with can see this record">
             <Chip

@@ -156,14 +156,18 @@ class PaperDAO(MongoDBConnection, WorkflowObject):
         return paper
 
     @staticmethod
-    def __visibleToSession():
-        """Query matching the records the current session may list: public
-        ones, plus private ones it can open (see auth.can_view_paper)."""
+    def __sessionUser():
+        """The session user, or None. Outside a request (scripts, DAO unit
+        tests) there is no session: treat it as anonymous."""
         from flask import has_request_context
-        from project.auth import get_current_user, is_admin
-        # Outside a request (scripts, DAO unit tests) there is no session:
-        # treat it as anonymous, i.e. public records only.
-        user = get_current_user() if has_request_context() else None
+        from project.auth import get_current_user
+        return get_current_user() if has_request_context() else None
+
+    @staticmethod
+    def __visibleToSession(user):
+        """Query matching the records the session may list: public ones,
+        plus private ones it can open (see auth.can_view_paper)."""
+        from project.auth import is_admin
         if is_admin(user):
             return Q()
         visible = Q(is_private__ne=True)
@@ -172,6 +176,25 @@ class PaperDAO(MongoDBConnection, WorkflowObject):
             visible = visible | Q(owner_email=email) | Q(
                 editor_emails=email) | Q(viewer_emails=email)
         return visible
+
+    @staticmethod
+    def __myRole(paper, email):
+        """The session's own relationship to a listed record -- 'owner',
+        'editor', 'viewer' or '' -- so the explorer can label the reader's
+        records. Deliberately not 'admin': admin rights would label every
+        card. Only ever describes the requesting session."""
+        if not email:
+            return ""
+        if (getattr(paper, "owner_email", None) or "").strip().lower() == email:
+            return "owner"
+        if email in {(e or "").strip().lower()
+                     for e in (getattr(paper, "editor_emails", None) or [])}:
+            return "editor"
+        if getattr(paper, "is_private", None) is True and email in {
+                (e or "").strip().lower()
+                for e in (getattr(paper, "viewer_emails", None) or [])}:
+            return "viewer"
+        return ""
 
     def __filtersearchedPaper(self, filteredPaper):
         """ Produces search results after filter
@@ -185,7 +208,9 @@ class PaperDAO(MongoDBConnection, WorkflowObject):
         # readers never see them. The `__ne` forms keep legacy records that
         # predate the flags (fields absent => active, public).
         filteredPaper = filteredPaper.filter(is_active__ne=False)
-        filteredPaper = filteredPaper.filter(self.__visibleToSession())
+        user = self.__sessionUser()
+        email = ((user or {}).get("email") or "").strip().lower()
+        filteredPaper = filteredPaper.filter(self.__visibleToSession(user))
         for paper in filteredPaper:
             search = Search()
             search.id = str(paper.id)
@@ -213,6 +238,7 @@ class PaperDAO(MongoDBConnection, WorkflowObject):
             search.year = int(paper.reference.year)
             search.institution = getattr(paper, 'institution', '') or ''
             search.is_private = getattr(paper, 'is_private', None) is True
+            search.my_role = self.__myRole(paper, email)
             filteredSearchobjects.append(search.__dict__)
         return filteredSearchobjects
 
