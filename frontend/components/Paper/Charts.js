@@ -28,7 +28,7 @@ import {
   isMixedContent,
   isPdfFile,
 } from "../../Utils/fileServerUrl";
-import Slider from "../HorizontalSlider";
+import ChartActions from "./ChartActions";
 import StyledTooltip from "../tooltip";
 import ChartWorkflow from "./ChartWorkflow";
 import { formatData } from "../Workflow/util";
@@ -351,57 +351,24 @@ const ChartInfo = ({
         </StyledTooltip>
         )}
         {showSlider && (
-          <Slider>
-            <a
-              href={datatreeLink}
-              rel="noopener noreferrer"
-              alt="View the data tree"
-              target="_blank"
-            >
-              <img src="/images/datatree.png" className="imgButton" />
-            </a>
-            {showWorkflows ? (
-              <a
-                onClick={(e) =>
-                  handleClick(e, rowdata.id, router.query.id, rowdata)
-                }
-                href="showChartWorkflow"
-              >
-                <img src="/images/workflow-icon.png" className="imgButton" />
-              </a>
-            ) : null}
-            <a
-              href={rowdata.downloadPath}
-              rel="noopener noreferrer"
-              alt="Download data associated to the paper Using Globus"
-              target="_blank"
-            >
-              <img src="/images/download-icon.png" className="imgButton" />
-            </a>
-            {rowdata.notebookFile ? (
-              <a
-                href={
-                  "https://nbviewer.jupyter.org/url/" +
+          <ChartActions
+            filesHref={datatreeLink}
+            onWorkflow={
+              showWorkflows
+                ? (e) => handleClick(e, rowdata.id, router.query.id, rowdata)
+                : undefined
+            }
+            downloadHref={rowdata.downloadPath || undefined}
+            notebookHref={
+              rowdata.notebookFile
+                ? "https://nbviewer.jupyter.org/url/" +
                   rowdata.server.replace(/(^\w+:|^)\/\//, "") +
                   "/" +
                   rowdata.notebookFile
-                }
-                rel="noopener noreferrer"
-                alt="View Default Notebook File"
-                target="_blank"
-              >
-                <img src="/images/jupyter-icon.png" className="imgButton" />
-              </a>
-            ) : null}
-          </Slider>
+                : undefined
+            }
+          />
         )}
-        <style jsx>{`
-          .imgButton {
-            margin: auto;
-            height: 32px;
-            width: 32px;
-          }
-        `}</style>
       </Fragment>
     );
   };
