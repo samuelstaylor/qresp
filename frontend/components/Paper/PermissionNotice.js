@@ -12,12 +12,13 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { GroupAddOutlined, LockOutlined } from "@mui/icons-material";
+import { LockOutlined } from "@mui/icons-material";
 import Link from "next/link";
 import Router from "next/router";
 
 import AuthContext from "../../Context/Auth/authContext";
 import SharingDialog from "../Sharing/SharingDialog";
+import ShareButton from "../Sharing/ShareButton";
 
 // Backend-driven edit-permission indicator. The decision comes from
 // GET /api/paper/{id}/permissions (never frontend-only logic). Editing goes
@@ -199,15 +200,11 @@ const PermissionNotice = ({ paperId, server }) => {
       ) : null}
       {canManage ? (
         <Fragment>
-          <Button
-            size="small"
-            variant="outlined"
-            data-testid="paper-sharing"
-            startIcon={<GroupAddOutlined fontSize="inherit" />}
+          <ShareButton
+            isPrivate={isPrivate}
+            testId="paper-sharing"
             onClick={() => setSharingOpen(true)}
-          >
-            Share
-          </Button>
+          />
           <SharingDialog
             open={sharingOpen}
             onClose={() => setSharingOpen(false)}

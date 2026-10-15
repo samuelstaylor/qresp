@@ -64,6 +64,29 @@ describe("private records on My Records", () => {
     expect(screen.queryByRole("button", { name: /editors/i })).not.toBeInTheDocument();
   });
 
+  it("shows the record's current visibility on the Share button", async () => {
+    renderRecords([
+      paper({ id: "p1", title: "Open Paper" }),
+      paper({ id: "p2", title: "Closed Paper", is_private: true }),
+    ]);
+    await screen.findByText(/open paper/i);
+    const [open, closed] = screen.getAllByTestId("record-sharing");
+    expect(open).toHaveTextContent("Public·Share");
+    expect(open).toHaveAccessibleName(/currently public/i);
+    expect(closed).toHaveTextContent("Private·Share");
+    expect(closed).toHaveAccessibleName(/currently private/i);
+  });
+
+  it("titles the dialog Visibility & sharing", async () => {
+    const user = userEvent.setup();
+    renderRecords([paper()]);
+    await screen.findByText(/my paper/i);
+    await user.click(screen.getByTestId("record-sharing"));
+    expect(
+      screen.getByRole("dialog", { name: /visibility & sharing/i })
+    ).toBeInTheDocument();
+  });
+
   it("adds a viewer and an editor in one Share dialog and saves both lists", async () => {
     axios.put.mockResolvedValue({
       data: { id: "p1", is_private: true, viewer_emails: ["a@x.org"], editor_emails: ["b@x.org"] },

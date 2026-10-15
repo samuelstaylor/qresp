@@ -21,7 +21,6 @@ import {
   Article,
   DeleteForever,
   Edit,
-  GroupAddOutlined,
   LockOutlined,
   OpenInNew,
   PeopleOutlined,
@@ -34,6 +33,7 @@ import AccountLayout from "../../components/Account/AccountLayout";
 import OwnerlessRecords from "../../components/Account/OwnerlessRecords";
 import AllRecords from "../../components/Account/AllRecords";
 import SharingDialog from "../../components/Sharing/SharingDialog";
+import ShareButton from "../../components/Sharing/ShareButton";
 import AuthContext from "../../Context/Auth/authContext";
 import { getServer } from "../../Utils/utils";
 
@@ -266,15 +266,11 @@ const RecordsPage = () => {
                         </Button>
                       )}
                       {canManage && (
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          data-testid="record-sharing"
-                          startIcon={<GroupAddOutlined fontSize="inherit" />}
+                        <ShareButton
+                          isPrivate={isPrivate}
+                          testId="record-sharing"
                           onClick={() => setSharingPaper(paper)}
-                        >
-                          Share
-                        </Button>
+                        />
                       )}
                       {canManage && (
                         deactivated ? (

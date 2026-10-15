@@ -193,7 +193,7 @@ const SharingDialog = ({
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1, pb: 0.5 }}>
         <GroupAddOutlined color="primary" />
-        Share record
+        Visibility &amp; sharing
       </DialogTitle>
       <DialogContent>
         {recordTitle ? (
