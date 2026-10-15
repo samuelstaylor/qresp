@@ -450,7 +450,8 @@ paths:
           required: true
           description: Set is_private=true to hide the record from public
             discovery and restrict reading to the owner, editors, admins and
-            viewer_emails. viewer_emails, when given, replaces the share list.
+            viewer_emails. viewer_emails / editor_emails, when given,
+            replace those lists (an email in both is an editor).
           schema:
             type: object
             required:
@@ -459,6 +460,10 @@ paths:
               is_private:
                 type: boolean
               viewer_emails:
+                type: array
+                items:
+                  type: string
+              editor_emails:
                 type: array
                 items:
                   type: string

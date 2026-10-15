@@ -66,6 +66,34 @@ class TestVisibilityManagement(PrivateTestBase):
         self.assertFalse(stored.is_private)
         self.assertEqual([VIEWER], list(stored.viewer_emails))
 
+    def test_one_save_sets_visibility_viewers_and_editors(self):
+        self.login(OWNER)
+        response = self.set_visibility(self.owned_id, {
+            "is_private": True,
+            "viewer_emails": [VIEWER, EDITOR, OWNER],
+            "editor_emails": [EDITOR, OWNER],
+        })
+        self.assertEqual(200, response.status_code, response.text)
+        stored = Paper.objects.get(id=self.owned_id)
+        # Editor wins over viewer; the owner is never listed as a collaborator.
+        self.assertEqual([EDITOR], list(stored.editor_emails))
+        self.assertEqual([VIEWER], list(stored.viewer_emails))
+        self.assertEqual([EDITOR], response.json()["editor_emails"])
+
+    def test_visibility_without_editor_list_keeps_editors(self):
+        Paper.objects(id=self.owned_id).update(set__editor_emails=[EDITOR])
+        self.login(OWNER)
+        self.set_visibility(self.owned_id, {"is_private": True})
+        self.assertEqual(
+            [EDITOR], list(Paper.objects.get(id=self.owned_id).editor_emails))
+
+    def test_invalid_editor_email_rejected(self):
+        self.login(OWNER)
+        response = self.set_visibility(
+            self.owned_id, {"is_private": False, "editor_emails": ["bad"]})
+        self.assertEqual(400, response.status_code)
+        self.assertIn("invalid editor email", response.json()["error"])
+
     def test_is_private_must_be_boolean(self):
         self.login(OWNER)
         response = self.set_visibility(self.owned_id, {"is_private": "yes"})

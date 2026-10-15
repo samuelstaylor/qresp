@@ -45,45 +45,90 @@ const renderRecords = (papers) => {
 describe("private records on My Records", () => {
   afterEach(() => jest.resetAllMocks());
 
-  it("marks a private record with a lock chip and a collaborator count", async () => {
+  it("marks a private record with a lock chip and counts everyone with access", async () => {
     renderRecords([
-      paper({ is_private: true, viewer_emails: ["a@x.org", "b@x.org"] }),
+      paper({
+        is_private: true,
+        viewer_emails: ["a@x.org", "b@x.org"],
+        editor_emails: ["c@x.org"],
+      }),
     ]);
     expect(await screen.findByTestId("record-private-chip")).toHaveTextContent(/private/i);
-    expect(screen.getByTestId("record-collaborators-chip")).toHaveTextContent(
-      "2 collaborators"
-    );
+    expect(screen.getByTestId("record-collaborators-chip")).toHaveTextContent("Shared with 3");
   });
 
-  it("makes a record private and adds collaborators through the Share dialog", async () => {
+  it("has one Share button and no separate Editors button", async () => {
+    renderRecords([paper()]);
+    await screen.findByText(/my paper/i);
+    expect(screen.getByTestId("record-sharing")).toHaveTextContent("Share");
+    expect(screen.queryByRole("button", { name: /editors/i })).not.toBeInTheDocument();
+  });
+
+  it("adds a viewer and an editor in one Share dialog and saves both lists", async () => {
     axios.put.mockResolvedValue({
-      data: { id: "p1", is_private: true, viewer_emails: ["a@x.org", "b@x.org"] },
+      data: { id: "p1", is_private: true, viewer_emails: ["a@x.org"], editor_emails: ["b@x.org"] },
     });
     const user = userEvent.setup();
     renderRecords([paper()]);
     await screen.findByText(/my paper/i);
-    expect(screen.queryByTestId("record-private-chip")).not.toBeInTheDocument();
 
     await user.click(screen.getByTestId("record-sharing"));
     const dialog = screen.getByRole("dialog");
-    const input = within(dialog).getByTestId("sharing-add-input");
-    expect(input).toBeDisabled();
     await user.click(within(dialog).getByTestId("sharing-visibility-private"));
-    expect(input).toBeEnabled();
+    const input = within(dialog).getByTestId("sharing-add-input");
 
+    // Default role for new people is Viewer.
     await user.type(input, "A@x.org{Enter}");
-    expect(within(dialog).getAllByTestId("sharing-collaborator")).toHaveLength(1);
-    // A typed-but-not-added address is saved too.
-    await user.type(input, "b@x.org");
+    // Pick Editor for the next person.
+    await user.click(within(dialog).getByRole("combobox", { name: "Role for new people" }));
+    await user.click(screen.getByRole("option", { name: "Editor" }));
+    await user.type(input, "b@x.org{Enter}");
+
+    expect(within(dialog).getAllByTestId("sharing-collaborator")).toHaveLength(2);
+    expect(within(dialog).getByRole("combobox", { name: "Role for b@x.org" })).toHaveTextContent("Editor");
     await user.click(within(dialog).getByTestId("sharing-save"));
 
     expect(axios.put).toHaveBeenCalledWith("/api/paper/p1/visibility", {
       is_private: true,
-      viewer_emails: ["a@x.org", "b@x.org"],
+      viewer_emails: ["a@x.org"],
+      editor_emails: ["b@x.org"],
     });
     expect(
       await screen.findByTestId("record-collaborators-chip")
-    ).toHaveTextContent("2 collaborators");
+    ).toHaveTextContent("Shared with 2");
+  });
+
+  it("changes an existing person's role from Viewer to Editor", async () => {
+    axios.put.mockResolvedValue({ data: { is_private: true, viewer_emails: [], editor_emails: ["a@x.org"] } });
+    const user = userEvent.setup();
+    renderRecords([paper({ is_private: true, viewer_emails: ["a@x.org"] })]);
+    await screen.findByText(/my paper/i);
+    await user.click(screen.getByTestId("record-sharing"));
+    const dialog = screen.getByRole("dialog");
+    await user.click(within(dialog).getByRole("combobox", { name: "Role for a@x.org" }));
+    await user.click(screen.getByRole("option", { name: "Editor" }));
+    await user.click(within(dialog).getByTestId("sharing-save"));
+    expect(axios.put).toHaveBeenCalledWith("/api/paper/p1/visibility", {
+      is_private: true,
+      viewer_emails: [],
+      editor_emails: ["a@x.org"],
+    });
+  });
+
+  it("a typed-but-not-added address is saved on Save", async () => {
+    axios.put.mockResolvedValue({ data: { is_private: false, viewer_emails: ["a@x.org"], editor_emails: [] } });
+    const user = userEvent.setup();
+    renderRecords([paper()]);
+    await screen.findByText(/my paper/i);
+    await user.click(screen.getByTestId("record-sharing"));
+    const dialog = screen.getByRole("dialog");
+    await user.type(within(dialog).getByTestId("sharing-add-input"), "a@x.org");
+    await user.click(within(dialog).getByTestId("sharing-save"));
+    expect(axios.put).toHaveBeenCalledWith("/api/paper/p1/visibility", {
+      is_private: false,
+      viewer_emails: ["a@x.org"],
+      editor_emails: [],
+    });
   });
 
   it("rejects an invalid email before saving", async () => {
@@ -112,6 +157,7 @@ describe("private records on My Records", () => {
     expect(axios.put).toHaveBeenCalledWith("/api/paper/p1/visibility", {
       is_private: true,
       viewer_emails: ["b@x.org"],
+      editor_emails: [],
     });
   });
 
@@ -191,6 +237,7 @@ describe("private records on the record page", () => {
       is_private: true,
       role: "owner",
       viewer_emails: ["a@x.org"],
+      editor_emails: ["e@x.org"],
     };
     renderNotice(perm);
     axios.put.mockResolvedValue({ data: { is_private: false } });
@@ -200,6 +247,7 @@ describe("private records on the record page", () => {
     await user.click(screen.getByTestId("paper-sharing"));
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText("a@x.org")).toBeInTheDocument();
+    expect(within(dialog).getByRole("combobox", { name: "Role for e@x.org" })).toHaveTextContent("Editor");
     axios.get.mockResolvedValue({ data: { ...perm, is_private: false } });
     await user.click(within(dialog).getByTestId("sharing-visibility-public"));
     await user.click(within(dialog).getByTestId("sharing-save"));
@@ -207,6 +255,7 @@ describe("private records on the record page", () => {
     expect(axios.put).toHaveBeenCalledWith("/api/paper/abc123/visibility", {
       is_private: false,
       viewer_emails: ["a@x.org"],
+      editor_emails: ["e@x.org"],
     });
     await waitFor(() =>
       expect(screen.queryByTestId("private-notice")).not.toBeInTheDocument()

@@ -110,11 +110,12 @@ const PermissionNotice = ({ paperId, server }) => {
 
   const isPrivate = permissions.is_private === true;
 
-  const saveSharing = async ({ isPrivate: nextPrivate, viewers }) => {
+  const saveSharing = async ({ isPrivate: nextPrivate, viewers, editors }) => {
     try {
       await axios.put(`/api/paper/${encodeURIComponent(paperId)}/visibility`, {
         is_private: nextPrivate,
         viewer_emails: viewers,
+        editor_emails: editors,
       });
     } catch (err) {
       const res = err.response;
@@ -212,6 +213,7 @@ const PermissionNotice = ({ paperId, server }) => {
             onClose={() => setSharingOpen(false)}
             initialPrivate={isPrivate}
             initialViewers={permissions.viewer_emails || []}
+            initialEditors={permissions.editor_emails || []}
             onSave={saveSharing}
           />
           <Button

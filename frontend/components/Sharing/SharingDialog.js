@@ -12,6 +12,8 @@ import {
   DialogTitle,
   Divider,
   IconButton,
+  MenuItem,
+  Select,
   TextField,
   Tooltip,
   Typography,
@@ -78,20 +80,54 @@ VisibilityOption.propTypes = {
   testId: PropTypes.string,
 };
 
-// Visibility + collaborator management for one record. Shared by My Records
-// and the record page; the caller performs the save (PUT /visibility) and
-// may throw an Error whose message is shown inline.
+const ROLES = {
+  viewer: { label: "Viewer", hint: "Can view" },
+  editor: { label: "Editor", hint: "Can view and edit" },
+};
+
+const RoleSelect = ({ value, onChange, ariaLabel, disabled, testId }) => (
+  <Select
+    size="small"
+    value={value}
+    onChange={(e) => onChange(e.target.value)}
+    disabled={disabled}
+    inputProps={{ "aria-label": ariaLabel }}
+    data-testid={testId}
+    sx={{ minWidth: 112, height: 40, flexShrink: 0 }}
+  >
+    {Object.entries(ROLES).map(([key, { label }]) => (
+      <MenuItem key={key} value={key}>
+        {label}
+      </MenuItem>
+    ))}
+  </Select>
+);
+
+RoleSelect.propTypes = {
+  value: PropTypes.string,
+  onChange: PropTypes.func,
+  ariaLabel: PropTypes.string,
+  disabled: PropTypes.bool,
+  testId: PropTypes.string,
+};
+
+// Visibility + everyone the record is shared with, each as a Viewer or an
+// Editor. Shared by My Records and the record page; the caller performs the
+// save (one PUT /visibility carrying both lists) and may throw an Error whose
+// message is shown inline.
 const SharingDialog = ({
   open,
   onClose,
   recordTitle,
   initialPrivate,
   initialViewers,
+  initialEditors,
   onSave,
 }) => {
   const [isPrivate, setIsPrivate] = useState(false);
-  const [viewers, setViewers] = useState([]);
+  const [people, setPeople] = useState([]);
   const [draft, setDraft] = useState("");
+  const [draftRole, setDraftRole] = useState("viewer");
   const [draftError, setDraftError] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -99,8 +135,15 @@ const SharingDialog = ({
   useEffect(() => {
     if (!open) return;
     setIsPrivate(Boolean(initialPrivate));
-    setViewers(initialViewers || []);
+    const editors = initialEditors || [];
+    setPeople([
+      ...editors.map((email) => ({ email, role: "editor" })),
+      ...(initialViewers || [])
+        .filter((email) => !editors.includes(email))
+        .map((email) => ({ email, role: "viewer" })),
+    ]);
     setDraft("");
+    setDraftRole("viewer");
     setDraftError("");
     setError("");
     setSaving(false);
@@ -115,11 +158,14 @@ const SharingDialog = ({
       setDraftError(`Not a valid email: ${invalid.join(", ")}`);
       return null;
     }
-    const next = [...viewers];
-    emails.forEach((e) => {
-      if (!next.includes(e)) next.push(e);
+    // Re-adding someone already listed just changes their role.
+    const next = people.map((p) =>
+      emails.includes(p.email) ? { ...p, role: draftRole } : p
+    );
+    emails.forEach((email) => {
+      if (!next.some((p) => p.email === email)) next.push({ email, role: draftRole });
     });
-    setViewers(next);
+    setPeople(next);
     setDraft("");
     setDraftError("");
     return next;
@@ -127,12 +173,16 @@ const SharingDialog = ({
 
   const save = async () => {
     // An address typed but not yet added is almost always meant to be saved.
-    const list = draft.trim() ? commitDraft() : viewers;
+    const list = draft.trim() ? commitDraft() : people;
     if (list === null) return;
     setSaving(true);
     setError("");
     try {
-      await onSave({ isPrivate, viewers: list });
+      await onSave({
+        isPrivate,
+        viewers: list.filter((p) => p.role === "viewer").map((p) => p.email),
+        editors: list.filter((p) => p.role === "editor").map((p) => p.email),
+      });
     } catch (err) {
       setError(err?.message || "Updating sharing failed, please try again.");
       setSaving(false);
@@ -168,7 +218,7 @@ const SharingDialog = ({
             selected={isPrivate}
             icon={<LockOutlined />}
             title="Private"
-            description="Only you, editors, admins and collaborators can open it."
+            description="Only you, admins and the people below can open it."
             onClick={() => setIsPrivate(true)}
             testId="sharing-visibility-private"
           />
@@ -177,21 +227,14 @@ const SharingDialog = ({
         <Divider sx={{ mb: 2 }} />
 
         <Typography variant="overline" color="text.secondary">
-          Collaborators
+          People with access
         </Typography>
-        {!isPrivate ? (
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            Public records are open to everyone. Make the record private to
-            limit it to the people listed here.
-          </Typography>
-        ) : null}
         <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
           <TextField
             size="small"
             fullWidth
             placeholder="Add people by email"
             value={draft}
-            disabled={!isPrivate}
             error={Boolean(draftError)}
             helperText={draftError || " "}
             onChange={(e) => {
@@ -206,10 +249,16 @@ const SharingDialog = ({
             }}
             slotProps={{ htmlInput: { "data-testid": "sharing-add-input" } }}
           />
+          <RoleSelect
+            value={draftRole}
+            onChange={setDraftRole}
+            ariaLabel="Role for new people"
+            testId="sharing-add-role"
+          />
           <Button
             variant="outlined"
             onClick={commitDraft}
-            disabled={!isPrivate || !draft.trim()}
+            disabled={!draft.trim()}
             data-testid="sharing-add"
             sx={{ height: 40, flexShrink: 0 }}
           >
@@ -222,15 +271,14 @@ const SharingDialog = ({
             border: "1px solid",
             borderColor: "divider",
             borderRadius: 2,
-            opacity: isPrivate ? 1 : 0.55,
           }}
         >
-          {viewers.length === 0 ? (
+          {people.length === 0 ? (
             <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: "center" }}>
-              No collaborators yet.
+              Only you have access.
             </Typography>
           ) : (
-            viewers.map((email, index) => (
+            people.map(({ email, role }, index) => (
               <Box
                 key={email}
                 data-testid="sharing-collaborator"
@@ -252,16 +300,26 @@ const SharingDialog = ({
                     {email}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Can view
+                    {role === "viewer" && !isPrivate
+                      ? "Can view (the record is public)"
+                      : ROLES[role].hint}
                   </Typography>
                 </Box>
+                <RoleSelect
+                  value={role}
+                  onChange={(next) =>
+                    setPeople((list) =>
+                      list.map((p) => (p.email === email ? { ...p, role: next } : p))
+                    )
+                  }
+                  ariaLabel={`Role for ${email}`}
+                />
                 <Tooltip title="Remove">
                   <span>
                     <IconButton
                       size="small"
                       aria-label={`Remove ${email}`}
-                      disabled={!isPrivate}
-                      onClick={() => setViewers((list) => list.filter((e) => e !== email))}
+                      onClick={() => setPeople((list) => list.filter((p) => p.email !== email))}
                     >
                       <Close fontSize="small" />
                     </IconButton>
@@ -272,8 +330,9 @@ const SharingDialog = ({
           )}
         </Box>
         <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 1 }}>
-          Collaborators sign in with this email to view the record. They
-          cannot edit it; add them as editors for that.
+          People sign in with this email. Viewers can open a private record;
+          editors can also change it. Neither can change sharing or delete
+          the record.
         </Typography>
 
         {error ? (
@@ -304,6 +363,7 @@ SharingDialog.propTypes = {
   recordTitle: PropTypes.string,
   initialPrivate: PropTypes.bool,
   initialViewers: PropTypes.arrayOf(PropTypes.string),
+  initialEditors: PropTypes.arrayOf(PropTypes.string),
   onSave: PropTypes.func,
 };
 

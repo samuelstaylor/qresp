@@ -561,8 +561,11 @@ def set_paper_visibility(id, body):
     Owner/admin only (auth.can_manage_paper). A private record is hidden from
     every public discovery surface and readable only by the owner, editors,
     admins and the accounts in viewer_emails. Optionally replaces
-    viewer_emails in the same atomic write. Making a record public keeps the
-    viewer list, so switching back to private restores the same sharing.
+    viewer_emails and/or editor_emails in the same atomic write, so the Share
+    dialog saves visibility and every collaborator's role at once. An email
+    in both lists is an editor (editing includes viewing); the owner's own
+    email is dropped from both. Making a record public keeps the viewer list,
+    so switching back to private restores the same sharing.
     """
     user = get_current_user()
     try:
@@ -580,12 +583,25 @@ def set_paper_visibility(id, body):
     if not isinstance(private, bool):
         return {"error": "is_private must be a boolean"}, 400
 
-    update = {"set__is_private": private}
+    body = body or {}
+    owner = (existing.owner_email or "").strip().lower()
+    editors = list(existing.editor_emails or [])
+    if "editor_emails" in body:
+        editors, error = _normalized_email_list(body["editor_emails"], "editor")
+        if error:
+            return {"error": error}, 400
     viewers = list(existing.viewer_emails or [])
-    if "viewer_emails" in (body or {}):
+    if "viewer_emails" in body:
         viewers, error = _normalized_email_list(body["viewer_emails"], "viewer")
         if error:
             return {"error": error}, 400
+    editors = [e for e in editors if e != owner]
+    viewers = [e for e in viewers if e != owner and e not in editors]
+
+    update = {"set__is_private": private}
+    if "editor_emails" in body:
+        update["set__editor_emails"] = editors
+    if "viewer_emails" in body or "editor_emails" in body:
         update["set__viewer_emails"] = viewers
 
     Paper.objects(id=existing.id).update(
@@ -593,7 +609,8 @@ def set_paper_visibility(id, body):
         **_audit_update_kwargs(user, "make_private" if private else "make_public")
     )
     return {"id": str(existing.id), "is_private": private,
-            "viewer_emails": viewers, "success": True}, 200
+            "viewer_emails": viewers, "editor_emails": editors,
+            "success": True}, 200
 
 
 @csrf_protect

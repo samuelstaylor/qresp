@@ -23,7 +23,6 @@ import {
   Edit,
   GroupAddOutlined,
   LockOutlined,
-  ManageAccountsOutlined,
   OpenInNew,
   PeopleOutlined,
   ToggleOff,
@@ -103,38 +102,25 @@ const RecordsPage = () => {
       });
   };
 
-  const confirmSetEditors = () => {
-    const { id, value } = recordDialog;
-    const editors = (value || "").split(",").map((e) => e.trim()).filter(Boolean);
-    setRecordSaving(true);
-    axios
-      .put(`/api/paper/${encodeURIComponent(id)}/editors`, { editor_emails: editors })
-      .then((res) => {
-        setPapers((items) =>
-          (items || []).map((p) => p.id === id ? { ...p, editor_emails: res.data.editor_emails } : p)
-        );
-        closeDialog();
-      })
-      .catch((err) => {
-        const msg = err?.response?.data?.error || "Could not update editors. Please try again.";
-        setRecordSaving(false);
-        setRecordDialog((cur) => cur ? { ...cur, error: msg } : cur);
-      });
-  };
-
   // Visibility and the collaborator list are saved together: a private
   // record and the people who may read it are one decision for the owner.
-  const saveSharing = async ({ isPrivate, viewers }) => {
+  const saveSharing = async ({ isPrivate, viewers, editors }) => {
     const id = sharingPaper.id;
     try {
       const res = await axios.put(`/api/paper/${encodeURIComponent(id)}/visibility`, {
         is_private: isPrivate,
         viewer_emails: viewers,
+        editor_emails: editors,
       });
       setPapers((items) =>
         (items || []).map((p) =>
           p.id === id
-            ? { ...p, is_private: res.data.is_private, viewer_emails: res.data.viewer_emails }
+            ? {
+                ...p,
+                is_private: res.data.is_private,
+                viewer_emails: res.data.viewer_emails,
+                editor_emails: res.data.editor_emails,
+              }
             : p
         )
       );
@@ -190,6 +176,14 @@ const RecordsPage = () => {
               const isPrivate = paper.is_private === true;
               const canManage = user.is_admin || (paper.role !== "editor" && paper.role !== "viewer");
               const canEdit = user.is_admin || paper.role !== "viewer";
+              // Everyone with access besides the owner. Viewers count only
+              // while private: a public record is open to all anyway.
+              const people = [
+                ...(paper.editor_emails || []).map((email) => ({ email, role: "editor" })),
+                ...(isPrivate ? paper.viewer_emails || [] : [])
+                  .filter((email) => !(paper.editor_emails || []).includes(email))
+                  .map((email) => ({ email, role: "viewer" })),
+              ];
               return (
                 <Paper
                   key={paper.id}
@@ -222,11 +216,13 @@ const RecordsPage = () => {
                             data-testid="record-private-chip"
                           />
                         )}
-                        {isPrivate && canManage && (paper.viewer_emails || []).length > 0 && (
-                          <Tooltip title={paper.viewer_emails.join(", ")}>
+                        {canManage && people.length > 0 && (
+                          <Tooltip
+                            title={people.map((p) => `${p.email} (${p.role})`).join(", ")}
+                          >
                             <Chip
                               icon={<PeopleOutlined />}
-                              label={`${paper.viewer_emails.length} collaborator${paper.viewer_emails.length === 1 ? "" : "s"}`}
+                              label={`Shared with ${people.length}`}
                               size="small"
                               variant="outlined"
                               data-testid="record-collaborators-chip"
@@ -278,23 +274,6 @@ const RecordsPage = () => {
                           onClick={() => setSharingPaper(paper)}
                         >
                           Share
-                        </Button>
-                      )}
-                      {canManage && (
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          startIcon={<ManageAccountsOutlined fontSize="inherit" />}
-                          onClick={() =>
-                            setRecordDialog({
-                              type: "editors",
-                              id: paper.id,
-                              title: paper.title || "this record",
-                              value: (paper.editor_emails || []).join(", "),
-                            })
-                          }
-                        >
-                          Editors
                         </Button>
                       )}
                       {canManage && (
@@ -369,39 +348,11 @@ const RecordsPage = () => {
           recordTitle={sharingPaper?.title || ""}
           initialPrivate={sharingPaper?.is_private === true}
           initialViewers={sharingPaper?.viewer_emails || []}
+          initialEditors={sharingPaper?.editor_emails || []}
           onSave={saveSharing}
         />
         <Dialog open={Boolean(recordDialog)} onClose={closeDialog} fullWidth maxWidth="xs">
-          {recordDialog?.type === "editors" ? (
-            <Fragment>
-              <DialogTitle>Manage editors</DialogTitle>
-              <DialogContent>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  Editors can edit &ldquo;{recordDialog.title}&rdquo; but cannot deactivate it or change this list.
-                </Typography>
-                <TextField
-                  autoFocus
-                  label="Editor emails"
-                  value={recordDialog.value || ""}
-                  onChange={(e) =>
-                    setRecordDialog((cur) => ({ ...cur, value: e.target.value }))
-                  }
-                  fullWidth
-                  margin="dense"
-                  helperText="Comma-separated email addresses. Leave empty to remove all editors."
-                />
-                {recordDialog.error && (
-                  <Typography variant="body2" color="error" sx={{ mt: 1 }}>
-                    {recordDialog.error}
-                  </Typography>
-                )}
-              </DialogContent>
-              <DialogActions>
-                <Button onClick={closeDialog}>Cancel</Button>
-                <Button onClick={confirmSetEditors} variant="contained" disabled={recordSaving}>Save</Button>
-              </DialogActions>
-            </Fragment>
-          ) : recordDialog?.type === "delete" ? (
+          {recordDialog?.type === "delete" ? (
             <Fragment>
               <DialogTitle>Delete record permanently?</DialogTitle>
               <DialogContent>
