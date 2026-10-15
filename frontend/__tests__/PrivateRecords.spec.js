@@ -199,12 +199,42 @@ describe("private records on My Records", () => {
     ).toBeInTheDocument();
   });
 
+  it("splits owned/editing records from records shared to view", async () => {
+    const user = userEvent.setup();
+    renderRecords([
+      paper({ id: "p1", title: "Owned Paper", role: "owner" }),
+      paper({ id: "p2", title: "Edited Paper", role: "editor" }),
+      paper({ id: "p3", title: "Viewed Paper", role: "viewer", is_private: true }),
+    ]);
+    await screen.findByText(/owned paper/i);
+    expect(screen.getByTestId("records-tab-mine")).toHaveTextContent("Owned & editing (2)");
+    expect(screen.getByTestId("records-tab-shared")).toHaveTextContent("Shared with me (1)");
+    expect(screen.getByText(/edited paper/i)).toBeInTheDocument();
+    expect(screen.queryByText(/viewed paper/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId("records-tab-shared"));
+    expect(screen.getByText(/viewed paper/i)).toBeInTheDocument();
+    expect(screen.queryByText(/owned paper/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/edited paper/i)).not.toBeInTheDocument();
+  });
+
+  it("says when nothing has been shared yet", async () => {
+    const user = userEvent.setup();
+    renderRecords([paper()]);
+    await screen.findByText(/my paper/i);
+    await user.click(screen.getByTestId("records-tab-shared"));
+    expect(screen.getByText(/nothing has been shared with you yet/i)).toBeInTheDocument();
+  });
+
   it("gives a viewer a read-only row: View only, no edit or manage", async () => {
+    const user = userEvent.setup();
     renderRecords([
       paper({ role: "viewer", is_private: true, owner_email: "someone@x.org" }),
     ]);
+    await screen.findByTestId("records-tab-shared");
+    await user.click(screen.getByTestId("records-tab-shared"));
     await screen.findByText(/my paper/i);
-    expect(screen.getByText(/shared with you/i)).toBeInTheDocument();
+    expect(screen.getByText("shared with you")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /view/i })).toBeInTheDocument();
     expect(
       screen.queryByRole("link", { name: /edit in curator/i })

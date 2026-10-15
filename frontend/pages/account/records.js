@@ -12,6 +12,8 @@ import {
   DialogTitle,
   Divider,
   Paper,
+  Tab,
+  Tabs,
   TextField,
   Tooltip,
   Typography,
@@ -21,9 +23,11 @@ import {
   Article,
   DeleteForever,
   Edit,
+  EditNoteOutlined,
   LockOutlined,
   OpenInNew,
   PeopleOutlined,
+  ShareOutlined,
   ToggleOff,
   ToggleOn,
 } from "@mui/icons-material";
@@ -50,6 +54,9 @@ const RecordsPage = () => {
   const [recordSaving, setRecordSaving] = useState(false);
   const [recordError, setRecordError] = useState("");
   const [sharingPaper, setSharingPaper] = useState(null);
+  // "mine": records the user owns or edits. "shared": records shared with
+  // them read-only (role "viewer"). The backend marks the role per record.
+  const [tab, setTab] = useState("mine");
   const origin = typeof window === "undefined" ? "" : getServer();
 
   useEffect(() => {
@@ -130,6 +137,10 @@ const RecordsPage = () => {
     }
   };
 
+  const mine = papers ? papers.filter((p) => p.role !== "viewer") : null;
+  const shared = papers ? papers.filter((p) => p.role === "viewer") : null;
+  const visible = (tab === "mine" ? mine : shared) || [];
+
   let content;
   if (loading) {
     content = (
@@ -144,7 +155,41 @@ const RecordsPage = () => {
   } else {
     content = (
       <Fragment>
-        <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 1,
+            mb: 2,
+            borderBottom: 1,
+            borderColor: "divider",
+          }}
+        >
+          <Tabs
+            value={tab}
+            onChange={(_, next) => setTab(next)}
+            aria-label="Which records to show"
+            sx={{ minHeight: 44 }}
+          >
+            <Tab
+              value="mine"
+              icon={<EditNoteOutlined fontSize="small" />}
+              iconPosition="start"
+              label={`Owned & editing${mine ? ` (${mine.length})` : ""}`}
+              data-testid="records-tab-mine"
+              sx={{ minHeight: 44, textTransform: "none", fontWeight: 600 }}
+            />
+            <Tab
+              value="shared"
+              icon={<ShareOutlined fontSize="small" />}
+              iconPosition="start"
+              label={`Shared with me${shared ? ` (${shared.length})` : ""}`}
+              data-testid="records-tab-shared"
+              sx={{ minHeight: 44, textTransform: "none", fontWeight: 600 }}
+            />
+          </Tabs>
           <Button
             variant="contained"
             startIcon={<Add />}
@@ -155,6 +200,11 @@ const RecordsPage = () => {
             New record
           </Button>
         </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          {tab === "mine"
+            ? "Records you published, and records where someone added you as an editor."
+            : "Private records other people shared with you to view. You can open them but not edit them."}
+        </Typography>
 
         {recordError && (
           <Typography color="error" sx={{ mb: 2 }}>{recordError}</Typography>
@@ -164,14 +214,22 @@ const RecordsPage = () => {
           <Box sx={{ display: "flex", justifyContent: "center", mt: 6 }}>
             <CircularProgress />
           </Box>
-        ) : papers.length === 0 ? (
+        ) : visible.length === 0 ? (
           <Box sx={{ textAlign: "center", mt: 8 }}>
-            <Article sx={{ fontSize: 56, color: "text.disabled", mb: 1.5 }} />
-            <Typography color="text.secondary">No published records yet.</Typography>
+            {tab === "mine" ? (
+              <Article sx={{ fontSize: 56, color: "text.disabled", mb: 1.5 }} />
+            ) : (
+              <ShareOutlined sx={{ fontSize: 56, color: "text.disabled", mb: 1.5 }} />
+            )}
+            <Typography color="text.secondary">
+              {tab === "mine"
+                ? "No published records yet."
+                : "Nothing has been shared with you yet."}
+            </Typography>
           </Box>
         ) : (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-            {papers.map((paper) => {
+            {visible.map((paper) => {
               const deactivated = paper.is_active === false;
               const isPrivate = paper.is_private === true;
               const canManage = user.is_admin || (paper.role !== "editor" && paper.role !== "viewer");
