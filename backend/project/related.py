@@ -90,7 +90,7 @@ from urllib.parse import quote
 import requests
 
 from project import federation, feedback_context, relatedcache
-from project.auth import can_edit_paper, get_current_user
+from project.auth import can_view_paper, get_current_user
 from project.federation import FOUND, NOT_FOUND, UNAVAILABLE
 from project.models import Paper, RelatedResearchCache, active_papers
 from project.relatedness import MAX_RESULTS as relatedness_max_results
@@ -1281,15 +1281,15 @@ def _local_source(paper_id):
         paper = Paper.objects.get(id=str(paper_id))
     except Exception:
         return None, None, NOT_FOUND
-    if paper.is_active is False:
-        allowed, _ = can_edit_paper(paper, get_current_user())
-        if not allowed:
-            return None, None, NOT_FOUND
+    allowed, _ = can_view_paper(paper, get_current_user())
+    if not allowed:
+        return None, None, NOT_FOUND
     current_record = _record_dict(paper)
     corpus = [_record_dict(record) for record in active_papers()]
     if all(record.get("_id") != current_record["_id"] for record in corpus):
-        # A deactivated record its owner is allowed to see: score it against
-        # the public corpus without adding it to that corpus.
+        # A deactivated or private record the session is allowed to see:
+        # score it against the public corpus without adding it to that
+        # corpus.
         corpus = corpus + [current_record]
     return current_record, corpus, FOUND
 

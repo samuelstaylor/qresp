@@ -24,7 +24,10 @@ import RelatedResearch from "../../components/Paper/RelatedResearch";
 
 import axios from "axios";
 
-import { resolveServerSideApiBase } from "../../Utils/serverSideApi";
+import {
+  resolveServerSideApiBase,
+  sessionHeadersFor,
+} from "../../Utils/serverSideApi";
 
 import CuratorHelperState from "../../Context/CuratorHelpers/curatorHelperState";
 
@@ -235,8 +238,12 @@ export async function getServerSideProps(ctx) {
         .then((res) => res.data);
       preview = true;
     } else {
+      // The reader's session goes along (own backend only) so a private
+      // record renders for the accounts it is shared with.
       paper = await axios
-        .get(`${apiBase}/api/paper/${query.id}`)
+        .get(`${apiBase}/api/paper/${query.id}`, {
+          headers: sessionHeadersFor(ctx, query.server),
+        })
         .then((res) => res.data);
     }
   } catch (e) {

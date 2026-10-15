@@ -155,9 +155,11 @@ def is_admin(user):
 
 
 def paper_role(paper, user):
-    """The session user's role on a record: 'admin', 'owner', 'editor' or
-    None. Emails are compared case-insensitively; editor_emails is stored
-    normalized (lowercase) but matched defensively anyway."""
+    """The session user's role on a record: 'admin', 'owner', 'editor',
+    'viewer' or None. Emails are compared case-insensitively; editor_emails
+    and viewer_emails are stored normalized (lowercase) but matched
+    defensively anyway. 'viewer' (shared read access to a private record)
+    grants no edit or manage rights."""
     if not user:
         return None
     if is_admin(user):
@@ -171,7 +173,30 @@ def paper_role(paper, user):
     editors = getattr(paper, "editor_emails", None) or []
     if email in {(e or "").strip().lower() for e in editors}:
         return "editor"
+    viewers = getattr(paper, "viewer_emails", None) or []
+    if email in {(e or "").strip().lower() for e in viewers}:
+        return "viewer"
     return None
+
+
+def can_view_paper(paper, user):
+    """Permission rule for READING a record (detail, workflow, chart,
+    related research). Returns (allowed, reason).
+
+    Public, active record -> everyone. Deactivated -> those who can edit it
+    (owner, editor, admin). Private (and active) -> owner, editor, admin and
+    the accounts it is shared with (viewer_emails).
+    """
+    if getattr(paper, "is_active", None) is False:
+        return can_edit_paper(paper, user)
+    if getattr(paper, "is_private", None) is True:
+        role = paper_role(paper, user)
+        if role:
+            return True, role
+        if not user:
+            return False, "authentication required"
+        return False, "this record is private"
+    return True, "public"
 
 
 def can_edit_paper(paper, user):
@@ -185,7 +210,7 @@ def can_edit_paper(paper, user):
     if not user:
         return False, "authentication required"
     role = paper_role(paper, user)
-    if role:
+    if role in ("admin", "owner", "editor"):
         return True, role
     owner = (getattr(paper, "owner_email", None) or "").strip().lower()
     editors = getattr(paper, "editor_emails", None) or []

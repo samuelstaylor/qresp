@@ -11,7 +11,9 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  FormControlLabel,
   Paper,
+  Switch,
   TextField,
   Typography,
 } from "@mui/material";
@@ -20,6 +22,7 @@ import {
   Article,
   DeleteForever,
   Edit,
+  Lock,
   OpenInNew,
   People,
   ToggleOff,
@@ -116,6 +119,34 @@ const RecordsPage = () => {
       });
   };
 
+  // Visibility and the share list are saved together: a private record and
+  // the accounts that may read it are one decision for the owner.
+  const confirmSetSharing = () => {
+    const { id, isPrivate, value } = recordDialog;
+    const viewers = (value || "").split(",").map((e) => e.trim()).filter(Boolean);
+    setRecordSaving(true);
+    axios
+      .put(`/api/paper/${encodeURIComponent(id)}/visibility`, {
+        is_private: isPrivate,
+        viewer_emails: viewers,
+      })
+      .then((res) => {
+        setPapers((items) =>
+          (items || []).map((p) =>
+            p.id === id
+              ? { ...p, is_private: res.data.is_private, viewer_emails: res.data.viewer_emails }
+              : p
+          )
+        );
+        closeDialog();
+      })
+      .catch((err) => {
+        const msg = err?.response?.data?.error || "Could not update sharing. Please try again.";
+        setRecordSaving(false);
+        setRecordDialog((cur) => cur ? { ...cur, error: msg } : cur);
+      });
+  };
+
   let content;
   if (loading) {
     content = (
@@ -159,7 +190,9 @@ const RecordsPage = () => {
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
             {papers.map((paper) => {
               const deactivated = paper.is_active === false;
-              const canManage = user.is_admin || paper.role !== "editor";
+              const isPrivate = paper.is_private === true;
+              const canManage = user.is_admin || (paper.role !== "editor" && paper.role !== "viewer");
+              const canEdit = user.is_admin || paper.role !== "viewer";
               return (
                 <Paper
                   key={paper.id}
@@ -179,6 +212,21 @@ const RecordsPage = () => {
                         </Typography>
                         {paper.role === "editor" && (
                           <Chip label="editor" size="small" variant="outlined" />
+                        )}
+                        {paper.role === "viewer" && (
+                          <Chip label="shared with you" size="small" variant="outlined" />
+                        )}
+                        {isPrivate && (
+                          <Chip
+                            icon={<Lock fontSize="inherit" />}
+                            label={
+                              canManage && (paper.viewer_emails || []).length
+                                ? `private · shared with ${paper.viewer_emails.length}`
+                                : "private"
+                            }
+                            size="small"
+                            data-testid="record-private-chip"
+                          />
                         )}
                         {deactivated && (
                           <Chip label="deactivated" size="small" color="default" />
@@ -205,15 +253,36 @@ const RecordsPage = () => {
                           View
                         </Button>
                       )}
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        startIcon={<Edit fontSize="inherit" />}
-                        component={Link}
-                        href={`/curator?edit=${encodeURIComponent(paper.id)}&server=${encodeURIComponent(origin)}`}
-                      >
-                        Edit in Curator
-                      </Button>
+                      {canEdit && (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<Edit fontSize="inherit" />}
+                          component={Link}
+                          href={`/curator?edit=${encodeURIComponent(paper.id)}&server=${encodeURIComponent(origin)}`}
+                        >
+                          Edit in Curator
+                        </Button>
+                      )}
+                      {canManage && (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          data-testid="record-sharing"
+                          startIcon={<Lock fontSize="inherit" />}
+                          onClick={() =>
+                            setRecordDialog({
+                              type: "sharing",
+                              id: paper.id,
+                              title: paper.title || "this record",
+                              isPrivate,
+                              value: (paper.viewer_emails || []).join(", "),
+                            })
+                          }
+                        >
+                          Sharing
+                        </Button>
+                      )}
                       {canManage && (
                         <Button
                           size="small"
@@ -298,7 +367,58 @@ const RecordsPage = () => {
 
         {/* Dialogs */}
         <Dialog open={Boolean(recordDialog)} onClose={closeDialog} fullWidth maxWidth="xs">
-          {recordDialog?.type === "editors" ? (
+          {recordDialog?.type === "sharing" ? (
+            <Fragment>
+              <DialogTitle>Visibility and sharing</DialogTitle>
+              <DialogContent>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={Boolean(recordDialog.isPrivate)}
+                      onChange={(e) =>
+                        setRecordDialog((cur) => ({ ...cur, isPrivate: e.target.checked }))
+                      }
+                      slotProps={{ input: { "data-testid": "record-private-switch" } }}
+                    />
+                  }
+                  label="Private"
+                />
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  {recordDialog.isPrivate
+                    ? `"${recordDialog.title}" is hidden from search and the explorer. Only you, its editors, admins and the people below can open it.`
+                    : `"${recordDialog.title}" is public: anyone can find it in search and the explorer.`}
+                </Typography>
+                <TextField
+                  label="Share with (emails)"
+                  value={recordDialog.value || ""}
+                  onChange={(e) =>
+                    setRecordDialog((cur) => ({ ...cur, value: e.target.value }))
+                  }
+                  fullWidth
+                  margin="dense"
+                  disabled={!recordDialog.isPrivate}
+                  slotProps={{ htmlInput: { "data-testid": "record-viewers-input" } }}
+                  helperText="Comma-separated email addresses. They can view the record after signing in, but not edit it. To let someone edit, add them under Editors."
+                />
+                {recordDialog.error && (
+                  <Typography variant="body2" color="error" sx={{ mt: 1 }}>
+                    {recordDialog.error}
+                  </Typography>
+                )}
+              </DialogContent>
+              <DialogActions>
+                <Button onClick={closeDialog}>Cancel</Button>
+                <Button
+                  onClick={confirmSetSharing}
+                  variant="contained"
+                  data-testid="record-sharing-save"
+                  disabled={recordSaving}
+                >
+                  Save
+                </Button>
+              </DialogActions>
+            </Fragment>
+          ) : recordDialog?.type === "editors" ? (
             <Fragment>
               <DialogTitle>Manage editors</DialogTitle>
               <DialogContent>

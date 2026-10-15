@@ -20,6 +20,20 @@ const stripTrailingSlash = (value) => value.replace(/\/+$/, "");
 const isLocalHostname = (hostname) =>
   LOCAL_HOSTNAMES.has(hostname) || hostname.endsWith(".localhost");
 
+// A parsed http(s) target that is this deployment: a local hostname, or the
+// host the request itself arrived on.
+const isOwnTarget = (ctx, parsed) => {
+  const requestHost = String(
+    (ctx &&
+      ctx.req &&
+      (ctx.req.headers["x-forwarded-host"] || ctx.req.headers.host)) ||
+      ""
+  ).toLowerCase();
+  const sameAsRequest =
+    requestHost.length > 0 && parsed.host.toLowerCase() === requestHost;
+  return isLocalHostname(parsed.hostname.toLowerCase()) || sameAsRequest;
+};
+
 const resolveServerSideApiBase = (ctx, serverParam) => {
   const internal =
     stripTrailingSlash((process.env.QRESP_INTERNAL_API_URL || "").trim()) ||
@@ -44,16 +58,7 @@ const resolveServerSideApiBase = (ctx, serverParam) => {
     return internal;
   }
 
-  const requestHost = String(
-    (ctx &&
-      ctx.req &&
-      (ctx.req.headers["x-forwarded-host"] || ctx.req.headers.host)) ||
-      ""
-  ).toLowerCase();
-  const sameAsRequest =
-    requestHost.length > 0 && parsed.host.toLowerCase() === requestHost;
-
-  if (isLocalHostname(parsed.hostname.toLowerCase()) || sameAsRequest) {
+  if (isOwnTarget(ctx, parsed)) {
     // Same-origin / local target: not reachable from inside the container.
     // Without the env var configured, fall back to the original behavior.
     return internal || stripTrailingSlash(raw);
@@ -61,6 +66,33 @@ const resolveServerSideApiBase = (ctx, serverParam) => {
 
   // External federation node: use it as-is.
   return stripTrailingSlash(raw);
+};
+
+/**
+ * SERVER-SIDE ONLY: request headers that carry the reader's session to the
+ * fetch target chosen by `resolveServerSideApiBase`.
+ *
+ * Private records are readable only by the accounts they are shared with, so
+ * a server-side fetch of one must present the reader's own session cookie.
+ * The cookie is forwarded ONLY when the target is this deployment's own
+ * backend (the same cases `resolveServerSideApiBase` rewrites to the
+ * internal URL); an external federation node never receives it.
+ */
+const sessionHeadersFor = (ctx, serverParam) => {
+  const cookie = ctx && ctx.req && ctx.req.headers && ctx.req.headers.cookie;
+  if (!cookie) return {};
+  const raw = (serverParam || "").trim();
+  if (!raw) return { cookie };
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch (err) {
+    return { cookie };
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return { cookie };
+  }
+  return isOwnTarget(ctx, parsed) ? { cookie } : {};
 };
 
 /**
@@ -100,4 +132,4 @@ const requestOrigin = (ctx) => {
   return stripTrailingSlash(`${proto}://${host}`);
 };
 
-export { resolveServerSideApiBase, requestOrigin };
+export { resolveServerSideApiBase, requestOrigin, sessionHeadersFor };

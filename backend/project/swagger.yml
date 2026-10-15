@@ -433,6 +433,83 @@ paths:
           description: Only the record owner or an admin may manage editors
         404:
           description: Paper with this id does not exist
+  /paper/{id}/visibility:
+    put:
+      operationId: "project.api.set_paper_visibility"
+      tags:
+        - "Paper details"
+      summary: "Make a record private or public (owner or admin only)"
+      parameters:
+        - in: path
+          name: id
+          type: string
+          required: true
+          description: Paper Id
+        - in: body
+          name: body
+          required: true
+          description: Set is_private=true to hide the record from public
+            discovery and restrict reading to the owner, editors, admins and
+            viewer_emails. viewer_emails, when given, replaces the share list.
+          schema:
+            type: object
+            required:
+              - is_private
+            properties:
+              is_private:
+                type: boolean
+              viewer_emails:
+                type: array
+                items:
+                  type: string
+      responses:
+        200:
+          description: Record visibility updated
+        400:
+          description: is_private must be a boolean, or an invalid viewer email
+        401:
+          description: Authentication required
+        403:
+          description: Only the record owner or an admin may change this
+        404:
+          description: Paper with this id does not exist
+  /paper/{id}/viewers:
+    put:
+      operationId: "project.api.set_paper_viewers"
+      tags:
+        - "Paper details"
+      summary: "Replaces the list of accounts a private record is shared with (owner or admin only)"
+      parameters:
+        - in: path
+          name: id
+          type: string
+          required: true
+          description: Paper Id
+        - in: body
+          name: body
+          required: true
+          description: Full replacement viewer list; emails are normalized
+            lowercase and deduplicated. Viewers get read-only access.
+          schema:
+            type: object
+            required:
+              - viewer_emails
+            properties:
+              viewer_emails:
+                type: array
+                items:
+                  type: string
+      responses:
+        200:
+          description: Viewer list updated
+        400:
+          description: viewer_emails missing or contains an invalid email
+        401:
+          description: Authentication required
+        403:
+          description: Only the record owner or an admin may manage sharing
+        404:
+          description: Paper with this id does not exist
   /paper/{id}/raw:
     get:
       operationId: "project.api.raw_paper"

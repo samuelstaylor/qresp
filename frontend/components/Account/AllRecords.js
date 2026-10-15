@@ -192,6 +192,9 @@ const AllRecords = () => {
                 {deactivated ? (
                   <Chip label="deactivated" size="small" color="default" />
                 ) : null}
+                {record.is_private === true ? (
+                  <Chip label="private" size="small" color="default" />
+                ) : null}
               </Box>
               <Typography variant="body2" color="secondary">
                 {record.authors}

@@ -160,11 +160,12 @@ class PaperDAO(MongoDBConnection, WorkflowObject):
         :return: list filteredSearchobjects: filtered search objects
         """
         filteredSearchobjects = []
-        # Deactivated records never appear in public search/explorer results.
-        # All search entry points funnel through here, so this is the single
-        # gate. `is_active__ne=False` keeps legacy records that predate the
-        # flag (field absent => active).
-        filteredPaper = filteredPaper.filter(is_active__ne=False)
+        # Deactivated and private records never appear in public
+        # search/explorer results. All search entry points funnel through
+        # here, so this is the single gate. The `__ne` forms keep legacy
+        # records that predate the flags (fields absent => active, public).
+        filteredPaper = filteredPaper.filter(is_active__ne=False,
+                                             is_private__ne=True)
         for paper in filteredPaper:
             search = Search()
             search.id = str(paper.id)

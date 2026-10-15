@@ -1,4 +1,7 @@
-import { resolveServerSideApiBase } from "../Utils/serverSideApi";
+import {
+  resolveServerSideApiBase,
+  sessionHeadersFor,
+} from "../Utils/serverSideApi";
 
 const ctxWithHost = (host) => ({ req: { headers: { host } } });
 const INTERNAL = "http://backend:5000";
@@ -117,5 +120,31 @@ describe("resolveServerSideApiBase", () => {
         resolveServerSideApiBase(ctxWithHost("h"), "javascript:alert(1)")
       ).toBeNull();
     });
+  });
+});
+
+describe("sessionHeadersFor", () => {
+  const ctx = (host, cookie) => ({ req: { headers: { host, cookie } } });
+
+  it("forwards the session cookie to this deployment's own backend", () => {
+    expect(
+      sessionHeadersFor(ctx("qresp.example.org", "session=s1"), "https://qresp.example.org")
+    ).toEqual({ cookie: "session=s1" });
+    expect(
+      sessionHeadersFor(ctx("x", "session=s1"), "https://localhost:8444")
+    ).toEqual({ cookie: "session=s1" });
+    expect(sessionHeadersFor(ctx("x", "session=s1"), "")).toEqual({
+      cookie: "session=s1",
+    });
+  });
+
+  it("never sends the cookie to an external federation node", () => {
+    expect(
+      sessionHeadersFor(ctx("qresp.example.org", "session=s1"), "https://paperstack.uchicago.edu")
+    ).toEqual({});
+  });
+
+  it("sends nothing when the reader has no cookie", () => {
+    expect(sessionHeadersFor(ctx("x", undefined), "https://localhost")).toEqual({});
   });
 });

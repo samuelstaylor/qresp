@@ -9,9 +9,9 @@ from flask import request
 from mongoengine import Q as MongoQ
 from mongoengine.errors import DoesNotExist, NotUniqueError, ValidationError as MongoValidationError
 
-from project.auth import (can_edit_paper, can_manage_paper, csrf_protect,
-                          get_current_user, is_admin, paper_role,
-                          public_profile, stamp_owner)
+from project.auth import (can_edit_paper, can_manage_paper, can_view_paper,
+                          csrf_protect, get_current_user, is_admin,
+                          paper_role, public_profile, stamp_owner)
 from project.models import CuratorDraft, Favorite, RelatedResearchCache
 from project.paperdao import *
 from project.util import Dtree
@@ -130,11 +130,12 @@ def paper(id):
         return msg, 400
 
     # Deactivated records are hidden from the public detail view; only the
-    # owner or an admin may still load them (to review or reactivate).
-    if stored.is_active is False:
-        allowed, _ = can_edit_paper(stored, get_current_user())
-        if not allowed:
-            return {"error": "This record is not available."}, 404
+    # owner, editors or an admin may still load them (to review or
+    # reactivate). Private records are additionally readable by the accounts
+    # they are shared with. 404 either way, so ids cannot be probed.
+    allowed, _ = can_view_paper(stored, get_current_user())
+    if not allowed:
+        return {"error": "This record is not available."}, 404
 
     try:
         dao = PaperDAO()
@@ -169,10 +170,9 @@ def paper_curator(id):
     except Exception:
         return {"error": "Paper not found."}, 404
 
-    if stored.is_active is False:
-        allowed, _ = can_edit_paper(stored, get_current_user())
-        if not allowed:
-            return {"error": "This record is not available."}, 404
+    allowed, _ = can_view_paper(stored, get_current_user())
+    if not allowed:
+        return {"error": "This record is not available."}, 404
 
     owner = (stored.owner_email or "").strip().lower()
     profile = public_profile(owner) if owner else None
@@ -184,6 +184,19 @@ def paper_curator(id):
     return {"profile": profile}, 200
 
 
+def _unviewable_paper_error(id):
+    """404 response when the record exists but the session may not read it
+    (deactivated or private); None otherwise. A missing record is left to
+    the caller's existing error path."""
+    stored = Paper.objects(id=str(id)).first() if OBJECT_ID_PATTERN.match(str(id)) else None
+    if stored is None:
+        return None
+    allowed, _ = can_view_paper(stored, get_current_user())
+    if not allowed:
+        return {"error": "This record is not available."}, 404
+    return None
+
+
 def workflow(id):
     """
     This function responds to a request for /api/workflow/{id}
@@ -191,6 +204,9 @@ def workflow(id):
 
     :return:        workflow object
     """
+    denied = _unviewable_paper_error(id)
+    if denied:
+        return denied
     workflowdetail = None
     try:
         dao = PaperDAO()
@@ -209,6 +225,9 @@ def chart(id, cid):
 
     :return:        chart object
     """
+    denied = _unviewable_paper_error(id)
+    if denied:
+        return denied
     chartworkflowdetail = None
     try:
         dao = PaperDAO()
@@ -363,11 +382,13 @@ def update_paper(id, paper):
         return {"error": reason}, 401 if user is None else 403
 
     # Server-owned / immutable fields are never taken from the payload.
-    # is_active is toggled ONLY through PUT /api/paper/{id}/active and
-    # editor_emails ONLY through PUT /api/paper/{id}/editors, so a metadata
-    # edit can never change activation, the editor list, or the audit trail.
+    # is_active is toggled ONLY through PUT /api/paper/{id}/active,
+    # editor_emails ONLY through PUT /api/paper/{id}/editors, and
+    # is_private/viewer_emails ONLY through /visibility and /viewers, so a
+    # metadata edit can never change activation, sharing, or the audit trail.
     for blocked in ("id", "_id", "owner_email", "version", "versions",
-                    "is_active", "editor_emails", "updated_at",
+                    "is_active", "editor_emails", "is_private",
+                    "viewer_emails", "updated_at",
                     "updated_by_email", "edit_history"):
         paper.pop(blocked, None)
 
@@ -389,6 +410,8 @@ def update_paper(id, paper):
         data["owner_email"] = existing.owner_email
         data["is_active"] = existing.is_active
         data["editor_emails"] = list(existing.editor_emails or [])
+        data["is_private"] = existing.is_private is True
+        data["viewer_emails"] = list(existing.viewer_emails or [])
         # Minimal audit trail: who touched the record, when, and how.
         now = datetime.utcnow()
         actor = _session_email(user)
@@ -499,25 +522,112 @@ def set_paper_editors(id, body):
     if not allowed:
         return {"error": reason}, 401 if user is None else 403
 
-    raw_editors = (body or {}).get("editor_emails")
-    if not isinstance(raw_editors, list):
-        return {"error": "editor_emails must be a list of email addresses"}, 400
-
-    editors = []
-    for item in raw_editors:
-        email = str(item or "").strip().lower()
-        if not email:
-            continue
-        if not EMAIL_PATTERN.match(email):
-            return {"error": "invalid editor email: %s" % email}, 400
-        if email not in editors:
-            editors.append(email)
+    editors, error = _normalized_email_list(
+        (body or {}).get("editor_emails"), "editor")
+    if error:
+        return {"error": error}, 400
 
     Paper.objects(id=existing.id).update(
         set__editor_emails=editors,
         **_audit_update_kwargs(user, "update_editors")
     )
     return {"id": str(existing.id), "editor_emails": editors,
+            "success": True}, 200
+
+
+def _normalized_email_list(raw, kind):
+    """Trim, lowercase, validate and deduplicate a submitted email list.
+    Returns (emails, None) or (None, error message)."""
+    if not isinstance(raw, list):
+        return None, "%s_emails must be a list of email addresses" % kind
+    emails = []
+    for item in raw:
+        email = str(item or "").strip().lower()
+        if not email:
+            continue
+        if not EMAIL_PATTERN.match(email):
+            return None, "invalid %s email: %s" % (kind, email)
+        if email not in emails:
+            emails.append(email)
+    return emails, None
+
+
+@csrf_protect
+def set_paper_visibility(id, body):
+    """
+    Make a record private or public
+    Handler for PUT: /api/paper/{id}/visibility
+
+    Owner/admin only (auth.can_manage_paper). A private record is hidden from
+    every public discovery surface and readable only by the owner, editors,
+    admins and the accounts in viewer_emails. Optionally replaces
+    viewer_emails in the same atomic write. Making a record public keeps the
+    viewer list, so switching back to private restores the same sharing.
+    """
+    user = get_current_user()
+    try:
+        existing = Paper.objects.get(id=str(id))
+    except Exception as e:
+        msg = "Exception in set paper visibility api " + str(e)
+        print(msg)
+        return {"error": "Paper not found"}, 404
+
+    allowed, reason = can_manage_paper(existing, user)
+    if not allowed:
+        return {"error": reason}, 401 if user is None else 403
+
+    private = (body or {}).get("is_private")
+    if not isinstance(private, bool):
+        return {"error": "is_private must be a boolean"}, 400
+
+    update = {"set__is_private": private}
+    viewers = list(existing.viewer_emails or [])
+    if "viewer_emails" in (body or {}):
+        viewers, error = _normalized_email_list(body["viewer_emails"], "viewer")
+        if error:
+            return {"error": error}, 400
+        update["set__viewer_emails"] = viewers
+
+    Paper.objects(id=existing.id).update(
+        **update,
+        **_audit_update_kwargs(user, "make_private" if private else "make_public")
+    )
+    return {"id": str(existing.id), "is_private": private,
+            "viewer_emails": viewers, "success": True}, 200
+
+
+@csrf_protect
+def set_paper_viewers(id, body):
+    """
+    Replace the list of accounts a private record is shared with
+    Handler for PUT: /api/paper/{id}/viewers
+
+    Owner/admin only (auth.can_manage_paper). Viewers get READ access to the
+    record while it is private -- no editing, no management. Emails are
+    normalized and deduplicated; the write is atomic.
+    """
+    user = get_current_user()
+    try:
+        existing = Paper.objects.get(id=str(id))
+    except Exception as e:
+        msg = "Exception in set paper viewers api " + str(e)
+        print(msg)
+        return {"error": "Paper not found"}, 404
+
+    allowed, reason = can_manage_paper(existing, user)
+    if not allowed:
+        return {"error": reason}, 401 if user is None else 403
+
+    viewers, error = _normalized_email_list(
+        (body or {}).get("viewer_emails"), "viewer")
+    if error:
+        return {"error": error}, 400
+
+    Paper.objects(id=existing.id).update(
+        set__viewer_emails=viewers,
+        **_audit_update_kwargs(user, "update_viewers")
+    )
+    return {"id": str(existing.id), "viewer_emails": viewers,
             "success": True}, 200
 
 
@@ -573,6 +683,8 @@ def _paper_summary(paper):
         "collections": list(paper.collections or []),
         "is_active": paper.is_active is not False,
         "editor_emails": list(paper.editor_emails or []),
+        "is_private": paper.is_private is True,
+        "viewer_emails": list(paper.viewer_emails or []),
         "updated_at": paper.updated_at.isoformat() if paper.updated_at else None,
         "updated_by_email": paper.updated_by_email or None,
     }
@@ -606,8 +718,10 @@ def account_papers():
 
     Powers the /account page. Anonymous requests get 401; admins see only
     THEIR OWN records here (the ownerless inventory is a separate admin
-    endpoint). Lists records the user OWNS plus records where they are a
-    listed editor, with the role marked per record.
+    endpoint). Lists records the user OWNS, records where they are a listed
+    editor, and private records shared with them (viewer), with the role
+    marked per record. Viewers never see the editor/viewer lists, and a
+    record shared with them only counts while it is private and active.
     """
     user = get_current_user()
     if not user:
@@ -616,14 +730,20 @@ def account_papers():
     email = _session_email(user)
     related = Paper.objects(
         MongoQ(owner_email=email) | MongoQ(editor_emails=email)
+        | MongoQ(viewer_emails=email, is_private=True, is_active__ne=False)
     )
     papers = []
     for paper in related:
         summary = _paper_summary(paper)
-        summary["role"] = (
-            "owner" if (paper.owner_email or "").strip().lower() == email
-            else "editor"
-        )
+        if (paper.owner_email or "").strip().lower() == email:
+            summary["role"] = "owner"
+        elif email in {(e or "").strip().lower()
+                       for e in (paper.editor_emails or [])}:
+            summary["role"] = "editor"
+        else:
+            summary["role"] = "viewer"
+            summary["editor_emails"] = []
+            summary["viewer_emails"] = []
         papers.append(summary)
     return {"papers": papers, "count": len(papers)}, 200
 
@@ -830,6 +950,7 @@ def ownerless_papers():
 
 
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+OBJECT_ID_PATTERN = re.compile(r"^[0-9a-fA-F]{24}$")
 
 
 @csrf_protect
@@ -887,6 +1008,11 @@ def paper_permissions(id):
         print(msg)
         return {"error": "Paper not found"}, 404
 
+    # A private record's permissions (owner email included) are as hidden as
+    # the record itself.
+    if paper.is_private is True and not can_view_paper(paper, user)[0]:
+        return {"error": "Paper not found"}, 404
+
     allowed, reason = can_edit_paper(paper, user)
     manage_allowed, _ = can_manage_paper(paper, user)
     response = {
@@ -896,6 +1022,7 @@ def paper_permissions(id):
         "authenticated": user is not None,
         "is_admin": is_admin(user),
         "is_active": paper.is_active is not False,
+        "is_private": paper.is_private is True,
         "role": paper_role(paper, user) or "none",
         "can_manage": manage_allowed,
     }
@@ -903,6 +1030,7 @@ def paper_permissions(id):
     # change it (owner/admin), not to editors or the public.
     if manage_allowed:
         response["editor_emails"] = list(paper.editor_emails or [])
+        response["viewer_emails"] = list(paper.viewer_emails or [])
     return response, 200
 
 

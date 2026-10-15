@@ -239,6 +239,16 @@ class Paper(Document):
     # or admin can toggle it (project.api.set_paper_active). Preferred over
     # physical delete so published records are preserved and reversible.
     is_active = BooleanField(default=True)
+    # Private visibility. Absent on legacy records => public. A private
+    # record never appears on public discovery surfaces (search, explorer,
+    # related research, keyword vocabulary) and its detail/workflow pages are
+    # readable only by the owner, editors, the accounts in viewer_emails, and
+    # admins. Toggled via PUT /api/paper/{id}/visibility (owner/admin only).
+    is_private = BooleanField(default=False)
+    # Verified emails a private record is shared with for READ access only.
+    # Managed exclusively via PUT /api/paper/{id}/viewers; normalized
+    # lowercase there. Ignored while the record is public.
+    viewer_emails = ListField(StringField(max_length=254))
     # Minimal audit trail, stamped server-side on every successful mutation
     # (edit / assign_owner / update_editors / deactivate / reactivate).
     # Absent on legacy records. edit_history entries are
@@ -336,9 +346,10 @@ class AssistUsage(Document):
 
 def active_papers():
     """Queryset of records visible to the public: legacy records without the
-    flag (field absent) and explicitly active ones. Only an explicit
-    is_active=False hides a record from public discovery surfaces."""
-    return Paper.objects(is_active__ne=False)
+    flags (fields absent) and explicitly active, non-private ones. An explicit
+    is_active=False or is_private=True hides a record from public discovery
+    surfaces."""
+    return Paper.objects(is_active__ne=False, is_private__ne=True)
 
 
 class RelatedResearchCache(Document):
