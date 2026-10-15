@@ -9,15 +9,15 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControlLabel,
-  Switch,
   TextField,
   Typography,
 } from "@mui/material";
+import { GroupAddOutlined, LockOutlined } from "@mui/icons-material";
 import Link from "next/link";
 import Router from "next/router";
 
 import AuthContext from "../../Context/Auth/authContext";
+import SharingDialog from "../Sharing/SharingDialog";
 
 // Backend-driven edit-permission indicator. The decision comes from
 // GET /api/paper/{id}/permissions (never frontend-only logic). Editing goes
@@ -40,10 +40,6 @@ const PermissionNotice = ({ paperId, server }) => {
   const [deleteMessage, setDeleteMessage] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [sharingOpen, setSharingOpen] = useState(false);
-  const [sharingPrivate, setSharingPrivate] = useState(false);
-  const [sharingViewers, setSharingViewers] = useState("");
-  const [sharingMessage, setSharingMessage] = useState("");
-  const [sharingSaving, setSharingSaving] = useState(false);
 
   const fetchPermissions = useCallback(async () => {
     try {
@@ -114,34 +110,21 @@ const PermissionNotice = ({ paperId, server }) => {
 
   const isPrivate = permissions.is_private === true;
 
-  const openSharing = () => {
-    setSharingPrivate(isPrivate);
-    setSharingViewers((permissions.viewer_emails || []).join(", "));
-    setSharingMessage("");
-    setSharingOpen(true);
-  };
-
-  const saveSharing = async () => {
-    setSharingSaving(true);
-    setSharingMessage("");
+  const saveSharing = async ({ isPrivate: nextPrivate, viewers }) => {
     try {
       await axios.put(`/api/paper/${encodeURIComponent(paperId)}/visibility`, {
-        is_private: sharingPrivate,
-        viewer_emails: sharingViewers
-          .split(",")
-          .map((e) => e.trim())
-          .filter(Boolean),
+        is_private: nextPrivate,
+        viewer_emails: viewers,
       });
-      setSharingOpen(false);
-      await fetchPermissions();
     } catch (err) {
       const res = err.response;
-      setSharingMessage(
+      throw new Error(
         (res && res.data && res.data.error) ||
           "Updating sharing failed, please try again."
       );
     }
-    setSharingSaving(false);
+    setSharingOpen(false);
+    await fetchPermissions();
   };
 
   // Permanent, unlike deactivation; the record page no longer exists after
@@ -189,7 +172,13 @@ const PermissionNotice = ({ paperId, server }) => {
         </Typography>
       ) : null}
       {isActive && isPrivate ? (
-        <Typography variant="subtitle2" color="secondary" data-testid="private-notice">
+        <Typography
+          variant="subtitle2"
+          color="secondary"
+          data-testid="private-notice"
+          sx={{ display: "inline-flex", alignItems: "center", gap: 0.5 }}
+        >
+          <LockOutlined fontSize="inherit" />
           {permissions.role === "viewer"
             ? "This private record has been shared with you. It is hidden from public search."
             : "This record is private: it is hidden from public search and only the people it is shared with can open it."}
@@ -213,61 +202,18 @@ const PermissionNotice = ({ paperId, server }) => {
             size="small"
             variant="outlined"
             data-testid="paper-sharing"
-            onClick={openSharing}
+            startIcon={<GroupAddOutlined fontSize="inherit" />}
+            onClick={() => setSharingOpen(true)}
           >
-            Sharing
+            Share
           </Button>
-          <Dialog
+          <SharingDialog
             open={sharingOpen}
             onClose={() => setSharingOpen(false)}
-            fullWidth
-            maxWidth="xs"
-          >
-            <DialogTitle>Visibility and sharing</DialogTitle>
-            <DialogContent>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={sharingPrivate}
-                    onChange={(e) => setSharingPrivate(e.target.checked)}
-                    slotProps={{ input: { "data-testid": "paper-private-switch" } }}
-                  />
-                }
-                label="Private"
-              />
-              <Typography variant="body2" color="secondary" gutterBottom>
-                {sharingPrivate
-                  ? "Hidden from search and the explorer. Only you, editors, admins and the people below can open it."
-                  : "Public: anyone can find this record in search and the explorer."}
-              </Typography>
-              <TextField
-                label="Share with (emails)"
-                value={sharingViewers}
-                onChange={(e) => setSharingViewers(e.target.value)}
-                fullWidth
-                margin="dense"
-                disabled={!sharingPrivate}
-                slotProps={{ htmlInput: { "data-testid": "paper-viewers-input" } }}
-                helperText="Comma-separated email addresses. They can view the record after signing in, but not edit it."
-              />
-              {sharingMessage ? (
-                <Typography variant="body2" color="error">
-                  {sharingMessage}
-                </Typography>
-              ) : null}
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setSharingOpen(false)}>Cancel</Button>
-              <Button
-                onClick={saveSharing}
-                variant="contained"
-                data-testid="paper-sharing-save"
-                disabled={sharingSaving}
-              >
-                Save
-              </Button>
-            </DialogActions>
-          </Dialog>
+            initialPrivate={isPrivate}
+            initialViewers={permissions.viewer_emails || []}
+            onSave={saveSharing}
+          />
           <Button
             size="small"
             variant="outlined"

@@ -45,16 +45,17 @@ const renderRecords = (papers) => {
 describe("private records on My Records", () => {
   afterEach(() => jest.resetAllMocks());
 
-  it("marks a private record and counts who it is shared with", async () => {
+  it("marks a private record with a lock chip and a collaborator count", async () => {
     renderRecords([
       paper({ is_private: true, viewer_emails: ["a@x.org", "b@x.org"] }),
     ]);
-    expect(
-      await screen.findByText(/private · shared with 2/i)
-    ).toBeInTheDocument();
+    expect(await screen.findByTestId("record-private-chip")).toHaveTextContent(/private/i);
+    expect(screen.getByTestId("record-collaborators-chip")).toHaveTextContent(
+      "2 collaborators"
+    );
   });
 
-  it("makes a record private and shares it through the Sharing dialog", async () => {
+  it("makes a record private and adds collaborators through the Share dialog", async () => {
     axios.put.mockResolvedValue({
       data: { id: "p1", is_private: true, viewer_emails: ["a@x.org", "b@x.org"] },
     });
@@ -65,35 +66,67 @@ describe("private records on My Records", () => {
 
     await user.click(screen.getByTestId("record-sharing"));
     const dialog = screen.getByRole("dialog");
-    const input = within(dialog).getByTestId("record-viewers-input");
+    const input = within(dialog).getByTestId("sharing-add-input");
     expect(input).toBeDisabled();
-    await user.click(within(dialog).getByTestId("record-private-switch"));
+    await user.click(within(dialog).getByTestId("sharing-visibility-private"));
     expect(input).toBeEnabled();
-    await user.type(input, "a@x.org, b@x.org");
-    await user.click(within(dialog).getByTestId("record-sharing-save"));
+
+    await user.type(input, "A@x.org{Enter}");
+    expect(within(dialog).getAllByTestId("sharing-collaborator")).toHaveLength(1);
+    // A typed-but-not-added address is saved too.
+    await user.type(input, "b@x.org");
+    await user.click(within(dialog).getByTestId("sharing-save"));
 
     expect(axios.put).toHaveBeenCalledWith("/api/paper/p1/visibility", {
       is_private: true,
       viewer_emails: ["a@x.org", "b@x.org"],
     });
     expect(
-      await screen.findByText(/private · shared with 2/i)
-    ).toBeInTheDocument();
+      await screen.findByTestId("record-collaborators-chip")
+    ).toHaveTextContent("2 collaborators");
+  });
+
+  it("rejects an invalid email before saving", async () => {
+    const user = userEvent.setup();
+    renderRecords([paper({ is_private: true })]);
+    await screen.findByText(/my paper/i);
+    await user.click(screen.getByTestId("record-sharing"));
+    const dialog = screen.getByRole("dialog");
+    await user.type(within(dialog).getByTestId("sharing-add-input"), "nope{Enter}");
+    expect(within(dialog).getByText(/not a valid email: nope/i)).toBeInTheDocument();
+    await user.click(within(dialog).getByTestId("sharing-save"));
+    expect(axios.put).not.toHaveBeenCalled();
+  });
+
+  it("removes a collaborator", async () => {
+    axios.put.mockResolvedValue({
+      data: { id: "p1", is_private: true, viewer_emails: ["b@x.org"] },
+    });
+    const user = userEvent.setup();
+    renderRecords([paper({ is_private: true, viewer_emails: ["a@x.org", "b@x.org"] })]);
+    await screen.findByText(/my paper/i);
+    await user.click(screen.getByTestId("record-sharing"));
+    const dialog = screen.getByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Remove a@x.org" }));
+    await user.click(within(dialog).getByTestId("sharing-save"));
+    expect(axios.put).toHaveBeenCalledWith("/api/paper/p1/visibility", {
+      is_private: true,
+      viewer_emails: ["b@x.org"],
+    });
   });
 
   it("shows the backend error inline when sharing fails", async () => {
     axios.put.mockRejectedValue({
-      response: { data: { error: "invalid viewer email: nope" } },
+      response: { data: { error: "only the record owner or an admin can manage this record" } },
     });
     const user = userEvent.setup();
     renderRecords([paper({ is_private: true })]);
     await screen.findByText(/my paper/i);
     await user.click(screen.getByTestId("record-sharing"));
     const dialog = screen.getByRole("dialog");
-    await user.type(within(dialog).getByTestId("record-viewers-input"), "nope");
-    await user.click(within(dialog).getByTestId("record-sharing-save"));
+    await user.click(within(dialog).getByTestId("sharing-save"));
     expect(
-      await within(dialog).findByText(/invalid viewer email: nope/i)
+      await within(dialog).findByText(/only the record owner or an admin/i)
     ).toBeInTheDocument();
   });
 
@@ -166,12 +199,10 @@ describe("private records on the record page", () => {
 
     await user.click(screen.getByTestId("paper-sharing"));
     const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByTestId("paper-viewers-input")).toHaveValue(
-      "a@x.org"
-    );
+    expect(within(dialog).getByText("a@x.org")).toBeInTheDocument();
     axios.get.mockResolvedValue({ data: { ...perm, is_private: false } });
-    await user.click(within(dialog).getByTestId("paper-private-switch"));
-    await user.click(within(dialog).getByTestId("paper-sharing-save"));
+    await user.click(within(dialog).getByTestId("sharing-visibility-public"));
+    await user.click(within(dialog).getByTestId("sharing-save"));
 
     expect(axios.put).toHaveBeenCalledWith("/api/paper/abc123/visibility", {
       is_private: false,

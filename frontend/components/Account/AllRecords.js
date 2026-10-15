@@ -12,6 +12,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { LockOutlined } from "@mui/icons-material";
 import Link from "next/link";
 
 import { getServer } from "../../Utils/utils";
@@ -193,7 +194,7 @@ const AllRecords = () => {
                   <Chip label="deactivated" size="small" color="default" />
                 ) : null}
                 {record.is_private === true ? (
-                  <Chip label="private" size="small" color="default" />
+                  <Chip icon={<LockOutlined />} label="Private" size="small" variant="outlined" />
                 ) : null}
               </Box>
               <Typography variant="body2" color="secondary">
