@@ -3,6 +3,39 @@ import { Global, css } from "@emotion/react";
 import Link from "next/link";
 import SEO from "../components/seo";
 import { Box, Typography, Container } from "@mui/material";
+import {
+  AccountTreeOutlined,
+  GroupsOutlined,
+  StorageOutlined,
+  TravelExploreOutlined,
+} from "@mui/icons-material";
+
+import { WORK_TYPE_ICONS } from "../components/CuratorElements/WorkTypeChooser";
+import { WORK_TYPES, WORK_TYPE_KEYS } from "../Utils/workTypes";
+
+// What Qresp does for any curated work, whatever its type.
+const CAPABILITIES = [
+  {
+    Icon: AccountTreeOutlined,
+    title: "Trace every result",
+    text: "Link each figure, dataset, script and tool to the exact files that produced it, and draw the workflow that connects them.",
+  },
+  {
+    Icon: StorageOutlined,
+    title: "Data stays where it lives",
+    text: "Records point to files on your research computing server or data repository. Nothing is copied or re-hosted.",
+  },
+  {
+    Icon: TravelExploreOutlined,
+    title: "Searchable everywhere",
+    text: "Published records are searchable across every Qresp server, with related research suggested alongside them.",
+  },
+  {
+    Icon: GroupsOutlined,
+    title: "Share on your terms",
+    text: "Publish openly, or keep a record private and invite collaborators as viewers or editors.",
+  },
+];
 
 const btnStyles = css`
   /*
@@ -302,7 +335,7 @@ const btnStyles = css`
 
 export default function Home() {
   const qrespDescription =
-    "Qresp facilitates scientific data reproducibility by making available all data & procedures presented in scientific papers, together with metadata to render them searchable and discoverable";
+    "Qresp makes research reproducible: it links published papers, unpublished reports, code repositories and datasets to the data, scripts and workflows behind them, with metadata that makes them searchable and discoverable";
   const qrespAuthor = "Giulia Galli, Marco Govoni";
 
   return (
@@ -345,9 +378,10 @@ export default function Home() {
               Open science, made reproducible.
             </Typography>
             <Typography variant="body1" sx={{ fontSize: "1.1rem", lineHeight: 1.8, color: "text.secondary" }}>
-              Qresp lets researchers annotate published papers with structured
-              metadata — linking every figure, dataset, and script to the exact
-              files that produced it, so any result can be traced and reproduced.
+              Qresp links research to the exact data, code and workflows behind
+              it. Curate a published paper, a report still in progress, a code
+              repository, a dataset or anything else, so every result can be
+              found, traced and reproduced.
             </Typography>
           </Container>
         </Box>
@@ -407,7 +441,7 @@ export default function Home() {
               <span className="qr-label-zoom" aria-hidden="true">Explore</span>
             </div>
 
-            <span className="qr-btn-sub">Browse reproducible papers</span>
+            <span className="qr-btn-sub">Browse reproducible research</span>
           </Link>
 
           {/* CURATE ─────────────────────────────────────────────── */}
@@ -456,7 +490,7 @@ export default function Home() {
             </div>
 
             <span className="qr-btn-label">Curate</span>
-            <span className="qr-btn-sub">Annotate and publish data</span>
+            <span className="qr-btn-sub">Papers, code, data and more</span>
           </Link>
 
           {/* DOCUMENTATION ──────────────────────────────────────────── */}
@@ -487,6 +521,102 @@ export default function Home() {
           </Link>
 
         </div>
+
+        {/* ── What can be curated ─────────────────────────────────── */}
+        <Box component="section" aria-labelledby="qr-curate-kinds" sx={{ bgcolor: "#faf7f7", py: 6, px: 3 }}>
+          <Container maxWidth="lg">
+            <Typography id="qr-curate-kinds" variant="h5" component="h2" align="center" sx={{ fontWeight: 700 }}>
+              What can you make reproducible?
+            </Typography>
+            <Typography align="center" color="text.secondary" sx={{ mt: 1, mb: 4 }}>
+              Not just published papers. Pick what you are working on to start curating it.
+            </Typography>
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", md: "repeat(5, 1fr)" },
+                gap: 2,
+              }}
+            >
+              {WORK_TYPE_KEYS.map((type) => {
+                const Icon = WORK_TYPE_ICONS[type];
+                const { label, description } = WORK_TYPES[type];
+                return (
+                  <Box
+                    key={type}
+                    component={Link}
+                    href={`/curator?type=${type}`}
+                    data-testid={`home-curate-${type}`}
+                    sx={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 1,
+                      p: 2.5,
+                      borderRadius: 3,
+                      bgcolor: "background.paper",
+                      border: "1px solid rgba(128,0,0,0.12)",
+                      color: "text.primary",
+                      textDecoration: "none",
+                      transition: "transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease",
+                      "&:hover": {
+                        transform: "translateY(-3px)",
+                        boxShadow: "0 10px 28px rgba(100,0,0,0.12)",
+                        borderColor: "#800000",
+                      },
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 2,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        bgcolor: "rgba(128,0,0,0.08)",
+                        color: "#800000",
+                      }}
+                    >
+                      <Icon />
+                    </Box>
+                    <Typography fontWeight={700}>{label}</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+                      {description}
+                    </Typography>
+                  </Box>
+                );
+              })}
+            </Box>
+          </Container>
+        </Box>
+
+        {/* ── What Qresp does ─────────────────────────────────────── */}
+        <Box component="section" aria-labelledby="qr-capabilities" sx={{ py: 6, px: 3 }}>
+          <Container maxWidth="lg">
+            <Typography id="qr-capabilities" variant="h5" component="h2" align="center" sx={{ fontWeight: 700, mb: 4 }}>
+              How Qresp helps
+            </Typography>
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", md: "repeat(4, 1fr)" },
+                gap: 3,
+              }}
+            >
+              {CAPABILITIES.map(({ Icon, title, text }) => (
+                <Box key={title} sx={{ textAlign: "center", px: 1 }}>
+                  <Icon sx={{ fontSize: 36, color: "#800000", mb: 1 }} aria-hidden="true" />
+                  <Typography fontWeight={700} gutterBottom>
+                    {title}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+                    {text}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+          </Container>
+        </Box>
       </Box>
     </Fragment>
   );

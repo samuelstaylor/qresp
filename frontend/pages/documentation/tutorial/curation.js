@@ -119,6 +119,17 @@ const Curation = () => (
         developers or creators), a description and a year; a code repository
         also needs its repository URL. A DOI is always optional.
       </Callout>
+      <P>
+        The guided setup fills in what it can for each type. A published
+        paper is looked up from its DOI or arXiv link, a report from its DOI
+        or arXiv link if it has one, and a dataset from its data DOI (Zenodo,
+        Figshare, Dryad and other data repositories issue them). For a code
+        repository, paste its GitHub or GitLab link: Qresp reads its name,
+        description, developers, latest release year and topics from the
+        public page. Every value can be reviewed and edited before publishing.
+        The header&rsquo;s Curator menu and the home page open the Curator
+        directly on any of these types.
+      </P>
     </Section>
 
     <Section title="Curator Information">

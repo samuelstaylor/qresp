@@ -15,6 +15,7 @@ import { Menu } from "@mui/icons-material";
 import StyledButton, { InternalStyledButton } from "./button";
 
 import AuthControls from "./AuthControls";
+import CuratorNavMenu from "./CuratorNavMenu";
 
 import Link from "next/link";
 
@@ -98,7 +99,9 @@ const Header = () => {
   const links = (
     <Fragment>
       <InternalStyledButton text="Explorer" url="/explorer" active={isActive("/explorer")} icon={ExplorerIcon} />
-      <InternalStyledButton text="Curator" url="/curator" active={isActive("/curator")} icon={CuratorIcon} />
+      {/* Hovering lists each kind of work to curate; clicking opens the
+          curator's own chooser. */}
+      <CuratorNavMenu text="Curator" active={isActive("/curator")} icon={CuratorIcon} />
       {/* Both are pages now, not jumps out of the app.
           Documentation was an external link to qresp.org and Contact was a
           bare `mailto:` — a navigation item that handed the page to a mail

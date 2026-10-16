@@ -141,7 +141,7 @@ describe("the reference section for each work type", () => {
     await waitFor(() => expect(screen.getAllByText(/^required$/i).length).toBeGreaterThan(0));
     expect(setReferenceInfo).not.toHaveBeenCalled();
 
-    await user.type(screen.getByPlaceholderText(/enter url/i), "https://github.com/qresp/qresp");
+    await user.type(screen.getByPlaceholderText("https://github.com/org/repo"), "https://github.com/qresp/qresp");
     await user.click(screen.getByRole("button", { name: /^save$/i }));
     await waitFor(() => expect(editor).toHaveBeenCalled());
     expect(setReferenceInfo.mock.calls[0][0]).toMatchObject({

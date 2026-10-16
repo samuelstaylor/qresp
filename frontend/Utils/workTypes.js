@@ -8,6 +8,8 @@
 // section and on the record; nothing below changes what is stored.
 export const WORK_TYPES = {
   paper: {
+    // How the curator's prose refers to it: "the paper".
+    noun: "paper",
     label: "Published paper",
     short: "Paper",
     description:
@@ -25,6 +27,8 @@ export const WORK_TYPES = {
     needsFigures: true,
   },
   report: {
+    // How the curator's prose refers to it: "the report".
+    noun: "report",
     label: "Unpublished paper or report",
     short: "Report",
     description:
@@ -42,6 +46,8 @@ export const WORK_TYPES = {
     urlHelp: "Optional. Where the paper or report can be read",
   },
   software: {
+    // How the curator's prose refers to it: "the code repository".
+    noun: "code repository",
     label: "Code repository",
     short: "Code",
     description:
@@ -58,6 +64,8 @@ export const WORK_TYPES = {
     urlRequired: true,
   },
   dataset: {
+    // How the curator's prose refers to it: "the dataset".
+    noun: "dataset",
     label: "Dataset",
     short: "Dataset",
     description:
@@ -73,6 +81,8 @@ export const WORK_TYPES = {
     urlHelp: "Optional. A page describing the data, if it has one",
   },
   other: {
+    // How the curator's prose refers to it: "the work".
+    noun: "work",
     label: "Other",
     short: "Other",
     description:

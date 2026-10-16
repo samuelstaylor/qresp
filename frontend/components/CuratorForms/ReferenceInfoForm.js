@@ -20,6 +20,7 @@ import CuratorContext from "../../Context/Curator/curatorContext";
 import AlertContext from "../../Context/Alert/alertContext";
 import LoadingContext from "../../Context/Loading/loadingContext";
 import { workTypeInfo, workTypeOf } from "../../Utils/workTypes";
+import { lookupRepo } from "../../Utils/repoLookup";
 
 const ReferenceInfoForm = ({ editor }) => {
   const { referenceInfo, setReferenceInfo, registerDraftFlusher, workType } =
@@ -154,6 +155,26 @@ const ReferenceInfoForm = ({ editor }) => {
           null
         );
       })
+      .finally(() => hideLoader());
+  };
+
+  // A code repository's URL fills the rest of the form from its GitHub or
+  // GitLab page, the way a paper's DOI does. Only fills the open form.
+  const fetchFromRepo = (event) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+    showLoader();
+    lookupRepo(getValues("url"))
+      .then((result) => {
+        setValue("url", result.url);
+        if (result.title) setValue("title", result.title);
+        if (result.description) setValue("abstract", result.description);
+        if (result.year) setValue("year", result.year);
+        if (result.developers.length) {
+          setValue("authors", namesUtil.get(result.developers.join(", ")));
+        }
+      })
+      .catch((err) => setAlert("Error", err.message, null))
       .finally(() => hideLoader());
   };
 
@@ -457,7 +478,7 @@ const ReferenceInfoForm = ({ editor }) => {
           <Grid>
             <TextInputField
               id="url"
-              placeholder="Enter url"
+              placeholder={type === "software" ? "https://github.com/org/repo" : "Enter url"}
               name="url"
               helperText={typeInfo.urlHelp}
               label={typeInfo.urlLabel}
@@ -465,6 +486,29 @@ const ReferenceInfoForm = ({ editor }) => {
               error={errors.url}
               defaultValue={referenceInfo.url}
               required={Boolean(typeInfo.urlRequired)}
+              action={
+                type === "software" ? (
+                  <Tooltip
+                    title={
+                      <Typography variant="subtitle2">
+                        Fill in the name, description, developers and year from the GitHub or GitLab page
+                      </Typography>
+                    }
+                    placement="right"
+                    arrow
+                  >
+                    <RegularStyledButton
+                      type="button"
+                      size="small"
+                      style={{ padding: "2px", margin: "4px" }}
+                      onClick={fetchFromRepo}
+                      data-testid="reference-repo-fetch"
+                    >
+                      Fetch
+                    </RegularStyledButton>
+                  </Tooltip>
+                ) : undefined
+              }
             />
           </Grid>
           <Grid>

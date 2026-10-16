@@ -52,6 +52,7 @@ import SourceTreeContext from "../../Context/SourceTree/SourceTreeContext";
 import { getList } from "../../Utils/Scraper";
 import { arxivIdOf, doiUtil } from "../../Utils/doi";
 import { workTypeInfo, workTypeOf } from "../../Utils/workTypes";
+import { lookupRepo, referenceFromRepo } from "../../Utils/repoLookup";
 import { buildFileUrl, isPdfFile } from "../../Utils/fileServerUrl";
 import { initialsOf } from "../Profile/ProfileLinks";
 import { labelFor, toRecord } from "../../Utils/artifactFields";
@@ -303,6 +304,35 @@ const FinishDetails = ({ needing, fileServerPath, paperTags, edit }) => {
 
 // ---- the setup ------------------------------------------------------------
 
+// What step 2 asks for when the work is looked up by DOI, per work type.
+const DOI_PROMPTS = {
+  paper: {
+    label: "Paper DOI or arXiv link",
+    placeholder: "10.1038/s41524-025-01558-w or https://arxiv.org/abs/2409.00246",
+    hint: "Fills in title, authors, journal, year and abstract. A preprint? Paste its arXiv link or ID. No DOI?",
+  },
+  report: {
+    label: "DOI or arXiv link (if it has one)",
+    placeholder: "https://arxiv.org/abs/2409.00246 or 10.2172/1234567",
+    hint: "A preprint on arXiv, or a report with a DOI (e.g. from OSTI), fills in its title, authors, year and abstract. Neither?",
+  },
+  dataset: {
+    label: "Dataset DOI",
+    placeholder: "10.5281/zenodo.1234567",
+    hint: "Data on Zenodo, Figshare, Dryad or a data repository usually has a DOI; it fills in the name, creators, year and description. No DOI?",
+  },
+  software: {
+    label: "Software DOI",
+    placeholder: "10.5281/zenodo.1234567",
+    hint: "A release archived on Zenodo has a DOI that fills in the name, developers, year and description.",
+  },
+  other: {
+    label: "DOI (if it has one)",
+    placeholder: "10.5281/zenodo.1234567",
+    hint: "A DOI fills in the title, authors, year and description. No DOI?",
+  },
+};
+
 const GuidedSetup = () => {
   const ctx = useContext(CuratorContext);
   const {
@@ -360,6 +390,46 @@ const GuidedSetup = () => {
   const [doiBusy, setDoiBusy] = useState(false);
   const [doiError, setDoiError] = useState("");
   const [changingPaper, setChangingPaper] = useState(false);
+  // A code repository is looked up from its GitHub/GitLab link instead.
+  const [repoLink, setRepoLink] = useState(referenceInfo.url || "");
+  const [repoBusy, setRepoBusy] = useState(false);
+  const [repoError, setRepoError] = useState("");
+  const [repoNote, setRepoNote] = useState("");
+  const [repoUseDoi, setRepoUseDoi] = useState(false);
+  const lookUpRepo = () => {
+    setRepoBusy(true);
+    setRepoError("");
+    setRepoNote("");
+    lookupRepo(repoLink)
+      .then((result) => {
+        const current = collectDraftState();
+        const patch = { referenceInfo: referenceFromRepo(result, current.referenceInfo) };
+        // The repository's topics are its keywords, when it has any and the
+        // curator has written none.
+        const tags = ((current.paperInfo || {}).tags || []).filter(Boolean);
+        if (!tags.length && result.topics.length) {
+          patch.paperInfo = { ...current.paperInfo, tags: result.topics };
+        }
+        apply(patch);
+        const filled = [
+          "name",
+          result.description && "description",
+          result.developers.length && `${result.developers.length} developer${result.developers.length === 1 ? "" : "s"}`,
+          result.year && "year",
+          "repository URL",
+          patch.paperInfo && "keywords",
+        ].filter(Boolean);
+        setRepoNote(
+          `Filled in the ${filled.join(", ")} from the repository.` +
+            (result.contributorsWithoutNames > 0
+              ? ` ${result.contributorsWithoutNames} contributor${result.contributorsWithoutNames === 1 ? " has" : "s have"} no full name on their profile; add them in the details.`
+              : "")
+        );
+        setChangingPaper(false);
+      })
+      .catch((err) => setRepoError(err.message))
+      .finally(() => setRepoBusy(false));
+  };
   useEffect(() => {
     if (referenceInfo.doi) setDoi(referenceInfo.doi);
   }, [referenceInfo.doi]);
@@ -378,7 +448,11 @@ const GuidedSetup = () => {
       .get(bare)
       .then((record) => {
         const current = collectDraftState();
-        const referenceInfo = referenceFromCrossref(record, { ...current.referenceInfo, doi: bare });
+        const looked = referenceFromCrossref(record, { ...current.referenceInfo, doi: bare });
+        const lookedType = workTypeOf(current.workType);
+        const referenceInfo = workTypeInfo(lookedType).paperFields
+          ? looked
+          : { ...looked, kind: lookedType };
         const patch = { referenceInfo };
         // The last author is, by convention, the P.I.; it fills an empty P.I.
         // field and can be changed in Qresp Curation Information.
@@ -1274,7 +1348,7 @@ const GuidedSetup = () => {
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
           {isPaper
             ? "Qresp fills in what it can from your profile, the paper's DOI and its project folder. You review it and add what only you know."
-            : `Qresp fills in what it can from your profile and the project folder. You describe the ${typeInfo.short.toLowerCase()} and add what only you know.`}
+            : `Qresp fills in what it can from your profile and the project folder. You describe the ${typeInfo.noun} and add what only you know.`}
         </Typography>
         <LinearProgress
           variant="determinate"
@@ -1328,7 +1402,7 @@ const GuidedSetup = () => {
           <Step completed={steps.paper} expanded>
             {stepLabel(
               "paper",
-              isPaper ? "The paper" : `The ${typeInfo.short.toLowerCase()}`,
+              isPaper ? "The paper" : `The ${typeInfo.noun}`,
               isPaper
                 ? "Looked up from its DOI"
                 : `Its ${typeInfo.titleLabel.toLowerCase()}, ${typeInfo.authorsLabel.toLowerCase()} and ${typeInfo.abstractLabel.toLowerCase()}`
@@ -1349,31 +1423,97 @@ const GuidedSetup = () => {
                   </Typography>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 0.75, flexWrap: "wrap" }}>
                     {referenceInfo.doi && <Chip size="small" variant="outlined" label={`DOI ${referenceInfo.doi}`} />}
+                    {type === "software" && referenceInfo.url && (
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        component="a"
+                        clickable
+                        href={referenceInfo.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        label={referenceInfo.url.replace(/^https?:\/\//, "")}
+                      />
+                    )}
                     <Box sx={{ flex: 1 }} />
-                    {(isPaper || referenceInfo.doi) && (
+                    {type === "software" ? (
+                      <Button size="small" onClick={() => setChangingPaper(true)} sx={{ textTransform: "none" }}>
+                        Use a different repository
+                      </Button>
+                    ) : (isPaper || referenceInfo.doi) && (
                       <Button size="small" onClick={() => setChangingPaper(true)} sx={{ textTransform: "none" }}>
                         Use a different DOI
                       </Button>
                     )}
                     <SectionLink target="curate-reference">Edit details</SectionLink>
                   </Box>
-                </Summary>
-              ) : (
-                <Box>
-                  {!isPaper && (
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.25 }} data-testid="guided-describe-work">
-                      {`Give the ${typeInfo.short.toLowerCase()} its ${typeInfo.titleLabel.toLowerCase()}, ${typeInfo.authorsLabel.toLowerCase()} and a ${typeInfo.abstractLabel.toLowerCase()}`}
-                      {typeInfo.urlRequired ? `, plus its ${typeInfo.urlLabel.toLowerCase()}` : ""}
-                      {": "}
-                      <SectionLink target="curate-reference">Fill in the details</SectionLink>
-                      . If it has a DOI (for example from Zenodo), you can look it up instead.
+                  {repoNote && (
+                    <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.5 }} data-testid="guided-repo-note">
+                      {repoNote}
                     </Typography>
                   )}
+                </Summary>
+              ) : type === "software" && !repoUseDoi ? (
+                <Box data-testid="guided-repo-lookup">
                   <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start", flexWrap: "wrap" }}>
                     <TextField
                       size="small"
-                      label={isPaper ? "Paper DOI or arXiv link" : "DOI (optional)"}
-                      placeholder="10.1038/s41524-025-01558-w or https://arxiv.org/abs/2409.00246"
+                      label="GitHub or GitLab repository link"
+                      placeholder="https://github.com/org/repo"
+                      value={repoLink}
+                      onChange={(e) => setRepoLink(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          lookUpRepo();
+                        }
+                      }}
+                      sx={{ flex: "1 1 260px" }}
+                      disabled={repoBusy}
+                      slotProps={{ htmlInput: { "data-testid": "guided-repo-input" } }}
+                    />
+                    <Button
+                      variant="contained"
+                      disableElevation
+                      onClick={lookUpRepo}
+                      disabled={repoBusy || !repoLink.trim()}
+                      startIcon={repoBusy ? <CircularProgress size={16} color="inherit" /> : <Search />}
+                      sx={{ textTransform: "none", minHeight: 40 }}
+                      data-testid="guided-repo-lookup-button"
+                    >
+                      Look up
+                    </Button>
+                    {changingPaper && (
+                      <Button onClick={() => setChangingPaper(false)} sx={{ textTransform: "none", minHeight: 40 }}>
+                        Cancel
+                      </Button>
+                    )}
+                  </Box>
+                  {repoError && <Alert severity="warning" sx={{ mt: 1 }}>{repoError}</Alert>}
+                  <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.75 }}>
+                    Fills in the name, description, developers, year and repository URL
+                    from its public page. Released on Zenodo with a DOI?{" "}
+                    <Link
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setRepoUseDoi(true);
+                      }}
+                      style={{ color: "#800000" }}
+                    >
+                      Look it up by DOI
+                    </Link>
+                    . Hosted somewhere else?{" "}
+                    <SectionLink target="curate-reference">Enter the details by hand</SectionLink>
+                  </Typography>
+                </Box>
+              ) : (
+                <Box>
+                  <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start", flexWrap: "wrap" }}>
+                    <TextField
+                      size="small"
+                      label={DOI_PROMPTS[type].label}
+                      placeholder={DOI_PROMPTS[type].placeholder}
                       value={doi}
                       onChange={(e) => setDoi(e.target.value)}
                       onKeyDown={(e) => {
@@ -1402,13 +1542,25 @@ const GuidedSetup = () => {
                     )}
                   </Box>
                   {doiError && <Alert severity="warning" sx={{ mt: 1 }}>{doiError}</Alert>}
-                  {isPaper && (
-                    <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.75 }}>
-                      Fills in title, authors, journal, year and abstract. A preprint?
-                      Paste its arXiv link or ID. No DOI?{" "}
-                      <SectionLink target="curate-reference">Enter the details by hand</SectionLink>
-                    </Typography>
-                  )}
+                  <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.75 }} data-testid="guided-doi-hint">
+                    {DOI_PROMPTS[type].hint}{" "}
+                    <SectionLink target="curate-reference">Enter the details by hand</SectionLink>
+                    {type === "software" && (
+                      <>
+                        {" · "}
+                        <Link
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setRepoUseDoi(false);
+                          }}
+                          style={{ color: "#800000" }}
+                        >
+                          Use the repository link instead
+                        </Link>
+                      </>
+                    )}
+                  </Typography>
                 </Box>
               )}
             </StepContent>

@@ -39,7 +39,7 @@ import FileTree from "../components/FileTree";
 import Publish from "../components/CuratorElements/Publish";
 import EditModeController from "../components/CuratorElements/EditMode";
 import WorkTypeChooser, { WorkTypeBadge } from "../components/CuratorElements/WorkTypeChooser";
-import { workTypeInfo } from "../Utils/workTypes";
+import { WORK_TYPES, workTypeInfo } from "../Utils/workTypes";
 import { CURATOR_DRAFT_KEY } from "../Utils/browserDraft";
 import { fetchServerDraft } from "../Utils/serverDrafts";
 import CuratorContext from "../Context/Curator/curatorContext";
@@ -346,6 +346,23 @@ const WorkTypeGate = ({ editMode, children }) => {
   return children;
 };
 
+// /curator?type=software (the header's Curator menu, the home page cards)
+// opens a new record already set to that work type, skipping the chooser.
+// Applied once, then dropped from the URL so a reload or "Start over"
+// does not re-apply it.
+export const WorkTypeFromQuery = () => {
+  const router = useRouter();
+  const { workType, setWorkType } = useContext(CuratorContext);
+  const wanted = typeof router.query.type === "string" ? router.query.type : "";
+  useEffect(() => {
+    if (!wanted || !WORK_TYPES[wanted]) return;
+    if (workType !== wanted) setWorkType(wanted);
+    const { type, ...rest } = router.query;
+    router.replace({ pathname: router.pathname, query: rest }, undefined, { shallow: true });
+  }, [wanted]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+};
+
 const NewRecordHeading = () => {
   const { workType } = useContext(CuratorContext);
   return (
@@ -392,6 +409,7 @@ const curator = () => {
                   <CuratorDraftNavigationGuard editMode={editMode} />
                   {editMode && <CuratorEditNavigationGuard />}
                   {!editMode && <ServerDraftLoader draftId={draftId} />}
+                  {!editMode && <WorkTypeFromQuery />}
                   <WorkTypeGate editMode={editMode}>
 
                   {/* ── Page header ──────────────────────────────────── */}

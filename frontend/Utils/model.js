@@ -40,6 +40,12 @@ const referenceBlockFromInfo = (info = {}) => {
   block["kind"] = info.kind;
   block["title"] = info.title;
   block["authors"] = namesUtil.get(info.authors || "");
+  // The publication string carries the year for a paper; a work filled in
+  // without one (a code repository from its GitHub page) has it on its own.
+  if (block.year == null && info.year != null && info.year !== "") {
+    const year = parseInt(info.year, 10);
+    if (!Number.isNaN(year)) block.year = year;
+  }
   return block;
 };
 
