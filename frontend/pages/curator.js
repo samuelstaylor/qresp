@@ -363,6 +363,23 @@ export const WorkTypeFromQuery = () => {
   return null;
 };
 
+// /curator?choose=1 (the header's Curator item, clicked while on a new
+// record's forms) goes back to "What are you curating?" with a blank record.
+// The navigation guard has already offered to save; the local recovery copy
+// is kept, as that guard promises.
+export const ChooserFromQuery = () => {
+  const router = useRouter();
+  const { resetAll } = useContext(CuratorContext);
+  const wanted = router.query.choose === "1";
+  useEffect(() => {
+    if (!wanted) return;
+    resetAll({ preserveDraft: true });
+    const { choose, ...rest } = router.query;
+    router.replace({ pathname: router.pathname, query: rest }, undefined, { shallow: true });
+  }, [wanted]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+};
+
 const NewRecordHeading = () => {
   const { workType } = useContext(CuratorContext);
   return (
@@ -410,6 +427,7 @@ const curator = () => {
                   {editMode && <CuratorEditNavigationGuard />}
                   {!editMode && <ServerDraftLoader draftId={draftId} />}
                   {!editMode && <WorkTypeFromQuery />}
+                  {!editMode && <ChooserFromQuery />}
                   <WorkTypeGate editMode={editMode}>
 
                   {/* ── Page header ──────────────────────────────────── */}

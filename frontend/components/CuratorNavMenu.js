@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import PropTypes from "prop-types";
 import Link from "next/link";
+import { useRouter } from "next/router";
 
 import { Box, Grow, Paper, Popper, Typography } from "@mui/material";
 
@@ -9,7 +10,9 @@ import { WORK_TYPE_ICONS } from "./CuratorElements/WorkTypeChooser";
 import { WORK_TYPES, WORK_TYPE_KEYS } from "../Utils/workTypes";
 
 // The header's "Curator" item. Clicking it opens the curator's own "What are
-// you curating?" step; hovering (or focusing) it lists the same choices so a
+// you curating?" step -- also from a new record's forms, where a plain
+// "/curator" link would be a no-op (same page), so it asks the page to start
+// over at the chooser (?choose=1, see ChooserFromQuery). Hovering (or focusing) it lists the same choices so a
 // curator can jump straight into one. The menu is rendered inside the hover
 // area (no portal) so moving the pointer from the button into it keeps it
 // open.
@@ -17,6 +20,10 @@ const CuratorNavMenu = ({ text, active, icon }) => {
   const anchor = useRef(null);
   const closeTimer = useRef(null);
   const [open, setOpen] = useState(false);
+  const router = useRouter();
+  const onNewRecord =
+    router && router.pathname === "/curator" && !(router.query && router.query.edit);
+  const url = onNewRecord ? "/curator?choose=1" : "/curator";
 
   const show = () => {
     clearTimeout(closeTimer.current);
@@ -44,7 +51,7 @@ const CuratorNavMenu = ({ text, active, icon }) => {
       sx={{ display: "inline-flex", position: "relative" }}
       data-testid="curator-nav"
     >
-      <InternalStyledButton text={text} url="/curator" active={active} icon={icon} />
+      <InternalStyledButton text={text} url={url} active={active} icon={icon} />
       <Popper
         open={open}
         anchorEl={anchor.current}

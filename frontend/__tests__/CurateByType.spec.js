@@ -7,17 +7,18 @@ import axios from "axios";
 
 const mockReplace = jest.fn();
 let mockQuery = {};
+let mockPathname = "/curator";
 jest.mock("next/router", () => ({
   __esModule: true,
   default: { push: jest.fn() },
-  useRouter: () => ({ pathname: "/curator", query: mockQuery, replace: mockReplace }),
+  useRouter: () => ({ pathname: mockPathname, query: mockQuery, replace: mockReplace }),
 }));
 jest.mock("../Utils/Scraper", () => ({ getList: jest.fn() }));
 
 import { parseRepoUrl, lookupRepo, referenceFromRepo } from "../Utils/repoLookup";
 import CuratorNavMenu from "../components/CuratorNavMenu";
 import GuidedSetup from "../components/CuratorElements/GuidedSetup";
-import { WorkTypeFromQuery } from "../pages/curator";
+import { ChooserFromQuery, WorkTypeFromQuery } from "../pages/curator";
 import CuratorState from "../Context/Curator/CuratorState";
 import CuratorContext from "../Context/Curator/curatorContext";
 import AuthContext from "../Context/Auth/authContext";
@@ -111,6 +112,11 @@ describe("repository links", () => {
 });
 
 describe("the header's Curator menu", () => {
+  afterEach(() => {
+    mockPathname = "/curator";
+    mockQuery = {};
+  });
+
   it("lists every kind of work on hover, each opening the curator set to it", async () => {
     const user = userEvent.setup();
     render(<CuratorNavMenu text="Curator" />);
@@ -120,6 +126,22 @@ describe("the header's Curator menu", () => {
     WORK_TYPE_KEYS.forEach((type) =>
       expect(screen.getByTestId(`curator-nav-${type}`)).toHaveAttribute("href", `/curator?type=${type}`)
     );
+  });
+
+  it("opens the curator from other pages", () => {
+    mockPathname = "/explorer";
+    render(<CuratorNavMenu text="Curator" />);
+    expect(screen.getByRole("link", { name: /curator/i })).toHaveAttribute("href", "/curator");
+  });
+
+  it("goes back to the chooser when clicked on a new record's forms", () => {
+    render(<CuratorNavMenu text="Curator" />);
+    expect(screen.getByRole("link", { name: /curator/i })).toHaveAttribute("href", "/curator?choose=1");
+  });
+
+  it("leaves edit mode the way it always has", () => {
+    mockQuery = { edit: "abc" };
+    render(<CuratorNavMenu text="Curator" />);
     expect(screen.getByRole("link", { name: /curator/i })).toHaveAttribute("href", "/curator");
   });
 
@@ -151,6 +173,33 @@ describe("opening the curator from a menu link", () => {
       </CuratorState>
     );
     await waitFor(() => expect(screen.getByTestId("state-work-type")).toHaveTextContent("dataset"));
+    expect(mockReplace).toHaveBeenCalledWith({ pathname: "/curator", query: {} }, undefined, { shallow: true });
+  });
+
+  it("starts over at the chooser for ?choose=1 and tidies the URL", async () => {
+    const SetType = () => {
+      const { setWorkType } = useContext(CuratorContext);
+      return <button onClick={() => setWorkType("software")}>pick</button>;
+    };
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <CuratorState draftKey={null}>
+        <SetType />
+        <ChooserFromQuery />
+        <ShowType />
+      </CuratorState>
+    );
+    await user.click(screen.getByText("pick"));
+    expect(screen.getByTestId("state-work-type")).toHaveTextContent("software");
+    mockQuery = { choose: "1" };
+    rerender(
+      <CuratorState draftKey={null}>
+        <SetType />
+        <ChooserFromQuery />
+        <ShowType />
+      </CuratorState>
+    );
+    await waitFor(() => expect(screen.getByTestId("state-work-type")).toHaveTextContent("(none)"));
     expect(mockReplace).toHaveBeenCalledWith({ pathname: "/curator", query: {} }, undefined, { shallow: true });
   });
 
