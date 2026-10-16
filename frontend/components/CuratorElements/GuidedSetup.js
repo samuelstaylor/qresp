@@ -51,6 +51,7 @@ import ServerContext from "../../Context/Servers/serverContext";
 import SourceTreeContext from "../../Context/SourceTree/SourceTreeContext";
 import { getList } from "../../Utils/Scraper";
 import { arxivIdOf, doiUtil } from "../../Utils/doi";
+import { workTypeInfo, workTypeOf } from "../../Utils/workTypes";
 import { buildFileUrl, isPdfFile } from "../../Utils/fileServerUrl";
 import { initialsOf } from "../Profile/ProfileLinks";
 import { labelFor, toRecord } from "../../Utils/artifactFields";
@@ -305,6 +306,7 @@ const FinishDetails = ({ needing, fileServerPath, paperTags, edit }) => {
 const GuidedSetup = () => {
   const ctx = useContext(CuratorContext);
   const {
+    workType,
     metadata,
     curatorInfo,
     referenceInfo,
@@ -1222,6 +1224,12 @@ const GuidedSetup = () => {
       )}
     </Box>
   );
+  // A code repository, dataset or other work has no paper LaTeX to copy
+  // captions from, so that step is only offered for papers and reports.
+  const type = workTypeOf(workType);
+  const typeInfo = workTypeInfo(type);
+  const isPaper = Boolean(typeInfo.paperFields);
+  const hasLatex = type === "paper" || type === "report";
   const steps = {
     you: curatorIsComplete(curatorInfo),
     paper: Boolean(referenceInfo.title),
@@ -1231,8 +1239,12 @@ const GuidedSetup = () => {
     ai: charts.length > 0 && figuresWithoutKeywords === 0,
     finish: recordReady,
   };
-  const done = Object.values(steps).filter(Boolean).length;
-  const STEP_KEYS = ["you", "paper", "folder", "import", "captions", "ai", "finish"];
+  const done = Object.keys(steps).filter(
+    (key) => steps[key] && (key !== "captions" || hasLatex)
+  ).length;
+  const STEP_KEYS = ["you", "paper", "folder", "import", "captions", "ai", "finish"].filter(
+    (key) => key !== "captions" || hasLatex
+  );
   const firstOpen = STEP_KEYS.findIndex((k) => !steps[k] && !skipped[k]);
 
   const stepLabel = (key, title, subtitle) => (
@@ -1260,8 +1272,9 @@ const GuidedSetup = () => {
           <Typography variant="caption" color="text.secondary">{`${done} of ${STEP_KEYS.length} done`}</Typography>
         </Box>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-          Qresp fills in what it can from your profile, the paper's DOI and its
-          project folder. You review it and add what only you know.
+          {isPaper
+            ? "Qresp fills in what it can from your profile, the paper's DOI and its project folder. You review it and add what only you know."
+            : `Qresp fills in what it can from your profile and the project folder. You describe the ${typeInfo.short.toLowerCase()} and add what only you know.`}
         </Typography>
         <LinearProgress
           variant="determinate"
@@ -1313,7 +1326,13 @@ const GuidedSetup = () => {
 
           {/* 2. Paper */}
           <Step completed={steps.paper} expanded>
-            {stepLabel("paper", "The paper", "Looked up from its DOI")}
+            {stepLabel(
+              "paper",
+              isPaper ? "The paper" : `The ${typeInfo.short.toLowerCase()}`,
+              isPaper
+                ? "Looked up from its DOI"
+                : `Its ${typeInfo.titleLabel.toLowerCase()}, ${typeInfo.authorsLabel.toLowerCase()} and ${typeInfo.abstractLabel.toLowerCase()}`
+            )}
             <StepContent>
               {referenceInfo.title && !changingPaper ? (
                 <Summary>
@@ -1323,24 +1342,37 @@ const GuidedSetup = () => {
                   </Typography>
                   <Typography variant="caption" color={referenceInfo.abstract ? "text.secondary" : "warning.main"} component="div">
                     {referenceInfo.abstract
-                      ? "Abstract included."
-                      : "The DOI registry has no abstract for this paper; step 5 fills it in from the LaTeX source."}
+                      ? `${typeInfo.abstractLabel} included.`
+                      : isPaper
+                      ? "The DOI registry has no abstract for this paper; step 5 fills it in from the LaTeX source."
+                      : `No ${typeInfo.abstractLabel.toLowerCase()} yet; add one in the details below.`}
                   </Typography>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 0.75, flexWrap: "wrap" }}>
                     {referenceInfo.doi && <Chip size="small" variant="outlined" label={`DOI ${referenceInfo.doi}`} />}
                     <Box sx={{ flex: 1 }} />
-                    <Button size="small" onClick={() => setChangingPaper(true)} sx={{ textTransform: "none" }}>
-                      Use a different DOI
-                    </Button>
+                    {(isPaper || referenceInfo.doi) && (
+                      <Button size="small" onClick={() => setChangingPaper(true)} sx={{ textTransform: "none" }}>
+                        Use a different DOI
+                      </Button>
+                    )}
                     <SectionLink target="curate-reference">Edit details</SectionLink>
                   </Box>
                 </Summary>
               ) : (
                 <Box>
+                  {!isPaper && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.25 }} data-testid="guided-describe-work">
+                      {`Give the ${typeInfo.short.toLowerCase()} its ${typeInfo.titleLabel.toLowerCase()}, ${typeInfo.authorsLabel.toLowerCase()} and a ${typeInfo.abstractLabel.toLowerCase()}`}
+                      {typeInfo.urlRequired ? `, plus its ${typeInfo.urlLabel.toLowerCase()}` : ""}
+                      {": "}
+                      <SectionLink target="curate-reference">Fill in the details</SectionLink>
+                      . If it has a DOI (for example from Zenodo), you can look it up instead.
+                    </Typography>
+                  )}
                   <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start", flexWrap: "wrap" }}>
                     <TextField
                       size="small"
-                      label="Paper DOI or arXiv link"
+                      label={isPaper ? "Paper DOI or arXiv link" : "DOI (optional)"}
                       placeholder="10.1038/s41524-025-01558-w or https://arxiv.org/abs/2409.00246"
                       value={doi}
                       onChange={(e) => setDoi(e.target.value)}
@@ -1370,11 +1402,13 @@ const GuidedSetup = () => {
                     )}
                   </Box>
                   {doiError && <Alert severity="warning" sx={{ mt: 1 }}>{doiError}</Alert>}
-                  <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.75 }}>
-                    Fills in title, authors, journal, year and abstract. A preprint?
-                    Paste its arXiv link or ID. No DOI?{" "}
-                    <SectionLink target="curate-reference">Enter the details by hand</SectionLink>
-                  </Typography>
+                  {isPaper && (
+                    <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.75 }}>
+                      Fills in title, authors, journal, year and abstract. A preprint?
+                      Paste its arXiv link or ID. No DOI?{" "}
+                      <SectionLink target="curate-reference">Enter the details by hand</SectionLink>
+                    </Typography>
+                  )}
                 </Box>
               )}
             </StepContent>
@@ -1764,7 +1798,8 @@ const GuidedSetup = () => {
             </StepContent>
           </Step>
 
-          {/* 5. Captions */}
+          {/* 5. Captions (papers and reports only) */}
+          {hasLatex && (
           <Step completed={steps.captions} expanded>
             {stepLabel("captions", "Figure captions", "Copied from the paper's LaTeX source")}
             <StepContent>
@@ -1999,6 +2034,7 @@ const GuidedSetup = () => {
               )}
             </StepContent>
           </Step>
+          )}
 
           {/* 6. AI assistant */}
           <Step completed={steps.ai} expanded id="guided-ai" sx={{ scrollMarginTop: 96 }}>

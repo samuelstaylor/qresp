@@ -60,6 +60,8 @@ const PaperDetails = ({ paper, error, preview = false, query }) => {
     heads,
     license,
     institution,
+    work_type,
+    url,
   } = paper;
 
   const workflows = paper.workflows;
@@ -81,6 +83,8 @@ const PaperDetails = ({ paper, error, preview = false, query }) => {
     abstract,
     fileServerPath,
     institution,
+    workType: work_type,
+    url,
   };
 
   const { setAlert, unsetAlert } = useContext(AlertContext);
@@ -151,6 +155,8 @@ const PaperDetails = ({ paper, error, preview = false, query }) => {
           <SectionHeading>Research artifacts</SectionHeading>
           {/* yet-another-react-lightbox needs no provider wrapper. */}
           <CuratorHelperState>
+            {/* A code repository or dataset may have no figures at all. */}
+            {charts && charts.length > 0 ? (
             <ChartInfo
               charts={charts}
               fileserverpath={fileServerPath}
@@ -162,6 +168,7 @@ const PaperDetails = ({ paper, error, preview = false, query }) => {
               showWorkflows={showWorkflows}
               server={query.server}
             />
+            ) : null}
           </CuratorHelperState>
           <DatasetInfo datasets={datasets} fileserverpath={fileServerPath} />
           <ToolsInfo tools={tools} />

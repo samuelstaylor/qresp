@@ -1,10 +1,20 @@
 import PropTypes from "prop-types";
 
 import { Box, Button, Chip, Divider, Grid, Paper, Typography } from "@mui/material";
-import { CloudDownload, MenuBook, OpenInNew } from "@mui/icons-material";
+import { CloudDownload, Link as LinkIcon, MenuBook, OpenInNew } from "@mui/icons-material";
 
 import Tag from "../tag";
 import SocialShare from "../social";
+import { WORK_TYPE_ICONS } from "../CuratorElements/WorkTypeChooser";
+import { workTypeInfo, workTypeOf } from "../../Utils/workTypes";
+
+// The link button a non-paper work gets for its reference URL.
+const URL_ACTION = {
+  report: "Read the report",
+  software: "View repository",
+  dataset: "View data page",
+  other: "Open link",
+};
 
 const toList = (value) => {
   if (Array.isArray(value)) return value.filter(Boolean);
@@ -56,7 +66,16 @@ const ReferenceInfo = ({ referenceData, actions }) => {
     abstract,
     fileServerPath,
     institution,
+    workType,
+    url,
   } = referenceData;
+  // Legacy records (no work type) are published papers and render as before.
+  const type = workTypeOf(workType);
+  const typeInfo = workTypeInfo(type);
+  const isPaper = Boolean(typeInfo.paperFields);
+  const TypeIcon = WORK_TYPE_ICONS[type];
+  const venue = !isPaper && typeInfo.venueLabel ? publication : "";
+  const urlAction = !isPaper && url ? URL_ACTION[type] : null;
 
   const notebook =
     notebookFile && fileServerPath
@@ -66,11 +85,14 @@ const ReferenceInfo = ({ referenceData, actions }) => {
         notebookFile
       : null;
   const doiUrl = doi ? "https://doi.org/" + doi : null;
-  const publishedIn = [publication, year ? `(${year})` : ""].filter(Boolean).join(" ");
+  const publishedIn = isPaper
+    ? [publication, year ? `(${year})` : ""].filter(Boolean).join(" ")
+    : "";
   const collectionList = toList(collections);
   const piList = toList(PIs);
   const citeText = Array.isArray(cite) ? cite.join(", ") : cite;
-  const hasDetails = collectionList.length || piList.length || publishedIn || doi || citeText;
+  const hasDetails =
+    collectionList.length || piList.length || publishedIn || venue || doi || citeText;
 
   return (
     <Paper variant="outlined" sx={{ borderRadius: 3, overflow: "hidden", mb: 4 }}>
@@ -85,6 +107,24 @@ const ReferenceInfo = ({ referenceData, actions }) => {
                 sx={{ color: "#800000", letterSpacing: "0.08em", lineHeight: 1.6 }}
               >
                 {publishedIn}
+              </Typography>
+            )}
+            {!isPaper && (
+              <Typography
+                variant="overline"
+                component="div"
+                data-testid="record-work-type"
+                sx={{
+                  color: "#800000",
+                  letterSpacing: "0.08em",
+                  lineHeight: 1.6,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.75,
+                }}
+              >
+                <TypeIcon sx={{ fontSize: 16 }} aria-hidden="true" />
+                {[typeInfo.label, year ? String(year) : ""].filter(Boolean).join(" · ")}
               </Typography>
             )}
             <Typography
@@ -135,8 +175,22 @@ const ReferenceInfo = ({ referenceData, actions }) => {
           </Box>
         )}
 
-        {(doiUrl || downloadPath || notebook) && (
+        {(doiUrl || urlAction || downloadPath || notebook) && (
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 2.5 }}>
+            {urlAction && (
+              <Button
+                variant="outlined"
+                size="small"
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                startIcon={<LinkIcon fontSize="small" />}
+                sx={actionSx}
+                data-testid="record-url-action"
+              >
+                {urlAction}
+              </Button>
+            )}
             {doiUrl && (
               <Button
                 variant="outlined"
@@ -147,7 +201,7 @@ const ReferenceInfo = ({ referenceData, actions }) => {
                 startIcon={<OpenInNew fontSize="small" />}
                 sx={actionSx}
               >
-                View publication
+                {isPaper ? "View publication" : "View DOI record"}
               </Button>
             )}
             {downloadPath && (
@@ -184,13 +238,13 @@ const ReferenceInfo = ({ referenceData, actions }) => {
         <Grid container spacing={4}>
           <Grid size={{ xs: 12, md: hasDetails ? 8 : 12 }}>
             <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 700, mb: 1, color: "#222" }}>
-              Abstract
+              {typeInfo.abstractLabel}
             </Typography>
             <Typography
               variant="body1"
               sx={{ color: "#444", lineHeight: 1.75, textAlign: "justify", whiteSpace: "pre-line" }}
             >
-              {abstract || "No abstract provided."}
+              {abstract || `No ${typeInfo.abstractLabel.toLowerCase()} provided.`}
             </Typography>
           </Grid>
           {hasDetails ? (
@@ -205,6 +259,7 @@ const ReferenceInfo = ({ referenceData, actions }) => {
                 }}
               >
                 {publishedIn && <DetailRow label="Published in">{publishedIn}</DetailRow>}
+                {venue && <DetailRow label={typeInfo.venueLabel}>{venue}</DetailRow>}
                 {doi && (
                   <DetailRow label="DOI">
                     <Box

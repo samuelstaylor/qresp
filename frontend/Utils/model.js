@@ -1,5 +1,6 @@
 import { getServer, namesUtil, referenceUtil } from "./utils";
 import { fromStoredEdge, toStoredEdge } from "./workflowGraph";
+import { workTypeOf } from "./workTypes";
 
 const convertStateToViewSchema = (state, serverInformation) => {
   const schema = {
@@ -59,6 +60,8 @@ const convertStatetoReqSchema = (state, servers) => {
   const reference = referenceBlockFromInfo(biblio);
 
   const schema = {
+    // What is curated; see Utils/workTypes.js. Every legacy draft is a paper.
+    work_type: workTypeOf(state.workType),
     PIs: namesUtil.get(state.paperInfo.PIs),
     collections: state.paperInfo.collections,
     tags: state.paperInfo.tags,
@@ -161,6 +164,7 @@ const convertReqSchematoState = (req) => {
       edges: (workflow.edges || []).map(fromStoredEdge),
     },
     license: req.license || "",
+    workType: workTypeOf(req.work_type),
   };
 
   return state;

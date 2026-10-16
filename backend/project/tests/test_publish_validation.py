@@ -6,11 +6,18 @@ asked for, and the form demanded a journal, page and volume the schema never
 checked -- so a curator could fill in everything the form marked required and
 still be rejected at publish.
 
-Both now enforce exactly this, for every kind of work:
+Both now enforce exactly this for a PUBLISHED PAPER (work_type absent or
+"paper"), whatever its kind (journal article, preprint, dissertation):
 
     required   kind, at least one author, title, journal name, page,
-               abstract, volume, year
+               abstract, volume, year, and at least one figure
     optional   DOI, URL
+
+Other work types -- an unpublished paper or report, a code repository, a
+dataset, anything else -- are not published papers, so they have no journal,
+volume or page, and a code base or a dataset may have no figure. They need
+authors, title, abstract and year; a code repository also needs its URL.
+The branch is on the top-level work_type, never on reference.kind.
 
 The mirror image lives in `ReferenceInfoForm.js` (yup) and is exercised in
 `PublicationWorkflow.spec.js`. Required here means non-empty: requiring a key
@@ -122,6 +129,60 @@ class TestPublishValidation(unittest.TestCase):
         # Nothing here migrates or rewrites stored records.
         self.accepts(paper(DOI="10.1021/x", volume="158", page="014101"),
                      "a fully populated legacy record")
+
+
+class TestWorkTypes(unittest.TestCase):
+    """Non-paper works publish without the paper-only fields."""
+
+    def work(self, work_type, **reference):
+        document = paper(**reference)
+        document["work_type"] = work_type
+        for field in ("journal", "kind", "page", "volume"):
+            document["reference"].pop(field, None)
+        document["reference"].pop("DOI", None)
+        document["charts"] = []
+        return document
+
+    def test_published_paper_rules_unchanged_when_named_explicitly(self):
+        document = paper()
+        document["work_type"] = "paper"
+        validate(document, SCHEMA)
+        document["charts"] = []
+        with self.assertRaises(ValidationError):
+            validate(document, SCHEMA)
+        legacy = paper()
+        legacy["charts"] = []
+        with self.assertRaises(ValidationError, msg="no work_type = paper"):
+            validate(legacy, SCHEMA)
+
+    def test_report_dataset_other_need_no_journal_or_figure(self):
+        for work_type in ("report", "dataset", "other"):
+            validate(self.work(work_type), SCHEMA)
+
+    def test_empty_paper_only_fields_are_fine_off_paper(self):
+        document = self.work("report", page="", volume="", kind="",
+                             journal={"fullName": ""})
+        validate(document, SCHEMA)
+
+    def test_software_needs_its_repository_url(self):
+        with self.assertRaises(ValidationError):
+            validate(self.work("software"), SCHEMA)
+        with self.assertRaises(ValidationError):
+            validate(self.work("software", URLs=""), SCHEMA)
+        validate(self.work("software", URLs="https://github.com/a/b"), SCHEMA)
+
+    def test_every_work_type_still_needs_the_basics(self):
+        for field in ("authors", "title", "publishedAbstract", "year"):
+            document = self.work("dataset")
+            del document["reference"][field]
+            with self.assertRaises(ValidationError, msg=field):
+                validate(document, SCHEMA)
+        with self.assertRaises(ValidationError):
+            validate(self.work("dataset", title=""), SCHEMA)
+
+    def test_unknown_work_type_is_refused(self):
+        with self.assertRaises(ValidationError):
+            validate(self.work("poem"), SCHEMA)
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ import CuratorContext from "./curatorContext";
 
 import WebStore from "../../Utils/Persist";
 import { summarizeBrowserDraft } from "../../Utils/browserDraft";
+import { workTypeOf } from "../../Utils/workTypes";
 import { listServerDrafts, saveServerDraft } from "../../Utils/serverDrafts";
 import { isNamedDraftTitle, sameDraftTitle as sameTitle } from "../../Utils/draftTitle";
 import { collapseAllSections } from "../../Utils/sectionCollapse";
@@ -17,6 +18,7 @@ import {
   SET_REFERENCEINFO,
   SET_DOCUMENTATION,
   SET_LICENSE,
+  SET_WORK_TYPE,
   SET,
   ADD,
   ADD_MANY,
@@ -148,6 +150,9 @@ const CuratorState = (props) => {
     // A new record starts under CC BY 4.0, the usual choice for open data;
     // the curator can change it in Choose a License.
     license: "cc_by",
+    // What is being curated (Utils/workTypes.js). "" until the curator picks
+    // one in the "What are you curating?" step a new record opens with.
+    workType: "",
   };
 
   const [state, dispatch] = useReducer(CuratorReducer, initialState);
@@ -289,6 +294,9 @@ const CuratorState = (props) => {
     datasets: data.datasets || initialState.datasets,
     scripts: data.scripts || initialState.scripts,
     heads: data.heads || initialState.heads,
+    // A stored draft or record that predates work types is a published
+    // paper; only a brand-new form (initialState) is still unchosen.
+    workType: workTypeOf(data.workType),
   });
 
   const setAll = (data) => {
@@ -525,6 +533,9 @@ const CuratorState = (props) => {
   const setLicense = (license) =>
     dispatch({ type: SET_LICENSE, payload: license });
 
+  const setWorkType = (workType) =>
+    dispatch({ type: SET_WORK_TYPE, payload: workTypeOf(workType) });
+
   const set = (type, value) =>
     dispatch({ type: SET, payload: { type: type + "s", value } });
 
@@ -568,6 +579,8 @@ const CuratorState = (props) => {
         fileServerPath: state.fileServerPath,
         paperInfo: state.paperInfo,
         referenceInfo: state.referenceInfo,
+        workType: state.workType,
+        setWorkType,
         documentation: state.documentation,
         charts: state.charts,
         tools: state.tools,

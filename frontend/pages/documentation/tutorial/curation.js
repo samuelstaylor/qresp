@@ -1,6 +1,8 @@
 import { Box, Chip, Typography } from "@mui/material";
 
 import DocsLayout from "../../../components/Docs/DocsLayout";
+import { WORK_TYPE_ICONS } from "../../../components/CuratorElements/WorkTypeChooser";
+import { WORK_TYPES, WORK_TYPE_KEYS } from "../../../Utils/workTypes";
 import {
   Bullets,
   Callout,
@@ -15,6 +17,7 @@ import {
 
 const CONTENTS = [
   "Start",
+  "What You Are Curating",
   "Curator Information",
   "Access Paper Content",
   "Paper Information",
@@ -84,6 +87,38 @@ const Curation = () => (
       </Callout>
       <Callout kind="tip">Use the pencil icon to edit details after saving any section.</Callout>
       <Callout kind="tip">Use the file icon to fill fields with details about files and folders.</Callout>
+    </Section>
+
+    <Section title="What You Are Curating">
+      <P>
+        A new record first asks what is being curated. Qresp is not only for
+        published papers: any piece of research can be linked to the data,
+        code and workflow behind it. The choice decides which reference fields
+        the Curator asks for; it can be changed at any time from the record
+        header without losing anything already entered.
+      </P>
+      <Fields
+        items={WORK_TYPE_KEYS.map((key) => {
+          const Icon = WORK_TYPE_ICONS[key];
+          return [
+            <Box
+              key={key}
+              component="span"
+              sx={{ display: "inline-flex", alignItems: "center", gap: 1 }}
+            >
+              <Icon fontSize="small" color="primary" aria-hidden="true" />
+              {WORK_TYPES[key].label}
+            </Box>,
+            WORK_TYPES[key].description,
+          ];
+        })}
+      />
+      <Callout kind="info">
+        Only a published paper must name its journal, volume and page and have
+        at least one figure. Every other type needs a title, authors (or
+        developers or creators), a description and a year; a code repository
+        also needs its repository URL. A DOI is always optional.
+      </Callout>
     </Section>
 
     <Section title="Curator Information">

@@ -194,6 +194,11 @@ class FilterQuerySet(QuerySet):
         return unique_values
 
 
+# Kinds of work a record can curate. "paper" is a published paper -- every
+# record from before this list existed.
+WORK_TYPES = ("paper", "report", "software", "dataset", "other")
+
+
 class Paper(Document):
     """ Class to filter query on mongo database
     """
@@ -239,6 +244,12 @@ class Paper(Document):
     # or admin can toggle it (project.api.set_paper_active). Preferred over
     # physical delete so published records are preserved and reversible.
     is_active = BooleanField(default=True)
+    # What is being curated: a published paper, an unpublished paper or
+    # report, a code repository, a dataset, or something else. Absent on
+    # records published before the field existed => a published paper
+    # (see work_type_of). Only a published paper must name a journal, volume
+    # and page and have a figure (schema.json's work_type rules).
+    work_type = StringField(choices=WORK_TYPES)
     # Private visibility. Absent on legacy records => public. A private
     # record never appears on public discovery surfaces (search, explorer,
     # related research, keyword vocabulary) and its detail/workflow pages are
@@ -342,6 +353,13 @@ class AssistUsage(Document):
         'collection': 'assist_usage',
         'indexes': [{'fields': ['email', 'day'], 'unique': True}],
     }
+
+
+def work_type_of(paper):
+    """The record's work type, treating legacy records (no field) and any
+    unknown value as a published paper."""
+    value = getattr(paper, "work_type", None)
+    return value if value in WORK_TYPES else "paper"
 
 
 def active_papers():

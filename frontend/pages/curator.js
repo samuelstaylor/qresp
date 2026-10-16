@@ -38,6 +38,8 @@ import LicenseInfoElement from "../components/CuratorElements/LicenseElement";
 import FileTree from "../components/FileTree";
 import Publish from "../components/CuratorElements/Publish";
 import EditModeController from "../components/CuratorElements/EditMode";
+import WorkTypeChooser, { WorkTypeBadge } from "../components/CuratorElements/WorkTypeChooser";
+import { workTypeInfo } from "../Utils/workTypes";
 import { CURATOR_DRAFT_KEY } from "../Utils/browserDraft";
 import { fetchServerDraft } from "../Utils/serverDrafts";
 import CuratorContext from "../Context/Curator/curatorContext";
@@ -335,6 +337,24 @@ const CuratorDraftNavigationGuard = ({ editMode }) => {
   );
 };
 
+// A new record first asks what is being curated. Edit mode and loaded
+// drafts already know (legacy ones are published papers), so they go
+// straight to the forms.
+const WorkTypeGate = ({ editMode, children }) => {
+  const { workType } = useContext(CuratorContext);
+  if (!editMode && !workType) return <WorkTypeChooser />;
+  return children;
+};
+
+const NewRecordHeading = () => {
+  const { workType } = useContext(CuratorContext);
+  return (
+    <Typography variant="h5" fontWeight={700}>
+      {workTypeInfo(workType).newHeading}
+    </Typography>
+  );
+};
+
 const curator = () => {
   const curatorDescription =
     "The curator guides the user in creating metadata from the data associated to a scientific paper.";
@@ -372,6 +392,7 @@ const curator = () => {
                   <CuratorDraftNavigationGuard editMode={editMode} />
                   {editMode && <CuratorEditNavigationGuard />}
                   {!editMode && <ServerDraftLoader draftId={draftId} />}
+                  <WorkTypeGate editMode={editMode}>
 
                   {/* ── Page header ──────────────────────────────────── */}
                   <Box sx={{ mt: 4, mb: 1 }}>
@@ -396,16 +417,16 @@ const curator = () => {
                         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                           Changes are saved directly to the published record.
                         </Typography>
+                        <Box sx={{ mt: 1 }}><WorkTypeBadge /></Box>
                       </>
                     ) : (
                       <>
-                        <Typography variant="h5" fontWeight={700}>
-                          New Paper Submission
-                        </Typography>
+                        <NewRecordHeading />
                         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                           Start with the guided setup; the full record below
                           fills in as you go.
                         </Typography>
+                        <Box sx={{ mt: 1 }}><WorkTypeBadge /></Box>
                       </>
                     )}
                     <Divider sx={{ mt: 2, mb: 3 }} />
@@ -474,6 +495,7 @@ const curator = () => {
                     <LicenseInfoElement />
                     {!editMode && <Box id="curate-publish" sx={{ scrollMarginTop: 96 }}><Publish /></Box>}
                   </CuratorFormsRemounter>
+                  </WorkTypeGate>
                 </Fragment>
               )}
             </EditModeController>

@@ -15,6 +15,8 @@ import Tag from "../tag";
 import FavoriteButton from "../FavoriteButton";
 
 import { TableSearchContext } from "../Table/TableSearch";
+import { WORK_TYPE_ICONS } from "../CuratorElements/WorkTypeChooser";
+import { workTypeInfo, workTypeOf } from "../../Utils/workTypes";
 
 // How the signed-in reader relates to a listed record. The backend fills
 // _Search__my_role for the requesting session only, so these labels are
@@ -33,6 +35,7 @@ const Summary = ({ rowdata }) => {
     _Search__institution,
     _Search__is_private,
     _Search__my_role,
+    _Search__work_type,
     _Search__publication,
     _Search__tags,
     _Search__title,
@@ -42,6 +45,9 @@ const Summary = ({ rowdata }) => {
 
   const { setQuery } = useContext(TableSearchContext);
   const role = ROLE_LABELS[_Search__my_role];
+  // Published papers (and every record from an older server) carry no badge.
+  const workType = workTypeOf(_Search__work_type);
+  const WorkTypeIcon = WORK_TYPE_ICONS[workType];
 
   // `_Search__sources` is still built and still carried on the row -- it is
   // what dedupe uses to merge a paper published on two nodes into one line,
@@ -79,6 +85,16 @@ const Summary = ({ rowdata }) => {
         {/* The backend lists a private record only to sessions that may
             open it (owner, editors, collaborators, admins), so the badge
             tells them this card is not visible to the public. */}
+        {workType !== "paper" ? (
+          <Chip
+            icon={<WorkTypeIcon />}
+            label={workTypeInfo(workType).short}
+            size="small"
+            variant="outlined"
+            data-testid="record-work-type-badge"
+            sx={{ flexShrink: 0, mt: 0.25 }}
+          />
+        ) : null}
         {role ? (
           <Chip
             icon={role.icon}

@@ -315,3 +315,34 @@ class TestAccountSharedRecords(PrivateTestBase):
         self.assertEqual("owner", papers[0]["role"])
         self.assertTrue(papers[0]["is_private"])
         self.assertEqual([VIEWER], papers[0]["viewer_emails"])
+
+
+class TestNonPaperWorks(PrivateTestBase):
+    """A code repository has no journal, volume or page; search and the
+    detail view must still list it and say what kind of work it is."""
+
+    def setUp(self):
+        super().setUp()
+        # Raw write: reference.URLs is a dynamic (undeclared) field.
+        from bson import ObjectId
+        Paper._get_collection().update_one(
+            {"_id": ObjectId(self.owned_id)},
+            {"$set": {"work_type": "software",
+                      "reference.URLs": "https://github.com/qresp/demo"},
+             "$unset": {"reference.journal": "", "reference.volume": "",
+                        "reference.page": ""}})
+
+    def test_search_lists_it_with_its_work_type(self):
+        rows = {i["_Search__id"]: i for i in self.client.get("/api/search").json()}
+        self.assertEqual("software", rows[self.owned_id]["_Search__work_type"])
+        self.assertEqual("", rows[self.owned_id]["_Search__publication"])
+        self.assertEqual("paper", rows[self.ownerless_id]["_Search__work_type"])
+
+    def test_detail_view_has_work_type_and_url(self):
+        body = self.client.get(f"/api/paper/{self.owned_id}").json()
+        self.assertEqual("software", body["work_type"])
+        self.assertEqual("https://github.com/qresp/demo", body["url"])
+        self.assertEqual("", body["publication"])
+        legacy = self.client.get(f"/api/paper/{self.ownerless_id}").json()
+        self.assertEqual("paper", legacy["work_type"])
+        self.assertTrue(legacy["publication"])

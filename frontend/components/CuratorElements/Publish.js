@@ -10,6 +10,7 @@ import { RegularStyledButton } from "../button";
 import { convertStatetoReqSchema } from "../../Utils/model";
 import { getServer } from "../../Utils/utils";
 import { deleteServerDraft } from "../../Utils/serverDrafts";
+import { workTypeInfo } from "../../Utils/workTypes";
 
 import Schema from "../../public/schema_v1.2.json";
 import CuratorContext from "../../Context/Curator/curatorContext";
@@ -23,7 +24,7 @@ const variableTotext = {
   curatorInfo: "Curator Information",
   paperInfo: "Qresp Curation Information",
   fileServerPathInfo: "File Server Information",
-  referenceInfo: "Publication Information for This Paper",
+  referenceInfo: "Publication / work information",
   documentationInfo: "Documentation Information",
   licenseInfo: "License Information",
   workflowInfo: "Workflow Graph",
@@ -88,7 +89,11 @@ const validate = (editing, metadata) => {
     );
   }
 
-  if (charts.length == 0 || datasets.length == 0) {
+  // A published paper links figures to their data, so it needs at least one
+  // of each. A code repository, dataset, report or other work may have no
+  // figure at all (schema.json's work_type rules).
+  const needsFigures = workTypeInfo(metadata.work_type).needsFigures;
+  if (needsFigures && (charts.length == 0 || datasets.length == 0)) {
     let str = "";
     if (errors.length == 0) {
       str += "Also, you ";

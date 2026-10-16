@@ -19,15 +19,26 @@ import * as Yup from "yup";
 import CuratorContext from "../../Context/Curator/curatorContext";
 import AlertContext from "../../Context/Alert/alertContext";
 import LoadingContext from "../../Context/Loading/loadingContext";
+import { workTypeInfo, workTypeOf } from "../../Utils/workTypes";
 
 const ReferenceInfoForm = ({ editor }) => {
-  const { referenceInfo, setReferenceInfo, registerDraftFlusher } =
+  const { referenceInfo, setReferenceInfo, registerDraftFlusher, workType } =
     useContext(CuratorContext);
+  // A published paper (and every legacy record) asks for its kind, journal,
+  // volume and page; other work types have none of those. A report may name
+  // an institution or series, stored where a paper's journal goes.
+  const type = workTypeOf(workType);
+  const typeInfo = workTypeInfo(type);
+  const isPaper = Boolean(typeInfo.paperFields);
+  const hasVenue = Boolean(typeInfo.venueLabel);
+  const optionalNumber = Yup.number()
+    .transform((value, original) => (original === "" || original == null ? undefined : value))
+    .typeError("Please enter a number");
   const { setAlert } = useContext(AlertContext);
   const { showLoader, hideLoader } = useContext(LoadingContext);
 
   const schema = Yup.object({
-    kind: Yup.string().required("Required"),
+    kind: isPaper ? Yup.string().required("Required") : Yup.string(),
     // Optional field. Accepted DOI shapes (bare, `doi:`-labelled, or a
     // doi.org/dx.doi.org resolver URL) are normalized to the bare DOI BEFORE
     // the format check, so a pasted resolver URL is no longer rejected; an
@@ -54,19 +65,23 @@ const ReferenceInfoForm = ({ editor }) => {
     // A short-lived branch made journal/page/volume conditional on kind while
     // the PDF-import and AI-assist features were being tried; that scope was
     // dropped, and so was the relaxation. Only DOI and URL are optional here.
-    journal: Yup.string().required("Required"),
-    page: Yup.string().required("Required"),
+    // Off a published paper these are not asked (a report's journal slot is
+    // its optional institution or series) -- schema.json's work_type rules.
+    journal: isPaper ? Yup.string().required("Required") : Yup.string(),
+    page: isPaper ? Yup.string().required("Required") : Yup.string(),
     abstract: Yup.string().required("Required"),
-    volume: Yup.number()
-      .min(1, "Minimum volume number is 1")
-      .required("Required"),
+    volume: isPaper
+      ? Yup.number().min(1, "Minimum volume number is 1").required("Required")
+      : optionalNumber,
     year: Yup.number()
       .min(1750, "Cannot be less than 1700")
       .integer("Plese enter a valid year")
       .required("Required"),
-    url: Yup.string()
-      .transform((value, original) => (original === "" ? undefined : value))
-      .url("Please enter a valid url"),
+    url: typeInfo.urlRequired
+      ? Yup.string().required("Required").url("Please enter a valid url")
+      : Yup.string()
+          .transform((value, original) => (original === "" ? undefined : value))
+          .url("Please enter a valid url"),
   });
 
   // react-hook-form v7 only knows values listed here or touched by the
@@ -74,9 +89,15 @@ const ReferenceInfoForm = ({ editor }) => {
   // selection) are NOT registered. Without kind/title/doi/url/abstract in
   // defaultValues, saving an untouched prefilled reference failed its
   // required checks.
+  const parsedPublication = referenceUtil.get(referenceInfo.publication);
   const defaults = {
     authors: namesUtil.get(referenceInfo.authors),
-    ...referenceUtil.get(referenceInfo.publication),
+    ...parsedPublication,
+    // A work with no journal/volume/page may have no publication string to
+    // parse the year from; it is still stored on its own.
+    year:
+      parsedPublication.year ||
+      (referenceInfo.year != null ? referenceInfo.year : ""),
     kind: referenceInfo.kind || "",
     title: referenceInfo.title || "",
     doi: referenceInfo.doi || "",
@@ -152,7 +173,9 @@ const ReferenceInfoForm = ({ editor }) => {
         : "",
       // Store ONE normalized bare DOI regardless of the shape pasted.
       doi: doiUtil.normalize(values.doi),
-      kind: values.kind,
+      // Off a paper there is no kind question; the work type stands in so
+      // the stored reference.kind still says what the record is.
+      kind: isPaper ? values.kind : type,
       title: values.title,
       year: values.year,
       url: values.url,
@@ -198,7 +221,7 @@ const ReferenceInfoForm = ({ editor }) => {
   }, [referenceInfo.authors]);
 
   return (
-    <Drawer heading="Publication Information for This Paper" defaultOpen={true} editing autoSave unsaved>
+    <Drawer heading={typeInfo.heading} defaultOpen={true} editing autoSave unsaved>
       {/* This section IS the primary paper's bibliography (the record's
           `reference` block). It is not a cited-works list.
 
@@ -212,6 +235,7 @@ const ReferenceInfoForm = ({ editor }) => {
           <Grid>
             <RequiredFieldLegend />
           </Grid>
+          {isPaper && (
           <Grid>
             <RadioInputField
               id="kind"
@@ -226,12 +250,17 @@ const ReferenceInfoForm = ({ editor }) => {
               defVal={referenceInfo.kind}
             />
           </Grid>
+          )}
           <Grid>
             <TextInputField
               id="doi"
-              placeholder="Enter doi of the paper, or its arXiv link"
+              placeholder={isPaper ? "Enter doi of the paper, or its arXiv link" : "Optional DOI"}
               name="doi"
-              helperText="The paper's DOI (e.g. 10.1038/s41524-025-01558-w), or its arXiv link or ID (e.g. https://arxiv.org/abs/2409.00246), which is turned into its arXiv DOI"
+              helperText={
+                isPaper
+                  ? "The paper's DOI (e.g. 10.1038/s41524-025-01558-w), or its arXiv link or ID (e.g. https://arxiv.org/abs/2409.00246), which is turned into its arXiv DOI"
+                  : "Optional. A DOI if the work has one, e.g. from Zenodo or an arXiv link or ID"
+              }
               label="DOI"
               defaultValue={referenceInfo.doi}
               action={
@@ -266,7 +295,7 @@ const ReferenceInfoForm = ({ editor }) => {
               spacing={1}
             >
               <Grid>
-                <FormInputLabel label="Authors" forId="authors" />
+                <FormInputLabel label={typeInfo.authorsLabel} forId="authors" />
               </Grid>
               <Grid>
                 <Tooltip
@@ -344,27 +373,30 @@ const ReferenceInfoForm = ({ editor }) => {
               id="title"
               placeholder="Enter title"
               name="title"
-              helperText="Enter title of the paper"
-              label="Title"
+              helperText={typeInfo.titleHelp}
+              label={typeInfo.titleLabel}
               required
               register={register}
               error={errors.title}
               defaultValue={referenceInfo.title}
             />
           </Grid>
+          {(isPaper || hasVenue) && (
           <Grid>
             <TextInputField
               id="journal"
-              placeholder="Enter full journal name"
+              placeholder={isPaper ? "Enter full journal name" : typeInfo.venueLabel}
               name="journal"
-              helperText="Enter full journal name"
-              label="Journal Name"
+              helperText={isPaper ? "Enter full journal name" : typeInfo.venueHelp}
+              label={isPaper ? "Journal Name" : typeInfo.venueLabel}
               register={register}
               error={errors.journal}
               defaultValue={defaults.journal}
-              required
+              required={isPaper}
             />
           </Grid>
+          )}
+          {isPaper && (
           <Grid>
             <TextInputField
               id="page"
@@ -378,13 +410,14 @@ const ReferenceInfoForm = ({ editor }) => {
               required
             />
           </Grid>
+          )}
           <Grid>
             <TextInputField
               id="abstract"
               placeholder="Enter abstract"
               name="abstract"
-              helperText="Enter abstract"
-              label="Abstract"
+              helperText={typeInfo.abstractHelp}
+              label={typeInfo.abstractLabel}
               register={register}
               error={errors.abstract}
               multiline
@@ -393,6 +426,7 @@ const ReferenceInfoForm = ({ editor }) => {
               required
             />
           </Grid>
+          {isPaper && (
           <Grid>
             <TextInputField
               id="volume"
@@ -406,12 +440,13 @@ const ReferenceInfoForm = ({ editor }) => {
               required
             />
           </Grid>
+          )}
           <Grid>
             <TextInputField
               id="year"
               placeholder="Enter year of publication"
               name="year"
-              helperText="Enter year of publication"
+              helperText={isPaper ? "Enter year of publication" : "The year of the version you are curating"}
               label="Year"
               register={register}
               error={errors.year}
@@ -424,11 +459,12 @@ const ReferenceInfoForm = ({ editor }) => {
               id="url"
               placeholder="Enter url"
               name="url"
-              helperText="Enter paper url"
-              label="URL"
+              helperText={typeInfo.urlHelp}
+              label={typeInfo.urlLabel}
               register={register}
               error={errors.url}
               defaultValue={referenceInfo.url}
+              required={Boolean(typeInfo.urlRequired)}
             />
           </Grid>
           <Grid>

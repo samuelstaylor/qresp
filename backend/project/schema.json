@@ -13,6 +13,14 @@
     "license"
   ],
   "properties": {
+    "work_type": {
+      "$id": "#/properties/work_type",
+      "type": "string",
+      "title": "The Work Type Schema",
+      "enum": ["paper", "report", "software", "dataset", "other"],
+      "default": "paper",
+      "description": "What is being curated. Absent on records published before the field existed, which are published papers."
+    },
     "PIs": {
       "$id": "#/properties/PIs",
       "type": ["array"],
@@ -53,7 +61,6 @@
     "charts": {
       "$id": "#/properties/charts",
       "type": ["array"],
-      "minItems": 1,
       "title": "The Charts Schema",
       "items": {
         "$id": "#/properties/charts/items",
@@ -443,16 +450,7 @@
       "$id": "#/properties/reference",
       "type": "object",
       "title": "The Reference Schema",
-      "required": [
-        "authors",
-        "journal",
-        "kind",
-        "page",
-        "publishedAbstract",
-        "title",
-        "volume",
-        "year"
-      ],
+      "required": ["authors", "publishedAbstract", "title", "year"],
       "properties": {
         "DOI": {
           "$id": "#/properties/reference/properties/DOI",
@@ -510,7 +508,6 @@
         "journal": {
           "$id": "#/properties/reference/properties/journal",
           "type": "object",
-          "required": ["fullName"],
           "title": "The Journal Schema",
           "default": null,
           "properties": {
@@ -525,7 +522,6 @@
             "fullName": {
               "$id": "#/properties/reference/properties/journal/properties/fullName",
               "type": ["string"],
-              "minLength": 1,
               "title": "The Fullname Schema",
               "default": "",
               "examples": ["Journal of the American Chemical Society"],
@@ -536,7 +532,6 @@
         "kind": {
           "$id": "#/properties/reference/properties/kind",
           "type": ["string"],
-          "minLength": 1,
           "title": "The Kind Schema",
           "default": "",
           "examples": ["article"],
@@ -545,7 +540,6 @@
         "page": {
           "$id": "#/properties/reference/properties/page",
           "type": ["string"],
-          "minLength": 1,
           "title": "The Page Schema",
           "default": "",
           "examples": ["6912"],
@@ -581,7 +575,6 @@
         "volume": {
           "$id": "#/properties/reference/properties/volume",
           "type": ["string"],
-          "minLength": 1,
           "title": "The Volume Schema",
           "default": "",
           "examples": ["138"],
@@ -988,5 +981,42 @@
         }
       }
     }
-  }
+  },
+  "comment_work_type": "A published paper (work_type absent or 'paper') is held to the full bibliographic contract: kind, journal name, page and volume required and non-empty, and at least one figure. Other work types (an unpublished paper or report, a code repository, a dataset, anything else) need authors, title, abstract and year; a code repository also needs its repository URL.",
+  "allOf": [
+    {
+      "if": { "properties": { "work_type": { "const": "paper" } } },
+      "then": {
+        "properties": {
+          "charts": { "minItems": 1 },
+          "reference": {
+            "required": ["journal", "kind", "page", "volume"],
+            "properties": {
+              "kind": { "minLength": 1 },
+              "page": { "minLength": 1 },
+              "volume": { "minLength": 1 },
+              "journal": {
+                "required": ["fullName"],
+                "properties": { "fullName": { "minLength": 1 } }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "work_type": { "const": "software" } },
+        "required": ["work_type"]
+      },
+      "then": {
+        "properties": {
+          "reference": {
+            "required": ["URLs"],
+            "properties": { "URLs": { "type": "string", "minLength": 1 } }
+          }
+        }
+      }
+    }
+  ]
 }

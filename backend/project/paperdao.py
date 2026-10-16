@@ -4,6 +4,19 @@ from project.models import *
 from project.util import WorkflowInfo, WorkflowNodeInfo, Search, PaperDetails, dotdict, WorkflowObject
 
 
+def publication_line(reference):
+    """"Journal 138, 6912" from a reference block, built only from the parts
+    that exist: a code repository, dataset or report may have no journal,
+    volume or page at all (and legacy records may hold None)."""
+    journal = getattr(getattr(reference, "journal", None), "fullName", "") or ""
+    volume = str(getattr(reference, "volume", "") or "")
+    page = str(getattr(reference, "page", "") or "")
+    line = " ".join(part for part in (journal, volume) if part)
+    if page:
+        line = "{}, {}".format(line, page) if line else page
+    return line
+
+
 class PaperDAO(MongoDBConnection, WorkflowObject):
     """
     Class providing data access objects
@@ -225,8 +238,7 @@ class PaperDAO(MongoDBConnection, WorkflowObject):
                 search.authors.append("{} {} {}".format(author.firstName, author.middleName, author.lastName).replace("  "," "))
 
             search.authors = ", ".join(search.authors)
-            search.publication = paper.reference.journal.fullName + \
-                " " + paper.reference.volume + ", " + paper.reference.page
+            search.publication = publication_line(paper.reference)
             search.abstract = paper.reference.publishedAbstract
             search.doi = paper.reference.DOI
             search.serverPath = paper.info.serverPath
@@ -235,9 +247,10 @@ class PaperDAO(MongoDBConnection, WorkflowObject):
             search.downloadPath = paper.info.downloadPath
             search.notebookPath = paper.info.notebookPath
             search.notebookFile = paper.info.notebookFile
-            search.year = int(paper.reference.year)
+            search.year = int(paper.reference.year or 0)
             search.institution = getattr(paper, 'institution', '') or ''
             search.is_private = getattr(paper, 'is_private', None) is True
+            search.work_type = work_type_of(paper)
             search.my_role = self.__myRole(paper, email)
             filteredSearchobjects.append(search.__dict__)
         return filteredSearchobjects
@@ -268,8 +281,9 @@ class PaperDAO(MongoDBConnection, WorkflowObject):
             paperDetails.PIs = [pi.firstName + " " +
                                 pi.lastName for pi in paper.PIs]
             paperDetails.PIs = ", ".join(paperDetails.PIs)
-        paperDetails.publication = paper.reference.journal.fullName + \
-            " " + paper.reference.volume + ", " + paper.reference.page
+        paperDetails.publication = publication_line(paper.reference)
+        paperDetails.work_type = work_type_of(paper)
+        paperDetails.url = getattr(paper.reference, 'URLs', '') or ''
         paperDetails.abstract = paper.reference.publishedAbstract
         paperDetails.doi = paper.reference.DOI
         paperDetails.serverPath = getattr(paper.info, 'serverPath', '')
@@ -280,7 +294,7 @@ class PaperDAO(MongoDBConnection, WorkflowObject):
         paperDetails.notebookPath = getattr(paper.info, 'notebookPath', '')
         paperDetails.notebookFile = getattr(paper.info, 'notebookFile', '')
         paperDetails.ProjectName = getattr(paper.info, 'ProjectName', '')
-        paperDetails.year = int(paper.reference.year)
+        paperDetails.year = int(paper.reference.year or 0)
         paperDetails.institution = getattr(paper, 'institution', '') or ''
         paperDetails.charts = paper.charts
         paperDetails.datasets = paper.datasets

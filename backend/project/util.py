@@ -249,6 +249,9 @@ class Search(object):
         # Private records are listed only to sessions that can open them;
         # the flag lets the explorer badge them.
         self.is_private = False
+        # 'paper' | 'report' | 'software' | 'dataset' | 'other'; legacy
+        # records are 'paper'. Lets the explorer badge non-paper works.
+        self.work_type = "paper"
         # The requesting session's role on the record ('owner', 'editor',
         # 'viewer' or ''), so the explorer can label the reader's own records.
         self.my_role = ""
@@ -390,6 +393,14 @@ class Search(object):
         self.__is_private = val
 
     @property
+    def work_type(self):
+        return self.__work_type
+
+    @work_type.setter
+    def work_type(self, val):
+        self.__work_type = val
+
+    @property
     def my_role(self):
         return self.__my_role
 
@@ -422,6 +433,10 @@ class PaperDetails(object):
     publication = ""
     abstract = ""
     doi = ""
+    # 'paper' (published, and every legacy record) | 'report' | 'software' |
+    # 'dataset' | 'other', and the reference URL (a code repository's URL).
+    work_type = "paper"
+    url = ""
     serverPath = ""
     folderAbsolutePath = ""
     fileServerPath = ""
