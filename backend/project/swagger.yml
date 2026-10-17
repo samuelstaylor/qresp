@@ -1583,6 +1583,41 @@ paths:
           description: Invalid DOI
         401:
           description: Not authenticated
+  /curation/analyze-repo:
+    post:
+      operationId: "project.repoanalysis.analyze_repo"
+      tags:
+        - "Import"
+      summary: "Inventories and classifies a GitHub or GitLab repository into
+        reviewable curation candidates (read-only; nothing is saved or
+        published)"
+      parameters:
+        - in: body
+          name: body
+          required: true
+          description: The code record's repository link. Only github.com and
+            gitlab.com are read, at the default branch's latest commit.
+          schema:
+            type: object
+            required:
+              - url
+            properties:
+              url:
+                type: string
+                maxLength: 500
+      responses:
+        200:
+          description: Analysis result, in the analyze-folder candidate format
+        400:
+          description: Not a GitHub or GitLab repository link
+        401:
+          description: Not authenticated
+        404:
+          description: No such public repository
+        502:
+          description: The repository host could not be read
+        503:
+          description: The repository host is rate limiting this server
   /curation/analyze-folder:
     post:
       operationId: "project.curation.analyze_folder"

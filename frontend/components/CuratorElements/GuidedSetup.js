@@ -51,9 +51,9 @@ import ServerContext from "../../Context/Servers/serverContext";
 import SourceTreeContext from "../../Context/SourceTree/SourceTreeContext";
 import { getList } from "../../Utils/Scraper";
 import { arxivIdOf, doiUtil } from "../../Utils/doi";
-import { CODE_HOSTS, CODE_HOST_KEYS, needsFolder, workTypeInfo, workTypeOf } from "../../Utils/workTypes";
+import { CODE_HOSTS, CODE_HOST_KEYS, isRepoFilesPath, needsFolder, workTypeInfo, workTypeOf } from "../../Utils/workTypes";
 import { lookupRepo, referenceFromRepo } from "../../Utils/repoLookup";
-import { buildFileUrl, isPdfFile } from "../../Utils/fileServerUrl";
+import { buildImageUrl, isPdfFile } from "../../Utils/fileServerUrl";
 import { initialsOf } from "../Profile/ProfileLinks";
 import { labelFor, toRecord } from "../../Utils/artifactFields";
 import { acceptGuidedChanges } from "../../Utils/savedSection";
@@ -180,7 +180,7 @@ const DetailField = ({ record, field, type, multiline, onSave, placeholder }) =>
 
 const Thumb = ({ server, file }) => {
   const [failed, setFailed] = useState(false);
-  const url = buildFileUrl(server, file);
+  const url = buildImageUrl(server, file);
   const box = {
     width: 56,
     height: 56,
@@ -333,6 +333,27 @@ const DOI_PROMPTS = {
   },
 };
 
+// Which commit a repository scan read, and what it left out.
+const RepoNotes = ({ analysis }) => {
+  const repo = (analysis && analysis.repo) || {};
+  const notes = (analysis && analysis.warnings) || [];
+  return (
+    <Box data-testid="guided-repo-notes">
+      {repo.commit && (
+        <Typography variant="caption" color="text.secondary" component="div">
+          {`Read ${repo.path || "the repository"} at commit ${String(repo.commit).slice(0, 7)}` +
+            `${repo.branch ? ` (${repo.branch})` : ""}. Every file will link to this commit, so the record keeps pointing at this exact code.`}
+        </Typography>
+      )}
+      {notes.map((note) => (
+        <Typography key={note} variant="caption" color="text.secondary" component="div">
+          {note}
+        </Typography>
+      ))}
+    </Box>
+  );
+};
+
 const GuidedSetup = () => {
   const ctx = useContext(CuratorContext);
   const {
@@ -359,11 +380,16 @@ const GuidedSetup = () => {
     setCodeHost,
   } = ctx;
   // A code repository says where its code lives. Code on GitHub or GitLab
-  // has no project folder to find, read or scan, so those steps are left out
-  // unless a folder was added anyway.
+  // has no project folder to find or ask the AI about, so those steps are
+  // left out unless an RCC folder was added anyway -- and the import step
+  // reads the repository instead of a folder (repoMode).
   const isCode = workTypeOf(workType) === "software";
   const folderNeeded = needsFolder(workType, codeHost);
-  const folderSteps = folderNeeded || Boolean(fileServerPath);
+  const rccFolder = fileServerPath && !isRepoFilesPath(fileServerPath) ? fileServerPath : "";
+  const folderSteps = folderNeeded || Boolean(rccFolder);
+  const repoMode = isCode && !folderSteps;
+  // What the import step reads: the repository link, or the folder.
+  const scanKey = repoMode ? String(referenceInfo.url || "").trim() : fileServerPath;
   const { setAlert } = useContext(AlertContext) || {};
   const { loading: authLoading, authenticated, user } = useContext(AuthContext);
 
@@ -723,22 +749,24 @@ const GuidedSetup = () => {
   const [added, setAdded] = useState(null);
 
   const scan = () => {
-    if (!fileServerPath) return;
+    if (!scanKey) return;
+    const key = scanKey;
     setScanning(true);
     setScanError("");
     setAdded(null);
-    axios
-      .post("/api/curation/analyze-folder", { path: fileServerPath })
+    (repoMode
+      ? axios.post("/api/curation/analyze-repo", { url: key })
+      : axios.post("/api/curation/analyze-folder", { path: key }))
       .then((res) => {
         setAnalysis(res.data || {});
-        setScannedPath(fileServerPath);
+        setScannedPath(key);
         setExcluded({});
-        if (cacheRccAnalysis) cacheRccAnalysis(fileServerPath, res.data || {});
+        if (!repoMode && cacheRccAnalysis) cacheRccAnalysis(key, res.data || {});
       })
       .catch((err) =>
         setScanError(
           (err && err.response && err.response.data && err.response.data.error) ||
-            "The folder could not be read."
+            (repoMode ? "The repository could not be read." : "The folder could not be read.")
         )
       )
       .finally(() => setScanning(false));
@@ -746,16 +774,16 @@ const GuidedSetup = () => {
 
   const artifactCount = charts.length + datasets.length + scripts.length + tools.length;
 
-  // A different (or cleared) folder or paper makes earlier results stale --
-  // this is also how Start Fresh resets the setup.
+  // A different (or cleared) folder, repository or paper makes earlier
+  // results stale -- this is also how Start Fresh resets the setup.
   useEffect(() => {
-    if (fileServerPath !== scannedPath) {
+    if (scanKey !== scannedPath) {
       setAnalysis(null);
       setAdded(null);
       setScanError("");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fileServerPath]);
+  }, [scanKey]);
   useEffect(() => {
     if (!referenceInfo.doi) {
       locatedFor.current = "";
@@ -764,13 +792,14 @@ const GuidedSetup = () => {
       setLatexSource(null);
     }
   }, [referenceInfo.doi]);
-  // Scan once, automatically, as soon as there is a folder and nothing yet.
+  // Scan once, automatically, as soon as there is a folder (or repository
+  // link) and nothing yet.
   useEffect(() => {
-    if (fileServerPath && authenticated && !artifactCount && scannedPath !== fileServerPath && !scanning) {
+    if (scanKey && authenticated && !artifactCount && scannedPath !== scanKey && !scanning) {
       scan();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fileServerPath, authenticated]);
+  }, [scanKey, authenticated]);
 
   const paperTags = (paperInfo.tags || []).filter(Boolean);
   const plan = useMemo(
@@ -791,6 +820,12 @@ const GuidedSetup = () => {
   const labels = Object.fromEntries(plan.items.map((item) => [item.key, item.label]));
 
   const addAll = () => {
+    // Repository paths are relative to the commit that was read; storing that
+    // as the record's file path root makes every file link to it.
+    const filesBase = repoMode && analysis && analysis.repo && analysis.repo.files_base;
+    if (filesBase && filesBase !== fileServerPath && ctx.setFileServerPath) {
+      ctx.setFileServerPath(filesBase);
+    }
     importBundle(
       chosen.map(({ key, list, value }) => ({ key, list, value })),
       chosenLinks.map(({ from, to, type }) => ({ from, to, type }))
@@ -814,7 +849,7 @@ const GuidedSetup = () => {
   const scanned = Boolean(analysis) || artifactCount > 0 || Boolean(scanError);
   // While scan results wait to be added, only kinds the scan did not find
   // are asked for, so the AI never proposes the same files twice.
-  const canFind = Boolean(fileServerPath) && authenticated && scanned && !scanning &&
+  const canFind = !repoMode && Boolean(fileServerPath) && authenticated && scanned && !scanning &&
     (missingKinds.length > 0 || !(pendingScan && chosen.length));
   const findKinds = missingKinds.length ? missingKinds : [...FIND_KINDS, "tools"];
   const findLabel = missingKinds.length
@@ -1291,7 +1326,7 @@ const GuidedSetup = () => {
     setSkipped((was) => ({ ...was, [key]: true }));
     scrollToSection("guided-ai");
   };
-  const SkipToAi = ({ step, note }) => (
+  const SkipToAi = ({ step, note }) => !folderSteps ? null : (
     <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", mt: 1.5 }}>
       <Button
         size="small"
@@ -1324,7 +1359,7 @@ const GuidedSetup = () => {
   };
   const offered = (key) =>
     (key !== "captions" || hasLatex) &&
-    (folderSteps || !["folder", "import", "ai"].includes(key));
+    (folderSteps || !["folder", "import", "ai"].includes(key) || (repoMode && key === "import"));
   const done = Object.keys(steps).filter((key) => steps[key] && offered(key)).length;
   const STEP_KEYS = ["you", "paper", "folder", "import", "captions", "ai", "finish"].filter(offered);
   const firstOpen = STEP_KEYS.findIndex((k) => !steps[k] && !skipped[k]);
@@ -1445,7 +1480,7 @@ const GuidedSetup = () => {
                   </ToggleButtonGroup>
                   <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.5 }}>
                     {codeHost === "repository"
-                      ? "The repository link is all Qresp needs; no RCC folder is required."
+                      ? "The repository link is all Qresp needs; no RCC folder is required. Step 3 reads its scripts, data and dependencies."
                       : codeHost === "fileserver"
                       ? "Point Qresp at the folder in step 3; a repository link is optional."
                       : "Give the repository link here and the RCC folder in step 3."}
@@ -1760,18 +1795,24 @@ const GuidedSetup = () => {
           )}
 
           {/* 4. Import */}
-          {folderSteps && (
+          {(folderSteps || repoMode) && (
           <Step completed={steps.import} expanded>
-            {stepLabel("import", "Figures, data & scripts", "Read from the project folder")}
+            {repoMode
+              ? stepLabel("import", "Scripts, data & tools", "Read from the repository")
+              : stepLabel("import", "Figures, data & scripts", "Read from the project folder")}
             <StepContent>
-              {!fileServerPath ? (
+              {!scanKey ? (
                 <Typography variant="body2" color="text.secondary">
-                  Available once the project folder is set.
+                  {repoMode
+                    ? "Available once the repository link is set in step 2."
+                    : "Available once the project folder is set."}
                 </Typography>
               ) : scanning ? (
                 <Box>
                   <Typography variant="body2" color="text.secondary" gutterBottom>
-                    Reading the project folder… large folders can take a minute.
+                    {repoMode
+                      ? "Reading the repository… large repositories can take a minute."
+                      : "Reading the project folder… large folders can take a minute."}
                   </Typography>
                   <LinearProgress />
                 </Box>
@@ -1798,8 +1839,9 @@ const GuidedSetup = () => {
                 plan.items.length === 0 ? (
                   <Box>
                     <Typography variant="body2" color="text.secondary">
-                      Nothing importable was found in this folder.{" "}
-                      <SectionLink target="curate-figures">Add items by hand</SectionLink>, or let the AI look for them below.
+                      {`Nothing importable was found in this ${repoMode ? "repository" : "folder"}.`}{" "}
+                      <SectionLink target="curate-figures">Add items by hand</SectionLink>
+                      {repoMode ? "." : ", or let the AI look for them below."}
                     </Typography>
                     <SkipToAi step="import" />
                   </Box>
@@ -1904,14 +1946,20 @@ const GuidedSetup = () => {
                       </Box>
                     </Collapse>
                     <Divider sx={{ my: 1.5 }} />
-                    <Typography variant="caption" color="text.secondary" component="div">
-                      Need finer control over what becomes a figure?{" "}
-                      <SectionLink target="curate-figures">Use the detailed import</SectionLink>
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" component="div">
-                      Folder not organised the Qresp way, or something missing? Step 6 can
-                      review and curate the whole folder with AI.
-                    </Typography>
+                    {repoMode ? (
+                      <RepoNotes analysis={analysis} />
+                    ) : (
+                      <>
+                        <Typography variant="caption" color="text.secondary" component="div">
+                          Need finer control over what becomes a figure?{" "}
+                          <SectionLink target="curate-figures">Use the detailed import</SectionLink>
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" component="div">
+                          Folder not organised the Qresp way, or something missing? Step 6 can
+                          review and curate the whole folder with AI.
+                        </Typography>
+                      </>
+                    )}
                   </Box>
                 )
               ) : artifactCount ? (
@@ -1927,12 +1975,12 @@ const GuidedSetup = () => {
                       .join(", ")}.`}
                   </Typography>
                   <Button size="small" onClick={scan} sx={{ textTransform: "none" }}>
-                    Scan the folder for more
+                    {repoMode ? "Read the repository for more" : "Scan the folder for more"}
                   </Button>
                 </Box>
               ) : (
                 <Button variant="outlined" onClick={scan} sx={{ textTransform: "none" }}>
-                  Scan the project folder
+                  {repoMode ? "Read the repository" : "Scan the project folder"}
                 </Button>
               )}
 

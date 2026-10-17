@@ -95,6 +95,17 @@ export const buildDirectoryUrl = (base, relative) => {
   return buildFileUrl(base, cut === -1 ? "" : path.slice(0, cut));
 };
 
+// A file in a GitHub or GitLab repository links to its page there
+// (.../blob/<commit>/path), which is right for a script but is an HTML page,
+// not the image, so a figure is drawn from the host's raw file instead.
+export const rawFileUrl = (url) =>
+  String(url || "")
+    .replace(/^https:\/\/(?:www\.)?github\.com\/([^/]+\/[^/]+)\/blob\//i, "https://raw.githubusercontent.com/$1/")
+    .replace(/^(https:\/\/(?:www\.)?gitlab\.com\/.+?)\/-\/blob\//i, "$1/-/raw/");
+
+// The URL to DRAW a stored image from (see rawFileUrl).
+export const buildImageUrl = (base, relative) => rawFileUrl(buildFileUrl(base, relative));
+
 // Browsers cannot draw a PDF in an <img>; PDF figures need the PDF viewer.
 export const isPdfFile = (path) =>
   /\.pdf$/i.test(String(path || "").split(/[?#]/)[0]);

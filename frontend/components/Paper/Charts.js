@@ -25,6 +25,7 @@ import Drawer from "../drawer";
 import {
   buildDirectoryUrl,
   buildFileUrl,
+  buildImageUrl,
   isMixedContent,
   isPdfFile,
 } from "../../Utils/fileServerUrl";
@@ -162,7 +163,7 @@ const ChartInfo = ({
 
   const FigureView = ({ rowdata }) => {
     const datatreeLink = buildDirectoryUrl(rowdata.server, rowdata.imageFile);
-    const imageUrl = buildFileUrl(rowdata.server, rowdata.imageFile);
+    const imageUrl = buildImageUrl(rowdata.server, rowdata.imageFile);
     // Decided once, from the URL alone -- the browser will block this before
     // any request is made, so it is knowable before the image errors.
     const mixedContent = isMixedContent(imageUrl);
@@ -423,7 +424,7 @@ const ChartInfo = ({
     } else {
       row["index"] = Gallery.length;
       Gallery.push({
-        src: buildFileUrl(row["server"], row["imageFile"]),
+        src: buildImageUrl(row["server"], row["imageFile"]),
         title: figureLabel(row["number"]),
         description: row["caption"],
       });

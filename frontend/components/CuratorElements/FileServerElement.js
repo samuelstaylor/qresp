@@ -8,7 +8,7 @@ import FileServerInfo from "../Paper/FileServer";
 import CuratorContext from "../../Context/Curator/curatorContext";
 import CuratorHelperContext from "../../Context/CuratorHelpers/curatorHelperContext";
 import SwitchFade from "../switchFade";
-import { CODE_HOSTS, needsFolder } from "../../Utils/workTypes";
+import { CODE_HOSTS, isRepoFilesPath, needsFolder } from "../../Utils/workTypes";
 
 const FileServerElement = () => {
   const { fileServerPath, workType, codeHost } = useContext(CuratorContext);
@@ -54,6 +54,11 @@ const FileServerElement = () => {
           }
           defaultOpen={true}
         >
+          {isRepoFilesPath(fileServerPath) && (
+            <Typography variant="body2" color="text.secondary" data-testid="fileserver-repo">
+              The record&rsquo;s files link to the repository at the commit it was read from.
+            </Typography>
+          )}
           {!required && !fileServerPath && (
             <Typography variant="body2" color="text.secondary" data-testid="fileserver-not-needed">
               {`Not needed: the code is on ${CODE_HOSTS.repository.label}. ` +

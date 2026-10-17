@@ -230,7 +230,7 @@ describe("the guided setup for a code repository", () => {
     workflow: { nodes: [], edges: [] },
   };
 
-  const renderSetup = (state = blank) => {
+  const renderSetup = (state = blank, auth = { loading: false, authenticated: false, user: null }) => {
     const curator = {
       codeHost: "repository",
       setCodeHost: jest.fn(),
@@ -244,9 +244,10 @@ describe("the guided setup for a code repository", () => {
       importBundle: jest.fn(),
       cacheRccAnalysis: jest.fn(),
       edit: jest.fn(),
+      setFileServerPath: jest.fn(),
     };
     render(
-      <AuthContext.Provider value={{ loading: false, authenticated: false, user: null }}>
+      <AuthContext.Provider value={auth}>
         <CuratorContext.Provider value={curator}>
           <GuidedSetup />
         </CuratorContext.Provider>
@@ -319,6 +320,88 @@ describe("the guided setup for a code repository", () => {
     renderSetup({ ...blank, codeHost: "both" });
     expect(screen.getByText("Project folder")).toBeInTheDocument();
     expect(screen.getByTestId("guided-repo-input")).toBeInTheDocument();
+  });
+
+  describe("reading the repository", () => {
+    const SHA = "0123456789abcdef0123456789abcdef01234567";
+    const BASE = `https://github.com/west-code/west/blob/${SHA}`;
+    const signedIn = { loading: false, authenticated: true, user: { email: "a@b.c", name: "" } };
+    const withRepo = {
+      ...blank,
+      referenceInfo: { ...blank.referenceInfo, title: "west", url: "https://github.com/west-code/west" },
+    };
+    const analysis = {
+      root: BASE,
+      repo: { host: "github", path: "west-code/west", commit: SHA, branch: "main", files_base: BASE },
+      warnings: ["2 test file(s) were left out: tests check the code rather than produce results."],
+      candidates: {
+        charts: [],
+        datasets: [],
+        scripts: [
+          { id: "script-0", label: "examples/si/", proposal: { files: ["examples/si"], readme: "" } },
+          { id: "script-1", label: "west/ (source code)", proposal: { files: ["west"], readme: "" } },
+        ],
+        tools: [
+          { id: "tool-0", label: "west v6.4.0",
+            proposal: { kind: "software", packageName: "west", version: "v6.4.0", urls: "https://github.com/west-code/west" } },
+        ],
+      },
+      suggestions: {
+        numbers: {},
+        links: [{ from: "tool-0", to: "script-0", type: "uses_tool", reason: "part of west", confidence: "medium" }],
+      },
+    };
+
+    it("reads the repository instead of a folder and adds what it found", async () => {
+      axios.post.mockImplementation((url) =>
+        url === "/api/curation/analyze-repo"
+          ? Promise.resolve({ data: analysis })
+          : Promise.resolve({ data: {} })
+      );
+      const user = userEvent.setup();
+      const curator = renderSetup(withRepo, signedIn);
+      expect(screen.getByText("Scripts, data & tools")).toBeInTheDocument();
+      await waitFor(() =>
+        expect(axios.post).toHaveBeenCalledWith("/api/curation/analyze-repo", { url: "https://github.com/west-code/west" })
+      );
+      expect(axios.post).not.toHaveBeenCalledWith("/api/curation/analyze-folder", expect.anything());
+      expect(await screen.findByTestId("guided-repo-notes")).toHaveTextContent("commit 0123456");
+      expect(screen.getByText(/test file\(s\) were left out/)).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: /add 3 items to the record/i }));
+      // Files link to the commit that was read.
+      expect(curator.setFileServerPath).toHaveBeenCalledWith(BASE);
+      expect(curator.importBundle).toHaveBeenCalledTimes(1);
+      const [records, links] = curator.importBundle.mock.calls[0];
+      expect(records.map((r) => r.list)).toEqual(["scripts", "scripts", "tools"]);
+      expect(links).toEqual([{ from: "cand:tool-0", to: "cand:script-0", type: "uses_tool" }]);
+    });
+
+    it("waits for the repository link", () => {
+      renderSetup(blank, signedIn);
+      expect(screen.getByText(/available once the repository link is set/i)).toBeInTheDocument();
+      expect(axios.post).not.toHaveBeenCalledWith("/api/curation/analyze-repo", expect.anything());
+    });
+
+    it("explains a repository that could not be read", async () => {
+      axios.post.mockImplementation((url) =>
+        url === "/api/curation/analyze-repo"
+          ? Promise.reject({ response: { data: { error: "No public repository was found at that link." } } })
+          : Promise.resolve({ data: {} })
+      );
+      renderSetup(withRepo, signedIn);
+      expect(await screen.findByText("No public repository was found at that link.")).toBeInTheDocument();
+    });
+
+    it("still scans the RCC folder when the code is there", async () => {
+      axios.post.mockResolvedValue({ data: { candidates: {}, suggestions: {} } });
+      const folder = "https://notebook.rcc.uchicago.edu/files/west";
+      renderSetup({ ...withRepo, codeHost: "both", fileServerPath: folder }, signedIn);
+      await waitFor(() =>
+        expect(axios.post).toHaveBeenCalledWith("/api/curation/analyze-folder", { path: folder })
+      );
+      expect(axios.post).not.toHaveBeenCalledWith("/api/curation/analyze-repo", expect.anything());
+    });
   });
 
   it("asks a dataset for its data DOI", () => {

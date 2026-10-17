@@ -130,12 +130,20 @@ export const CODE_HOSTS = {
 
 export const CODE_HOST_KEYS = Object.keys(CODE_HOSTS);
 
+// A code record read from its repository stores the repository, pinned to
+// one commit, as its file path root (github.com/<o>/<r>/blob/<sha>), so every
+// script and dataset links to the code it was curated from. That root is the
+// repository, not an RCC folder.
+export const isRepoFilesPath = (path) =>
+  /^https:\/\/(www\.)?(github\.com|gitlab\.com)\//i.test(String(path || "").trim());
+
 // The curator's choice, or -- for edit mode and drafts from before it was
 // asked -- whatever the record already has filled in.
 export const codeHostOf = ({ codeHost, referenceInfo, fileServerPath } = {}) => {
   if (Object.prototype.hasOwnProperty.call(CODE_HOSTS, codeHost)) return codeHost;
   const url = Boolean(String((referenceInfo && referenceInfo.url) || "").trim());
-  const folder = Boolean(String(fileServerPath || "").trim());
+  const folder =
+    Boolean(String(fileServerPath || "").trim()) && !isRepoFilesPath(fileServerPath);
   if (url && folder) return "both";
   return folder ? "fileserver" : "repository";
 };

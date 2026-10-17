@@ -22,7 +22,8 @@ import LoadingContext from "../Context/Loading/loadingContext";
 import AuthContext from "../Context/Auth/authContext";
 import { TableSearchContext } from "../components/Table/TableSearch";
 import { convertReqSchematoState, convertStatetoReqSchema } from "../Utils/model";
-import { WORK_TYPE_KEYS, codeHostOf, needsFolder, needsRepoUrl, workTypeOf } from "../Utils/workTypes";
+import { WORK_TYPE_KEYS, codeHostOf, isRepoFilesPath, needsFolder, needsRepoUrl, workTypeOf } from "../Utils/workTypes";
+import { buildImageUrl, rawFileUrl } from "../Utils/fileServerUrl";
 
 const ShowType = () => {
   const { workType } = useContext(CuratorContext);
@@ -76,6 +77,24 @@ describe("where a code repository's code lives", () => {
     expect(codeHostOf({ referenceInfo: { url: URL }, fileServerPath: FOLDER })).toBe("both");
     expect(codeHostOf({ codeHost: "", referenceInfo: { url: "" } })).toBe("repository");
     expect(codeHostOf()).toBe("repository");
+  });
+
+  it("does not mistake files read from the repository for an RCC folder", () => {
+    const base = "https://github.com/a/b/blob/0123456789abcdef0123456789abcdef01234567";
+    expect(isRepoFilesPath(base)).toBe(true);
+    expect(isRepoFilesPath("https://gitlab.com/g/p/-/blob/abc")).toBe(true);
+    expect(isRepoFilesPath(FOLDER)).toBe(false);
+    expect(codeHostOf({ referenceInfo: { url: URL }, fileServerPath: base })).toBe("repository");
+  });
+
+  it("draws repository figures from the raw file, not the page", () => {
+    const sha = "0123456789abcdef0123456789abcdef01234567";
+    expect(buildImageUrl(`https://github.com/a/b/blob/${sha}`, "figures/x.png")).toBe(
+      `https://raw.githubusercontent.com/a/b/${sha}/figures/x.png`
+    );
+    expect(rawFileUrl("https://gitlab.com/g/sub/p/-/blob/abc/f.png")).toBe("https://gitlab.com/g/sub/p/-/raw/abc/f.png");
+    // RCC is untouched.
+    expect(buildImageUrl(FOLDER, "Figure1.png")).toBe(`${FOLDER}/Figure1.png`);
   });
 
   it("asks for the URL, the folder or both", () => {

@@ -95,6 +95,7 @@ jobs:
             project.tests.test_paper_curator \
             project.tests.test_publish_validation \
             project.tests.test_relatedness \
+            project.tests.test_repoanalysis \
             project.tests.test_update_paper \
             project.tests.test_verify \
             project.tests.test_workflow_graph
