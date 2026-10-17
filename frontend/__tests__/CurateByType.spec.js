@@ -340,6 +340,8 @@ describe("the guided setup for a code repository", () => {
         scripts: [
           { id: "script-0", label: "examples/si/", proposal: { files: ["examples/si"], readme: "" } },
           { id: "script-1", label: "west/ (source code)", proposal: { files: ["west"], readme: "" } },
+          // Writes no figure: listed, not selected.
+          { id: "script-2", label: "tools/helper.py", selected: false, proposal: { files: ["tools/helper.py"], readme: "" } },
         ],
         tools: [
           { id: "tool-0", label: "west v6.4.0",
@@ -367,6 +369,7 @@ describe("the guided setup for a code repository", () => {
       expect(axios.post).not.toHaveBeenCalledWith("/api/curation/analyze-folder", expect.anything());
       expect(await screen.findByTestId("guided-repo-notes")).toHaveTextContent("commit 0123456");
       expect(screen.getByText(/test file\(s\) were left out/)).toBeInTheDocument();
+      expect(screen.getByTestId("guided-unselected")).toHaveTextContent("1 more item was found but not selected");
 
       await user.click(screen.getByRole("button", { name: /add 3 items to the record/i }));
       // Files link to the commit that was read.
@@ -374,7 +377,23 @@ describe("the guided setup for a code repository", () => {
       expect(curator.importBundle).toHaveBeenCalledTimes(1);
       const [records, links] = curator.importBundle.mock.calls[0];
       expect(records.map((r) => r.list)).toEqual(["scripts", "scripts", "tools"]);
+      expect(records.map((r) => r.key)).not.toContain("cand:script-2");
       expect(links).toEqual([{ from: "cand:tool-0", to: "cand:script-0", type: "uses_tool" }]);
+    });
+
+    it("lets an unselected item be added from the list", async () => {
+      axios.post.mockImplementation((url) =>
+        url === "/api/curation/analyze-repo" ? Promise.resolve({ data: analysis }) : Promise.resolve({ data: {} })
+      );
+      const user = userEvent.setup();
+      const curator = renderSetup(withRepo, signedIn);
+      await screen.findByTestId("guided-unselected");
+      await user.click(screen.getByRole("button", { name: /review the list/i }));
+      const box = screen.getByRole("checkbox", { name: "tools/helper.py" });
+      expect(box).not.toBeChecked();
+      await user.click(box);
+      await user.click(screen.getByRole("button", { name: /add 4 items to the record/i }));
+      expect(curator.importBundle.mock.calls[0][0].map((r) => r.key)).toContain("cand:script-2");
     });
 
     it("waits for the repository link", () => {

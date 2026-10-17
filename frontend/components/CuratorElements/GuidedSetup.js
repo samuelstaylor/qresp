@@ -76,6 +76,7 @@ import {
   curatorIsComplete,
   recordsNeedingDetails,
   referenceFromCrossref,
+  unselectedKeys,
 } from "../../Utils/autoCurate";
 
 export const scrollToSection = (id) => {
@@ -760,7 +761,7 @@ const GuidedSetup = () => {
       .then((res) => {
         setAnalysis(res.data || {});
         setScannedPath(key);
-        setExcluded({});
+        setExcluded(unselectedKeys(res.data || {}));
         if (!repoMode && cacheRccAnalysis) cacheRccAnalysis(key, res.data || {});
       })
       .catch((err) =>
@@ -1857,6 +1858,15 @@ const GuidedSetup = () => {
                         <Chip label={plural(chosenLinks.length, "link found", "links found")} variant="outlined" />
                       )}
                     </Box>
+                    {plan.items.length - chosen.length - plan.items.filter((item) => item.duplicate).length > 0 && (
+                      <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.75 }} data-testid="guided-unselected">
+                        {`${plural(
+                          plan.items.length - chosen.length - plan.items.filter((item) => item.duplicate).length,
+                          "more item was",
+                          "more items were"
+                        )} found but not selected${repoMode ? " (images no script writes, scripts that write no figure)" : ""}. Review the list to add them.`}
+                      </Typography>
+                    )}
                     {plan.items.some((item) => item.duplicate) && (
                       <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.75 }}>
                         Items already in this record are skipped.

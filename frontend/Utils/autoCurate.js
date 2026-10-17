@@ -155,6 +155,19 @@ export const buildImportPlan = (analysis, { state = {}, paperTags = [] } = {}) =
   return { items, links };
 };
 
+// Candidates the analysis lists but does not propose (a repository image no
+// script writes, a script that writes no figure): unticked until chosen.
+export const unselectedKeys = (analysis) => {
+  const keys = {};
+  const candidates = (analysis && analysis.candidates) || {};
+  LISTS.forEach(({ key: list }) => {
+    (candidates[list] || []).forEach((candidate) => {
+      if (candidate && candidate.id && candidate.selected === false) keys[keyFor(candidate)] = true;
+    });
+  });
+  return keys;
+};
+
 export const countByList = (items) => {
   const counts = {};
   LISTS.forEach(({ key }) => {
