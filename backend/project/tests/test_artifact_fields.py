@@ -110,70 +110,44 @@ class TestKeywordsAreTheirOwnField(SchemaCase):
                 "legacy %s with no keywords key" % section)
 
 
-class TestPublishRequiresWhatEachTypeNeeds(SchemaCase):
+class TestNothingTypedIsRequiredToPublish(SchemaCase):
+    """Any artifact field may be blank: data can be shared first and
+    described later. Only the id the form mints, and a tool's kind, remain."""
 
-    def test_a_chart_needs_number_image_and_properties(self):
-        for field in ("number", "imageFile", "properties"):
+    def test_a_chart_may_have_no_number_image_or_keywords(self):
+        for field in ("number", "imageFile", "properties", "caption"):
             chart = dict(CHART)
             del chart[field]
-            self.rejects(paper(charts=[chart]),
-                         "publishing a chart with no %s" % field)
+            self.accepts(paper(charts=[chart]), "a chart with no %s" % field)
+        self.accepts(paper(charts=[{"id": "c0"}]), "a chart with only its id")
 
-    def test_a_chart_caption_is_optional(self):
-        chart = dict(CHART)
-        del chart["caption"]
-        self.accepts(paper(charts=[chart]), "a chart with no caption")
-        self.accepts(paper(charts=[dict(CHART, caption="")]), "an empty caption")
-
-    def test_a_dataset_or_script_needs_files_but_its_description_is_optional(self):
+    def test_a_dataset_or_script_may_have_no_files_or_description(self):
         for section in ("datasets", "scripts"):
-            self.accepts(paper(**{section: [{"id": "x", "files": ["a"]}]}),
-                         "%s with no description" % section)
+            self.accepts(paper(**{section: [{"id": "x"}]}),
+                         "%s with only its id" % section)
             self.accepts(paper(**{section: [
-                {"id": "x", "files": ["a"], "readme": ""}]}),
-                "%s with an empty description" % section)
-            self.rejects(paper(**{section: [{"id": "x", "readme": "r"}]}),
-                         "%s with no files" % section)
+                {"id": "x", "files": [], "readme": ""}]}),
+                "%s with empty files and description" % section)
 
-    def test_keywords_and_urls_never_block_publish(self):
-        for section in ("datasets", "scripts"):
-            self.accepts(paper(**{section: [
-                {"id": "x", "files": ["a"], "readme": "r"}]}),
-                "%s with neither keywords nor URLs" % section)
+    def test_a_tool_may_have_no_version_or_package(self):
+        for tool in ({"id": "t", "kind": "software", "packageName": "QE"},
+                     {"id": "t", "kind": "software", "packageName": "QE",
+                      "version": ""},
+                     {"id": "t", "kind": "software"},
+                     {"id": "t", "kind": "experiment", "facilityName": "APS"},
+                     {"id": "t", "kind": "experiment"}):
+            self.accepts(paper(tools=[tool]), "tool %r" % tool)
 
-    def test_a_software_tool_needs_a_package_and_a_version(self):
-        complete = {"id": "t", "kind": "software", "packageName": "QE",
-                    "version": "7.2"}
-        self.accepts(paper(tools=[complete]), "a complete software tool")
-        for field in ("packageName", "version"):
-            partial = dict(complete)
-            del partial[field]
-            self.rejects(paper(tools=[partial]),
-                         "software tool with no %s" % field)
-            self.rejects(paper(tools=[dict(complete, **{field: ""})]),
-                         "software tool with an empty %s" % field)
-
-    def test_an_experiment_tool_needs_a_facility_and_a_measurement(self):
-        complete = {"id": "t", "kind": "experiment", "facilityName": "APS",
-                    "measurement": "XRD"}
-        self.accepts(paper(tools=[complete]), "a complete experiment tool")
-        for field in ("facilityName", "measurement"):
-            partial = dict(complete)
-            del partial[field]
-            self.rejects(paper(tools=[partial]),
-                         "experiment tool with no %s" % field)
-
-    def test_neither_kind_is_held_to_the_other_kind_s_fields(self):
-        self.accepts(paper(tools=[
-            {"id": "t", "kind": "software", "packageName": "QE",
-             "version": "7.2"}]), "software needs no facility")
-        self.accepts(paper(tools=[
-            {"id": "t", "kind": "experiment", "facilityName": "APS",
-             "measurement": "XRD"}]), "an experiment needs no package")
-
-    def test_a_tool_must_say_which_kind_it_is(self):
+    def test_structure_is_still_checked(self):
+        # The id is what the workflow graph points at.
+        self.rejects(paper(charts=[{"imageFile": "a.png"}]), "a chart with no id")
+        self.rejects(paper(datasets=[{"files": ["a"]}]), "a dataset with no id")
+        # The form always sets a tool's kind.
         self.rejects(paper(tools=[{"id": "t", "packageName": "QE"}]),
                      "a tool with no kind")
+        # Types still apply.
+        self.rejects(paper(charts=[dict(CHART, properties="not a list")]),
+                     "keywords that are not a list")
 
 
 class TestAiFieldsPerType(unittest.TestCase):

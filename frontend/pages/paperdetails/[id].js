@@ -110,7 +110,7 @@ const PaperDetails = ({ paper, error, preview = false, query }) => {
 
   return !error ? (
     <Fragment>
-      <SEO title={"Qresp | " + title} description={abstract} author={authors} />
+      <SEO title={"Qresp | " + (title || "Untitled record")} description={abstract || ""} author={authors} />
       <Container maxWidth="lg">
         <Box sx={{ mt: 4, mb: 8 }}>
           {preview ? (

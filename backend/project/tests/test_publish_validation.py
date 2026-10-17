@@ -77,23 +77,51 @@ class TestPublishValidation(unittest.TestCase):
     def test_a_complete_record_publishes(self):
         self.accepts(paper(), "a fully populated journal article")
 
-    def test_every_required_field_blocks_publish_when_absent(self):
+    def test_every_reference_field_may_be_absent(self):
+        # Nothing a curator types is required to publish: share the data
+        # first, describe it later.
         for field in ("authors", "journal", "kind", "page",
                       "publishedAbstract", "title", "volume", "year"):
             document = paper()
             del document["reference"][field]
-            self.rejects(document, "publishing without %s" % field)
+            self.accepts(document, "publishing without %s" % field)
 
-    def test_required_means_non_empty_not_merely_present(self):
+    def test_empty_values_publish(self):
         for field, empty in (("title", ""), ("kind", ""),
                              ("publishedAbstract", ""), ("page", ""),
-                             ("volume", ""), ("authors", [])):
-            self.rejects(paper(**{field: empty}),
+                             ("volume", ""), ("authors", []), ("year", None)):
+            self.accepts(paper(**{field: empty}),
                          "publishing with an empty %s" % field)
-        # journal is an object, so an empty name has to be caught inside it.
-        self.rejects(paper(journal={"fullName": "", "abbrevName": ""}),
+        self.accepts(paper(journal={"fullName": "", "abbrevName": ""}),
                      "publishing with an empty journal name")
-        self.rejects(paper(journal={}), "publishing with no journal name key")
+        self.accepts(paper(journal={}), "publishing with no journal name key")
+
+    def test_a_blank_record_publishes(self):
+        # Exactly what an untouched curator form sends.
+        self.accepts({
+            "work_type": "paper", "PIs": [], "charts": [], "datasets": [],
+            "scripts": [], "tools": [], "collections": [], "tags": [],
+            "schema": "1", "license": "cc_by",
+            "info": {"ProjectName": "", "insertedBy": {}},
+            "reference": {"authors": [], "journal": {"fullName": ""}},
+            "workflow": {"nodes": [], "edges": []},
+        }, "a record with nothing filled in")
+
+    def test_a_blank_record_is_also_storable(self):
+        # The Paper model is what /verify inserts and edits re-validate; it
+        # used to refuse empty keyword and collection lists and part names.
+        from project.models import Paper
+        Paper(PIs=[{"firstName": "Ada"}], charts=[{"id": "c0"}],
+              collections=[], tags=[], schema="1",
+              info={"ProjectName": "", "insertedBy": {}},
+              reference={"authors": [{"lastName": "Lovelace"}]}).validate()
+
+    def test_formats_and_structure_still_apply(self):
+        self.rejects(paper(year="2023"), "a year that is not a number")
+        self.rejects(paper(authors="A B"), "authors that are not a list")
+        document = paper()
+        del document["info"]
+        self.rejects(document, "a record with no info block")
 
     def test_doi_is_optional(self):
         # A preprint or a dissertation may legitimately have none, and the
@@ -122,7 +150,7 @@ class TestPublishValidation(unittest.TestCase):
         # contract as a journal article, exactly as the form is.
         for kind in ("journal", "preprint", "dissertation"):
             self.accepts(paper(kind=kind), "a complete %s" % kind)
-            self.rejects(paper(kind=kind, page=""),
+            self.accepts(paper(kind=kind, page=""),
                          "a %s with no page" % kind)
 
     def test_a_legacy_record_round_trips(self):
@@ -143,17 +171,15 @@ class TestWorkTypes(unittest.TestCase):
         document["charts"] = []
         return document
 
-    def test_published_paper_rules_unchanged_when_named_explicitly(self):
-        document = paper()
-        document["work_type"] = "paper"
-        validate(document, SCHEMA)
-        document["charts"] = []
-        with self.assertRaises(ValidationError):
+    def test_no_work_type_has_rules_of_its_own(self):
+        # A published paper no longer needs a journal, volume, page or a
+        # figure; a code repository no longer needs a URL or a folder.
+        self.assertNotIn("allOf", SCHEMA)
+        for work_type in ("paper", None):
+            document = self.work("paper")
+            if work_type is None:
+                del document["work_type"]
             validate(document, SCHEMA)
-        legacy = paper()
-        legacy["charts"] = []
-        with self.assertRaises(ValidationError, msg="no work_type = paper"):
-            validate(legacy, SCHEMA)
 
     def test_report_dataset_other_need_no_journal_or_figure(self):
         for work_type in ("report", "dataset", "other"):
@@ -169,28 +195,19 @@ class TestWorkTypes(unittest.TestCase):
         document["info"]["fileServerPath"] = folder
         return document
 
-    def test_software_needs_a_repository_url_or_a_folder(self):
+    def test_software_needs_neither_a_repository_url_nor_a_folder(self):
         for folder in ("", None):
-            with self.assertRaises(ValidationError):
-                validate(self.code(folder), SCHEMA)
-            with self.assertRaises(ValidationError):
-                validate(self.code(folder, URLs=""), SCHEMA)
-        # On GitHub or GitLab: no folder needed.
+            validate(self.code(folder), SCHEMA)
+            validate(self.code(folder, URLs=""), SCHEMA)
         validate(self.code("", URLs="https://github.com/a/b"), SCHEMA)
-        # On the RCC file server: no repository URL needed.
         validate(self.code("https://notebook.rcc.uchicago.edu/files/x"), SCHEMA)
-        # Both.
-        validate(self.code("https://notebook.rcc.uchicago.edu/files/x",
-                           URLs="https://github.com/a/b"), SCHEMA)
 
-    def test_every_work_type_still_needs_the_basics(self):
+    def test_no_work_type_needs_the_basics_either(self):
         for field in ("authors", "title", "publishedAbstract", "year"):
             document = self.work("dataset")
             del document["reference"][field]
-            with self.assertRaises(ValidationError, msg=field):
-                validate(document, SCHEMA)
-        with self.assertRaises(ValidationError):
-            validate(self.work("dataset", title=""), SCHEMA)
+            validate(document, SCHEMA)
+        validate(self.work("dataset", title=""), SCHEMA)
 
     def test_unknown_work_type_is_refused(self):
         with self.assertRaises(ValidationError):

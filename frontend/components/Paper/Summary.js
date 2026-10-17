@@ -79,7 +79,8 @@ const Summary = ({ rowdata }) => {
             component="div"
             sx={{ fontWeight: 700, fontSize: "1.05rem", lineHeight: 1.35 }}
           >
-            {_Search__title}
+            {/* Nothing is required to publish, a title included. */}
+            {_Search__title || "Untitled record"}
           </Typography>
         </Box>
         {/* The backend lists a private record only to sessions that may

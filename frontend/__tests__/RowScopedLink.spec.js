@@ -269,10 +269,10 @@ describe("LINK -> From RCC", () => {
     expect(edgesNow()).toBe("none");
   });
 
-  it("creates nothing while a required field is missing", async () => {
+  it("creates and links a candidate with a blank field -- nothing is required", async () => {
     analysisResponse = analysisWith([
       datasetCandidate({
-        // Files are required; a description is optional.
+        // No files: fine, they can be filled in later.
         proposal: { files: [], readme: "Short trajectory", URLs: [],
                     extraFields: [] },
       }),
@@ -282,9 +282,9 @@ describe("LINK -> From RCC", () => {
     await u.click(await openRccFromRow(u));
     await u.click(screen.getByTestId("apply-selected"));
 
-    expect(screen.getByTestId("blocked-summary")).toBeInTheDocument();
-    expect(datasetsNow()).toBe("none");
-    expect(edgesNow()).toBe("none");
+    expect(screen.queryByTestId("blocked-summary")).toBeNull();
+    await waitFor(() => expect(edgesNow()).toBe("d0>s0:consumes"));
+    expect(datasetsNow()).toBe("d0:Short trajectory");
   });
 
   it("creates nothing when the source row is gone before confirming", async () => {
@@ -374,18 +374,15 @@ describe("LINK -> Enter manually", () => {
     await waitFor(() => expect(edgesNow()).toBe("s0>d0:links_to"));
   });
 
-  it("creates nothing while a required field is empty", async () => {
+  it("creates and links a blank record -- nothing is required", async () => {
     const u = user();
     renderLive();
     await openManualFromRow(u);
     const dialog = within(await screen.findByRole("dialog"));
     await u.click(dialog.getByRole("button", { name: /create and link/i }));
 
-    await waitFor(() =>
-      expect(dialog.getAllByText(/required/i).length).toBeGreaterThan(0)
-    );
-    expect(datasetsNow()).toBe("none");
-    expect(edgesNow()).toBe("none");
+    await waitFor(() => expect(edgesNow()).toBe("d0>s0:consumes"));
+    expect(datasetsNow()).toMatch(/^d0:/);
   });
 
   it("defaults a new Figure under a Script to Script -> Figure, generates",

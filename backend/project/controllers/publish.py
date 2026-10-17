@@ -105,12 +105,13 @@ class Publish:
             print(e, file=stderr)
             return {'msg': 'Schema not found, Internal Server Error', 'code': 500}
 
-        curatorDetails = paper['info']['insertedBy']
+        curatorDetails = paper['info'].get('insertedBy') or {}
 
-        name = "{} {} {}".format(curatorDetails['firstName'],
-                                 curatorDetails['middleName'],
-                                 curatorDetails['lastName'])
-        name = name.replace("  ", " ")
+        # Every curator field is optional, so the greeting is built from
+        # whatever parts are there.
+        name = " ".join(part for part in (
+            curatorDetails.get('firstName'), curatorDetails.get('middleName'),
+            curatorDetails.get('lastName')) if part) or "there"
 
         id = self.generateId()
 
@@ -157,7 +158,7 @@ class Publish:
             }
 
         try:
-            mailClient.send(subject, "", html, curatorDetails['emailId'])
+            mailClient.send(subject, "", html, curatorDetails.get('emailId'))
             return 200
         except Exception:
             # Full cause goes to the server log only; the client gets a

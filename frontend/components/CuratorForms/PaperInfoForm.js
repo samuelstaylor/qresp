@@ -11,7 +11,7 @@ import {
 import { namesUtil } from "../../Utils/utils";
 
 import { TextInputField } from "../Form/InputFields";
-import { SubmitAndReset, FormInputLabel, FieldDescription, RequiredFieldLegend } from "../Form/Util";
+import { SubmitAndReset, FormInputLabel, FieldDescription } from "../Form/Util";
 import NameInput from "../Form//NameInput";
 import Drawer from "../drawer";
 
@@ -49,18 +49,15 @@ const PaperInfoForm = ({ editor }) => {
   );
 
   const schema = Yup.object({
-    PIs: Yup.array()
-      .of(
-        Yup.object().shape({
-          firstName: Yup.string().required("Required"),
-          middleName: Yup.string(),
-          lastName: Yup.string().required("Required"),
-        })
-      )
-      .required("Required")
-      .min(1, "Minimum of 1 PrincipalInvestigator"),
-    // Optional: a record publishes with no collection or keyword (the
-    // publish schema allows empty lists); they only help readers find it.
+    // Nothing here is required to publish; it all helps readers find the
+    // record.
+    PIs: Yup.array().of(
+      Yup.object().shape({
+        firstName: Yup.string(),
+        middleName: Yup.string(),
+        lastName: Yup.string(),
+      })
+    ),
     collections: Yup.string(),
     tags: Yup.string(),
     notebookFile: Yup.string(),
@@ -99,7 +96,12 @@ const PaperInfoForm = ({ editor }) => {
       ...values,
       collections: splitList(values.collections),
       tags: splitList(values.tags),
-      PIs: namesUtil.set(values.PIs || []),
+      // A blank row (the form always shows one) is not a P.I.
+      PIs: namesUtil.set(
+        (values.PIs || []).filter((name) =>
+          ["firstName", "middleName", "lastName"].some((key) => String((name && name[key]) || "").trim())
+        )
+      ),
     };
     if (next.notebookFile && next.notebookFile.length > 0) {
       next.notebookPath = fileServerPath + next.notebookFile;
@@ -138,14 +140,12 @@ const PaperInfoForm = ({ editor }) => {
     <Drawer heading="Qresp Curation Information" defaultOpen={true} editing autoSave unsaved>
       <form onSubmit={handleSubmit(onSubmit)}>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1, maxWidth: 720 }}>
-          How this paper is described and grouped on Qresp. Only a principal
-          investigator is required; everything else helps readers find the
-          record.
+          How this record is described and grouped on Qresp. Everything here
+          is optional; it helps readers find the record.
         </Typography>
-        <RequiredFieldLegend />
 
         <Section title="People">
-          <FormInputLabel label="Principal Investigators" forId="pis" required />
+          <FormInputLabel label="Principal Investigators" forId="pis" />
           <FieldDescription>
             The researcher(s) who led this work, usually the corresponding or
             last author. Shown on the record and used when searching by PI.
@@ -166,7 +166,7 @@ const PaperInfoForm = ({ editor }) => {
                   defaults={formattedNames[index]}
                   remove={
                     <Tooltip
-                      title={fields.length == 1 ? "At least one P.I. is required" : "Remove this P.I."}
+                      title={fields.length == 1 ? "Leave the names blank if there is no P.I." : "Remove this P.I."}
                       placement="right"
                       arrow
                     >

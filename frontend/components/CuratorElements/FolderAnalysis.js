@@ -1796,10 +1796,9 @@ const FolderAnalysis = ({
           dividers
           sx={{ overflowY: "auto", overscrollBehavior: "contain" }}
         >
-          {/* Said ONCE, here, rather than repeated under every field of every
-              candidate. The asterisk is drawn in the same colour as the ones
-              on the labels below, and the sentence beside it carries the
-              whole meaning, so the marker never depends on colour alone. */}
+          {/* Said ONCE, here. Nothing is required to publish, so nothing is
+              required to add a proposal either: a field left blank can be
+              filled in later, here or in the artifact's own form. */}
           <Typography
             variant="caption"
             color="text.secondary"
@@ -1807,22 +1806,9 @@ const FolderAnalysis = ({
             sx={{ mb: 2 }}
             data-testid="required-note"
           >
-            <Box
-              component="span"
-              aria-hidden="true"
-              sx={{ color: REQUIRED_MARKER_COLOR, fontWeight: "bold" }}
-            >
-              *
-            </Box>{" "}
-            Required to Save, Update, or Publish.{" "}
-            {/* And required to ADD, which is the change: an incomplete
-                proposal used to be allowed into the Curator and refused at
-                publish, by the server, long after the folder was closed.
-                This line promised exactly that, so it had to go with it. */}
-            <Box component="span">
-              A proposal is added once its required fields are filled — here
-              on the card, or in the artifact&rsquo;s own form.
-            </Box>
+            Nothing here is required: add a proposal with any field blank and
+            fill it in later, here on the card or in the artifact&rsquo;s own
+            form.
           </Typography>
           {loading && (
             <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>

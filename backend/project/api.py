@@ -330,6 +330,15 @@ def publish(paper):
     except WorkflowError as e:
         return {"error": str(e)}, 400
 
+    # The curator's email is optional on the form; the verification link
+    # then goes to the signed-in account that is publishing.
+    info = paper.setdefault("info", {})
+    curator = info.get("insertedBy")
+    if not isinstance(curator, dict):
+        curator = info["insertedBy"] = {}
+    if not str(curator.get("emailId") or "").strip():
+        curator["emailId"] = user.get("email") or ""
+
     paper.pop("owner_email", None)
     stamp_owner(paper)
     origin = (request.headers.get('origin') or request.host_url or "").strip()

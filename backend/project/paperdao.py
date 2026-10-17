@@ -327,7 +327,7 @@ class PaperDAO(MongoDBConnection, WorkflowObject):
             self.workflowinfo.edges = paper.workflow.edges
             for node in paper.workflow.nodes:
                 self.__insertWorkflowNodeDetails(node, paper)
-            self.workflowinfo.workflowType = "paper: " + paper.reference.title
+            self.workflowinfo.workflowType = "paper: " + (paper.reference.title or "")
             return self.workflowinfo.__dict__
         except Exception as e:
             print(e)
@@ -492,7 +492,7 @@ class PaperDAO(MongoDBConnection, WorkflowObject):
                             workflownodeinfo.nodelabel = node
                         workflownodeinfo.hasNotebookFile = False
                         self.workflowinfo.nodes[node] = workflownodeinfo.__dict__
-                        self.workflowinfo.workflowType = chart.number + " of " + paper.reference.title
+                        self.workflowinfo.workflowType = (chart.number or "") + " of " + (paper.reference.title or "")
         except Exception as e:
             print(e)
 

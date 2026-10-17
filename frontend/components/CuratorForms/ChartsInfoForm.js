@@ -25,7 +25,6 @@ import {
   confirmLabel,
   useRowLink,
 } from "./ConnectionSection";
-import { RequiredFieldLegend } from "../Form/Util";
 import { artifactLabel } from "../../Utils/artifactLabel";
 import { rowScopedIntent } from "../../Utils/connectionIntent";
 import {
@@ -102,11 +101,12 @@ const ChartsInfoForm = ({ hideTrigger = false }) => {
   );
 
   const schema = Yup.object({
-    // Optional: the paper may have no caption to copy.
+    // Nothing is required to publish: a figure may be saved with any of
+    // these blank. A number is text ("2", "S1"), not only digits.
     caption: Yup.string(),
-    number: Yup.number().required("Required"),
-    imageFile: Yup.string().required("Required"),
-    properties: Yup.string().required("Required"),
+    number: Yup.string(),
+    imageFile: Yup.string(),
+    properties: Yup.string(),
     extraFields: extraFieldsSchema,
   });
 
@@ -181,7 +181,11 @@ const ChartsInfoForm = ({ hideTrigger = false }) => {
     );
 
   const onSubmit = (values) => {
-    values.properties = values.properties.split(",").map((el) => el.trim());
+    values.properties = String(values.properties || "")
+      .split(",")
+      .map((el) => el.trim())
+      .filter(Boolean);
+    values.number = values.number == null ? "" : String(values.number);
     const extraFields = cleanExtraFields(values.extraFields);
     values.extraFields = extraFields;
     let chartId;
@@ -272,9 +276,6 @@ const ChartsInfoForm = ({ hideTrigger = false }) => {
           >
             <Grid container direction="column" spacing={1}>
               <Grid>
-                <RequiredFieldLegend />
-              </Grid>
-              <Grid>
                 <TextInputField
                   id="caption"
                   placeholder="Enter the figure caption"
@@ -298,7 +299,6 @@ const ChartsInfoForm = ({ hideTrigger = false }) => {
                   error={errors.number}
                   register={register}
                   defaultValue={(def && def.number) || charts.length}
-                  required
                 />
               </Grid>
               <Grid>
@@ -319,7 +319,6 @@ const ChartsInfoForm = ({ hideTrigger = false }) => {
                     </IconButton>
                   }
                   defaultValue={def && def.imageFile}
-                  required
                 />
               </Grid>
               <Grid>
@@ -334,7 +333,6 @@ const ChartsInfoForm = ({ hideTrigger = false }) => {
                   defaultValue={
                     def && def.properties && def.properties.join(", ")
                   }
-                  required
                 />
               </Grid>
               <Grid>

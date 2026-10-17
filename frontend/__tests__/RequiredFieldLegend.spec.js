@@ -86,21 +86,23 @@ describe("a required field's marker", () => {
 });
 
 describe("the curator forms", () => {
-  // Every form that marks a required field explains the symbol; the two that
-  // mark none do not, because explaining a symbol that is not on the form is
-  // noise.
-  const WITH_REQUIRED = [
+  // Nothing a curator enters is required to publish, so no publishing form
+  // marks a field required -- and explaining a symbol that is not on the
+  // form is noise. FileServerInfoForm's markers belong to its folder SEARCH
+  // box, which needs a server to search, not to the record.
+  const WITH_REQUIRED = ["FileServerInfoForm"];
+  const WITHOUT_REQUIRED = [
     "ChartsInfoForm",
     "CuratorInfoForm",
     "DatasetsInfoForm",
-    "FileServerInfoForm",
+    "DocumentationInfoForm",
     "LicenseInfoForm",
     "PaperInfoForm",
     "ReferenceInfoForm",
     "ScriptsInfoForm",
     "ToolsInfoForm",
+    "WorkflowInfoForm",
   ];
-  const WITHOUT_REQUIRED = ["DocumentationInfoForm", "WorkflowInfoForm"];
 
   const source = (name) =>
     require("fs").readFileSync(
@@ -124,5 +126,7 @@ describe("the curator forms", () => {
     const text = source(name);
     expect(text).not.toContain("RequiredFieldLegend");
     expect(text).not.toMatch(/^\s+required$/m);
+    expect(text).not.toMatch(/required=\{/);
+    expect(text).not.toMatch(/\.required\(/);
   });
 });

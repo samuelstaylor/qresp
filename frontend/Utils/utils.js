@@ -10,22 +10,21 @@ const getServer = () => {
 
 const namesUtil = {
   get: (names) => {
-    names = names.trim();
+    names = String(names || "").trim();
     if (names.length == 0) {
       return [{ firstName: "", middleName: "", lastName: "" }];
     }
 
+    // Names are optional, so a person may be just "Ada": one word is a
+    // first name with no last name, never an error.
     const result = names.split(",").map((el) => {
-      const splits = el.trim().split(" ");
-      const obj = { firstName: splits[0], middleName: "", lastName: "" };
+      const splits = el.trim().split(/\s+/).filter(Boolean);
+      const obj = { firstName: splits[0] || "", middleName: "", lastName: "" };
       if (splits.length >= 3) {
-        obj.middleName = splits
-          .slice(1, splits.length - 1)
-          .join(" ")
-          .trim();
-        obj.lastName = splits[splits.length - 1].trim();
-      } else {
-        obj.lastName = splits[1].trim();
+        obj.middleName = splits.slice(1, splits.length - 1).join(" ");
+        obj.lastName = splits[splits.length - 1];
+      } else if (splits.length === 2) {
+        obj.lastName = splits[1];
       }
       return obj;
     });

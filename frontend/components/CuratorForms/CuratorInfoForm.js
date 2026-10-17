@@ -8,7 +8,7 @@ import * as Yup from "yup";
 import { Grid } from "@mui/material";
 
 import { TextInputField, NameInputField } from "../Form/InputFields";
-import { SubmitAndReset, RequiredFieldLegend } from "../Form/Util";
+import { SubmitAndReset } from "../Form/Util";
 import Drawer from "../drawer";
 
 import CuratorContext from "../../Context/Curator/curatorContext";
@@ -37,10 +37,12 @@ const CuratorInfoForm = ({ editor }) => {
   };
 
   const schema = Yup.object({
-    [nameFields.firstName]: Yup.string().required("Required"),
+    // Optional, like everything else needed to publish; an email that is
+    // given must still be one.
+    [nameFields.firstName]: Yup.string(),
     [nameFields.middleName]: Yup.string(),
-    [nameFields.lastName]: Yup.string().required("Required"),
-    emailId: Yup.string().email("Invalid email address").required("Required"),
+    [nameFields.lastName]: Yup.string(),
+    emailId: Yup.string().email("Invalid email address"),
     affiliation: Yup.string(),
   });
 
@@ -66,13 +68,9 @@ const CuratorInfoForm = ({ editor }) => {
       <form onSubmit={handleSubmit(onSubmit)}>
         <Grid container direction="column" spacing={1}>
           <Grid>
-            <RequiredFieldLegend />
-          </Grid>
-          <Grid>
             <NameInputField
               ids={nameFields}
               label="Name"
-              required={true}
               id="curatorname"
               register={register}
               errors={errors}
@@ -87,7 +85,6 @@ const CuratorInfoForm = ({ editor }) => {
               name="emailId"
               helperText="eg. Jane@univ.com"
               label="Email"
-              required={true}
               error={errors["emailId"]}
               register={register}
               defaultValue={defaultEmail}

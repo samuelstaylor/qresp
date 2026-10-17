@@ -117,7 +117,7 @@ class TestFullMetadataUpdate(PermissionTestBase):
     def test_invalid_full_payload_rejected(self):
         self.login(OWNER)
         payload = self.full_payload()
-        payload["license"] = None  # required field
+        payload["tags"] = "not a list"  # wrong type: still refused
         response = self.update(self.owned_id, payload)
         self.assertEqual(400, response.status_code)
 

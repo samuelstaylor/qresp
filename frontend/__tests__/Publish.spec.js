@@ -211,6 +211,48 @@ describe("the client-side publishing check", () => {
     expect(check(doc)).toBe(false);
   });
 
+  it("lets a record with nothing filled in publish", () => {
+    // Exactly what an untouched curator form sends, for any work type.
+    const blank = {
+      PIs: [], charts: [], datasets: [], scripts: [], tools: [],
+      collections: [], tags: [], schema: "x", license: "cc_by",
+      info: { ProjectName: "", insertedBy: {} },
+      reference: { journal: { fullName: "" }, year: null, authors: [] },
+      workflow: { nodes: [], edges: [] },
+    };
+    const check = publishSchemaValidator();
+    ["paper", "report", "software", "dataset", "other"].forEach((workType) => {
+      expect(check({ ...blank, work_type: workType })).toBe(true);
+    });
+    // A tool with no version, a figure with only its id.
+    expect(check({ ...blank, tools: [{ id: "t0", kind: "software", packageName: "numpy" }], charts: [{ id: "c0" }] })).toBe(true);
+    // Structure still counts.
+    expect(check({ ...blank, charts: [{ imageFile: "a.png" }] })).toBe(false);
+  });
+
+  it("publishes what is typed in sections that are still open", async () => {
+    const user = userEvent.setup();
+    const metadata = convertReqSchematoState(paperDoc);
+    const typed = { ...metadata, referenceInfo: { ...metadata.referenceInfo, title: "Typed, not saved" } };
+    render(
+      <CuratorContext.Provider value={{ metadata, collectDraftState: () => typed }}>
+        <CuratorHelperContext.Provider value={{ editing: { referenceInfo: true, curatorInfo: true } }}>
+          <ServerContext.Provider value={{ selectedHttp: null }}>
+            <AlertContext.Provider value={{ setAlert: jest.fn() }}>
+              <LoadingContext.Provider value={{ showLoader: jest.fn(), hideLoader: jest.fn() }}>
+                <Publish />
+              </LoadingContext.Provider>
+            </AlertContext.Provider>
+          </ServerContext.Provider>
+        </CuratorHelperContext.Provider>
+      </CuratorContext.Provider>
+    );
+    axios.post.mockResolvedValue({ data: {} });
+    await user.click(screen.getByRole("button", { name: /^publish$/i }));
+    await waitFor(() => expect(axios.post).toHaveBeenCalled());
+    expect(axios.post.mock.calls[0][1].reference.title).toBe("Typed, not saved");
+  });
+
   it("strips only anchors, never a property named id", () => {
     expect(
       stripSchemaIds({ $id: "#/a", properties: { id: { type: "string", $id: "#/b" } } })

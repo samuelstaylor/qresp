@@ -191,7 +191,7 @@ describe("ReferenceInfoForm", () => {
     });
   });
 
-  it("still blocks saving and shows errors when required fields are missing", async () => {
+  it("saves with every field left blank -- nothing is required", async () => {
     const { setReferenceInfo, editor } = renderForm({
       kind: "",
       doi: "",
@@ -204,11 +204,13 @@ describe("ReferenceInfoForm", () => {
     });
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /^save$/i }));
-    await waitFor(() =>
-      expect(screen.queryAllByText("Required").length).toBeGreaterThan(0)
-    );
-    expect(setReferenceInfo).not.toHaveBeenCalled();
-    expect(editor).not.toHaveBeenCalled();
+    await waitFor(() => expect(setReferenceInfo).toHaveBeenCalledTimes(1));
+    expect(editor).toHaveBeenCalledTimes(1);
+    expect(screen.queryAllByText("Required")).toHaveLength(0);
+    // The blank author row the form shows is not stored as an author.
+    const saved = setReferenceInfo.mock.calls[0][0];
+    expect(saved.authors).toBe("");
+    expect(saved.title).toBe("");
   });
 });
 

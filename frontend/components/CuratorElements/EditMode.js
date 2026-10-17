@@ -41,7 +41,7 @@ const afterEditHref = (editId, server, originalDoc) =>
     : backToPaperHref(editId, server);
 
 const SaveChangesBar = ({ editId, server, originalDoc }) => {
-  const { metadata } = useContext(CuratorContext);
+  const { metadata, collectDraftState } = useContext(CuratorContext);
   const { editing } = useContext(CuratorHelperContext);
   const { selectedHttp } = useContext(ServerContext);
   const { setAlert } = useContext(AlertContext);
@@ -50,8 +50,10 @@ const SaveChangesBar = ({ editId, server, originalDoc }) => {
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
+    // Sections still open are saved with what is typed in them; nothing is
+    // required (see Publish.validate).
     const payload = convertStateToUpdatePayload(
-      metadata,
+      collectDraftState ? collectDraftState() : metadata,
       originalDoc,
       selectedHttp
     );

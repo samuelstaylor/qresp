@@ -296,7 +296,7 @@ describe("the guided setup for a code repository", () => {
     expect(screen.getByTestId("code-host-repository")).toHaveAttribute("aria-pressed", "true");
     expect(screen.queryByText("Project folder")).not.toBeInTheDocument();
     expect(screen.queryByText("Figures, data & scripts")).not.toBeInTheDocument();
-    expect(screen.getByText(/no rcc folder is required/i)).toBeInTheDocument();
+    expect(screen.getByText(/no rcc folder needed/i)).toBeInTheDocument();
     // Code needs no figures, so Finish is open straight away.
     expect(screen.queryByText(/available once figures/i)).not.toBeInTheDocument();
   });

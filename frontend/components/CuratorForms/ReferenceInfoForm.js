@@ -5,7 +5,7 @@ import { AddCircleOutlined, RemoveCircleOutlined } from "@mui/icons-material";
 
 import { RegularStyledButton } from "../button";
 import { TextInputField, RadioInputField } from "../Form/InputFields";
-import { SubmitAndReset, FormInputLabel, RequiredFieldLegend } from "../Form/Util";
+import { SubmitAndReset, FormInputLabel } from "../Form/Util";
 import { namesUtil, referenceUtil } from "../../Utils/utils";
 import { doiUtil, DOI_PATTERN } from "../../Utils/doi";
 import NameInput from "../Form//NameInput";
@@ -19,11 +19,11 @@ import * as Yup from "yup";
 import CuratorContext from "../../Context/Curator/curatorContext";
 import AlertContext from "../../Context/Alert/alertContext";
 import LoadingContext from "../../Context/Loading/loadingContext";
-import { needsRepoUrl, workTypeInfo, workTypeOf } from "../../Utils/workTypes";
+import { workTypeInfo, workTypeOf } from "../../Utils/workTypes";
 import { lookupRepo } from "../../Utils/repoLookup";
 
 const ReferenceInfoForm = ({ editor }) => {
-  const { referenceInfo, setReferenceInfo, registerDraftFlusher, workType, codeHost } =
+  const { referenceInfo, setReferenceInfo, registerDraftFlusher, workType } =
     useContext(CuratorContext);
   // A published paper (and every legacy record) asks for its kind, journal,
   // volume and page; other work types have none of those. A report may name
@@ -32,8 +32,8 @@ const ReferenceInfoForm = ({ editor }) => {
   const typeInfo = workTypeInfo(type);
   const isPaper = Boolean(typeInfo.paperFields);
   const hasVenue = Boolean(typeInfo.venueLabel);
-  // Code on the RCC file server needs no repository URL.
-  const urlRequired = needsRepoUrl(type, codeHost);
+  // Nothing here is required to publish (any field may be left blank, for
+  // every work type); a value that IS given must still be well formed.
   const optionalNumber = Yup.number()
     .transform((value, original) => (original === "" || original == null ? undefined : value))
     .typeError("Please enter a number");
@@ -41,7 +41,7 @@ const ReferenceInfoForm = ({ editor }) => {
   const { showLoader, hideLoader } = useContext(LoadingContext);
 
   const schema = Yup.object({
-    kind: isPaper ? Yup.string().required("Required") : Yup.string(),
+    kind: Yup.string(),
     // Optional field. Accepted DOI shapes (bare, `doi:`-labelled, or a
     // doi.org/dx.doi.org resolver URL) are normalized to the bare DOI BEFORE
     // the format check, so a pasted resolver URL is no longer rejected; an
@@ -53,38 +53,26 @@ const ReferenceInfoForm = ({ editor }) => {
         return normalized === "" ? undefined : normalized;
       })
       .matches(DOI_PATTERN, "Please enter a valid DOI, or an arXiv link or ID"),
-    authors: Yup.array()
-      .of(
-        Yup.object().shape({
-          firstName: Yup.string().required("Required"),
-          middleName: Yup.string(),
-          lastName: Yup.string().required("Required"),
-        })
-      )
-      .required("Required")
-      .min(1, "Minimum of 1 PrincipalInvestigator"),
-    title: Yup.string().required("Required"),
-    // Every field the UI marks with an asterisk is required for every kind.
-    // A short-lived branch made journal/page/volume conditional on kind while
-    // the PDF-import and AI-assist features were being tried; that scope was
-    // dropped, and so was the relaxation. Only DOI and URL are optional here.
-    // Off a published paper these are not asked (a report's journal slot is
-    // its optional institution or series) -- schema.json's work_type rules.
-    journal: isPaper ? Yup.string().required("Required") : Yup.string(),
-    page: isPaper ? Yup.string().required("Required") : Yup.string(),
-    abstract: Yup.string().required("Required"),
-    volume: isPaper
-      ? Yup.number().min(1, "Minimum volume number is 1").required("Required")
-      : optionalNumber,
-    year: Yup.number()
-      .min(1750, "Cannot be less than 1700")
-      .integer("Plese enter a valid year")
-      .required("Required"),
-    url: urlRequired
-      ? Yup.string().required("Required").url("Please enter a valid url")
-      : Yup.string()
-          .transform((value, original) => (original === "" ? undefined : value))
-          .url("Please enter a valid url"),
+    authors: Yup.array().of(
+      Yup.object().shape({
+        firstName: Yup.string(),
+        middleName: Yup.string(),
+        lastName: Yup.string(),
+      })
+    ),
+    title: Yup.string(),
+    // Off a published paper journal/volume/page are not asked (a report's
+    // journal slot is its optional institution or series).
+    journal: Yup.string(),
+    page: Yup.string(),
+    abstract: Yup.string(),
+    volume: optionalNumber.min(1, "Minimum volume number is 1"),
+    year: optionalNumber
+      .min(1750, "Cannot be less than 1750")
+      .integer("Please enter a valid year"),
+    url: Yup.string()
+      .transform((value, original) => (original === "" ? undefined : value))
+      .url("Please enter a valid url"),
   });
 
   // react-hook-form v7 only knows values listed here or touched by the
@@ -184,8 +172,12 @@ const ReferenceInfoForm = ({ editor }) => {
     const hasPublication = ["journal", "year", "volume", "page"].some((key) =>
       String(values[key] || "").trim()
     );
+    // A blank author row (the form always shows one) is not an author.
+    const authors = (values.authors || []).filter((name) =>
+      ["firstName", "middleName", "lastName"].some((key) => String((name && name[key]) || "").trim())
+    );
     return {
-      authors: namesUtil.set(values.authors || []),
+      authors: namesUtil.set(authors),
       publication: hasPublication
         ? referenceUtil.set({
             journal: values.journal || "",
@@ -255,9 +247,6 @@ const ReferenceInfoForm = ({ editor }) => {
           blank for the curator to fill in. */}
       <form onSubmit={handleSubmit(onSubmit)}>
         <Grid container direction="column" spacing={1}>
-          <Grid>
-            <RequiredFieldLegend />
-          </Grid>
           {isPaper && (
           <Grid>
             <RadioInputField
@@ -266,7 +255,6 @@ const ReferenceInfoForm = ({ editor }) => {
               label="Kind"
               helperText="Select Preprint, Dissertation or Journal"
               error={errors.kind}
-              required={true}
               options={radioOptions}
               row={true}
               control={control}
@@ -364,7 +352,7 @@ const ReferenceInfoForm = ({ editor }) => {
                         title={
                           <Typography variant="subtitle2">
                             {fields.length == 1
-                              ? "Required (minimum one author)"
+                              ? "Leave the names blank if you do not know them"
                               : "Remove author"}
                           </Typography>
                         }
@@ -398,7 +386,6 @@ const ReferenceInfoForm = ({ editor }) => {
               name="title"
               helperText={typeInfo.titleHelp}
               label={typeInfo.titleLabel}
-              required
               register={register}
               error={errors.title}
               defaultValue={referenceInfo.title}
@@ -415,7 +402,6 @@ const ReferenceInfoForm = ({ editor }) => {
               register={register}
               error={errors.journal}
               defaultValue={defaults.journal}
-              required={isPaper}
             />
           </Grid>
           )}
@@ -430,7 +416,6 @@ const ReferenceInfoForm = ({ editor }) => {
               register={register}
               error={errors.page}
               defaultValue={defaults.page}
-              required
             />
           </Grid>
           )}
@@ -446,7 +431,6 @@ const ReferenceInfoForm = ({ editor }) => {
               multiline
               rows={4}
               defaultValue={referenceInfo.abstract}
-              required
             />
           </Grid>
           {isPaper && (
@@ -460,7 +444,6 @@ const ReferenceInfoForm = ({ editor }) => {
               register={register}
               error={errors.volume}
               defaultValue={defaults.volume}
-              required
             />
           </Grid>
           )}
@@ -474,7 +457,6 @@ const ReferenceInfoForm = ({ editor }) => {
               register={register}
               error={errors.year}
               defaultValue={defaults.year}
-              required
             />
           </Grid>
           <Grid>
@@ -482,16 +464,11 @@ const ReferenceInfoForm = ({ editor }) => {
               id="url"
               placeholder={type === "software" ? "https://github.com/org/repo" : "Enter url"}
               name="url"
-              helperText={
-                type === "software" && !urlRequired
-                  ? "Optional. A public repository, if the code also has one"
-                  : typeInfo.urlHelp
-              }
+              helperText={typeInfo.urlHelp}
               label={typeInfo.urlLabel}
               register={register}
               error={errors.url}
               defaultValue={referenceInfo.url}
-              required={urlRequired}
               action={
                 type === "software" ? (
                   <Tooltip

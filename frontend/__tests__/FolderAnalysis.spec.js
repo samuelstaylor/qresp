@@ -257,12 +257,22 @@ const ANSWER_FOR = {
 //
 // `fireEvent.change` rather than typing, because these tests are about what
 // the record ends up holding, not about keystrokes.
+// Nothing is required any more (requiredKeys is empty for every kind). Tests
+// that check WHAT an import creates still answer the fields a curator would
+// usually fill, which are the ones that used to be required.
+const FORMERLY_REQUIRED = {
+  chart: ["imageFile", "number", "properties"],
+  dataset: ["files"],
+  script: ["files"],
+  tool: ["packageName", "version"],
+};
+
 const completeRequired = () => {
   screen.queryAllByTestId(/^field-group-/).forEach((group) => {
     const rest = group.dataset.testid.replace("field-group-", "");
     const field = rest.split("-").pop();
     const kind = rest.split("-")[0];
-    if (!requiredKeys(kind).includes(field)) return;
+    if (!(FORMERLY_REQUIRED[kind] || []).includes(field)) return;
     const input = group.querySelector("input, textarea");
     if (!input || input.value) return;
     fireEvent.change(input, { target: { value: ANSWER_FOR[field] || "x" } });
@@ -419,14 +429,11 @@ describe("Analyze RCC Folder", () => {
     );
     expect(await screen.findByLabelText(/^figure caption ?\*?$/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^figure image ?\*?$/i)).toBeInTheDocument();
-    // The rule is stated ONCE, in the legend at the top -- not repeated
-    // under every blank required field, which is what it used to do.
+    // The rule is stated ONCE, in the note at the top.
     expect(screen.getByTestId("required-note")).toHaveTextContent(
-      /required to save, update, or publish/i
+      /nothing here is required/i
     );
-    expect(
-      screen.queryAllByText(/required to save, update, or publish/i)
-    ).toHaveLength(1);
+    expect(screen.queryAllByText(/nothing here is required/i)).toHaveLength(1);
   });
 
   it("Edit proposal opens the fields without selecting the candidate", async () => {
@@ -2411,7 +2418,7 @@ describe("Analyze RCC Folder — consent-gated AI enhancement", () => {
 
   it("is non-blocking when Gemini is not configured", async () => {
     const user = userEvent.setup();
-    renderWith();
+    const { addMany } = renderWith();
     await openAnalysis(user);
     await selectAndOpenConsent(user, null, /select figure1\.png/i);
 
@@ -2428,19 +2435,14 @@ describe("Analyze RCC Folder — consent-gated AI enhancement", () => {
       await screen.findByText(/not configured on this server/i)
     ).toBeInTheDocument();
     // The deterministic review is unaffected and still appliable. The
-    // failure is local to that candidate: the rest of the dialog works, Add
-    // is live, and the AI being unavailable is not what stands between the
-    // curator and the record -- the missing caption is, and they can type
-    // one.
+    // failure is local to that candidate: the rest of the dialog works and
+    // Add goes through, blank fields and all.
     await user.click(
       screen.getByRole("checkbox", { name: /select figure1\.png/i })
     );
     await askToAdd(user);
-    expect(screen.getByTestId("blocked-summary")).toBeInTheDocument();
-
-    completeRequired();
-    await askToAdd(user);
     expect(screen.queryByTestId("blocked-summary")).toBeNull();
+    expect(addMany).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -2576,8 +2578,8 @@ describe("Folder Analysis field contract", () => {
     await openFields(user, /datasets \(1\)/i, /select short_traj/i,
                      "dataset-0");
 
-    expect(input(/^files/i)).toBeRequired();
-    // Optional: a dataset may be added and published without one.
+    // Nothing is required: a dataset may be added and published blank.
+    expect(input(/^files/i)).not.toBeRequired();
     expect(input(/^description/i)).not.toBeRequired();
     const keywords = input(/^keywords/i);
     expect(keywords).not.toBeRequired();
@@ -2590,27 +2592,23 @@ describe("Folder Analysis field contract", () => {
     expect(keywords).toHaveValue("silicon");
   });
 
-  it("marks only required fields, and says what the marker means", async () => {
+  it("marks no field required, and says so once", async () => {
     const user = userEvent.setup();
     renderWith();
     await openFields(user, null, /select figure1\.png/i, "chart-0");
 
-    expect(input(/^figure image ?\*?$/i)).toBeRequired();
-    // Optional for a chart.
-    expect(input(/^figure caption ?\*?$/i)).not.toBeRequired();
-    expect(input(/^reproduction notebook ?\*?$/i)).not.toBeRequired();
-    expect(input(/^input \/ supporting files/i)).not.toBeRequired();
+    [
+      /^figure image ?\*?$/i,
+      /^figure number ?\*?$/i,
+      /^figure caption ?\*?$/i,
+      /^keywords ?\*?$/i,
+      /^reproduction notebook ?\*?$/i,
+      /^input \/ supporting files/i,
+    ].forEach((label) => expect(input(label)).not.toBeRequired());
 
-    // One concise legend. The asterisk is a marker; the sentence beside it
-    // is what carries the meaning, so nothing here depends on seeing colour.
-    //
-    // And it no longer promises what import no longer does. It used to say a
-    // proposal could be added with these blank -- true then, and the reason
-    // an incomplete figure reached the Curator and was refused at publish.
     expect(screen.getByTestId("required-note")).toHaveTextContent(
-      "* Required to Save, Update, or Publish. A proposal is added once its " +
-        "required fields are filled — here on the card, or in the " +
-        "artifact’s own form."
+      "Nothing here is required: add a proposal with any field blank and " +
+        "fill it in later, here on the card or in the artifact’s own form."
     );
   });
 
@@ -2628,8 +2626,7 @@ describe("Folder Analysis field contract", () => {
       /use the paper.s caption/i,
       /keyword\(s\) for what the figure shows/i,
     ].forEach((prose) => expect(fields.textContent).not.toMatch(prose));
-    // The label, the value and the required marker all stay.
-    expect(input(/^figure image ?\*?$/i)).toBeRequired();
+    // The label and the value stay.
     expect(input(/^figure image ?\*?$/i)).toHaveValue("figures/figure1.png");
   });
 
@@ -2648,31 +2645,18 @@ describe("Folder Analysis field contract", () => {
     expect(dialog.textContent).not.toMatch(/low evidence/i);
   });
 
-  it("keeps validation and Add to Curator working without the prose", async () => {
-    // Trimming text must not trim behaviour: the missing-required count, the
-    // asterisks and the add path are all still here.
+  it("keeps Add to Curator working without the prose, with fields blank", async () => {
     const user = userEvent.setup();
     const { addMany } = renderWith();
     await openFields(user, null, /select figure1\.png/i, "chart-0");
 
-    // The count is real: it names the blank required fields and drops as
-    // they are filled.
-    await askToAdd(user);
-    expect(screen.getByTestId("needs-input-chart-0")).toHaveTextContent(
-      "Needs Figure Number, Keywords"
-    );
-    await fill(user, input(/^figure number ?\*?$/i), "1");
-    await waitFor(() =>
-      expect(screen.getByTestId("needs-input-chart-0")).toHaveTextContent(
-        /^Needs Keywords$/
-      )
-    );
-
-    completeRequired();
+    // Figure Number and Keywords are blank, and that is fine.
     await user.click(
       screen.getByRole("button", { name: /add selected items/i })
     );
     expect(addMany).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId("needs-input-chart-0")).toBeNull();
+    expect(screen.queryByTestId("blocked-summary")).toBeNull();
   });
 
   it("keeps both disclosures closed by default and openable", async () => {
@@ -2692,24 +2676,18 @@ describe("Folder Analysis field contract", () => {
     ).toHaveAttribute("aria-expanded", "true");
   });
 
-  it("states the required rule once, not under every field", async () => {
-    // The dialog used to repeat "Required before Save/Update and Publish"
-    // as helper text under EVERY blank required field -- the same sentence
-    // up to a dozen times, restating both the asterisk on the label and the
-    // legend at the top.
+  it("states the rule once, not under every field", async () => {
     const user = userEvent.setup();
     renderWith();
     await openFields(user, null, /select figure1\.png/i, "chart-0");
 
-    expect(
-      screen.queryAllByText(/required to save, update, or publish/i)
-    ).toHaveLength(1);
+    expect(screen.queryAllByText(/nothing here is required/i)).toHaveLength(1);
     expect(
       screen.queryByText(/required before save\/update and publish/i)
     ).toBeNull();
-    // The marker itself is untouched: `required` still drives MUI's real
-    // aria-required, which is what a screen reader acts on.
-    expect(input(/^figure image ?\*?$/i)).toBeRequired();
+    expect(
+      screen.queryByText(/required to save, update, or publish/i)
+    ).toBeNull();
   });
 
   it("keeps a real scan warning visible while the prose is trimmed", async () => {
@@ -2931,29 +2909,16 @@ describe("a card never contradicts itself about what a field holds", () => {
     reason: "notebook markdown",
   };
 
-  it("drops the stale Needs input chip once AI fills the field", async () => {
+  it("fills the fields from the AI, and never says a field is needed", async () => {
     const user = userEvent.setup();
     renderWith();
     await suggestForChart(user, SUGGESTION);
 
-    // Ask for it: three required fields are empty, and the refusal says so.
-    await user.click(
-      screen.getByRole("checkbox", { name: /select figure1\.png/i })
-    );
-    await askToAdd(user);
-    expect(screen.getByTestId("needs-input-chart-0")).toHaveTextContent(
-      /Needs Figure Number, Keywords/i
-    );
-
     await user.click(screen.getByTestId("ai-use-description-chart-0"));
     await user.click(screen.getByTestId("ai-use-keywords-chart-0"));
 
-    // The message tracks the draft, so accepting the AI's answer for two of
-    // the three fields leaves it asking for the third and no longer for
-    // them. It is derived, never remembered.
-    expect(screen.getByTestId("needs-input-chart-0")).toHaveTextContent(
-      /Needs Figure Number/i
-    );
+    // Nothing is required, so no field is ever reported missing.
+    expect(screen.queryByTestId("needs-input-chart-0")).toBeNull();
     expect(caption()).toHaveValue(SUGGESTION.description);
     expect(screen.queryByTestId("field-evidence-chart-0-caption")).toBeNull();
     expect(
@@ -3001,24 +2966,16 @@ describe("a card never contradicts itself about what a field holds", () => {
     expectState("not applied");
   });
 
-  it("restores the missing count when an applied value is cleared", async () => {
+  it("frees the AI value again when an applied value is cleared", async () => {
     const user = userEvent.setup();
     renderWith();
     await suggestForChart(user, SUGGESTION);
 
-    await user.click(
-      screen.getByRole("checkbox", { name: /select figure1\.png/i })
-    );
-    await askToAdd(user);
     await user.click(screen.getByTestId("ai-use-keywords-chart-0"));
-    expect(screen.getByTestId("needs-input-chart-0")).toHaveTextContent(
-      /^Needs Figure Number$/i
-    );
+    expectState("partially applied");
 
     await user.clear(keywords());
-    expect(screen.getByTestId("needs-input-chart-0")).toHaveTextContent(
-      /Needs Figure Number, Keywords/i
-    );
+    expect(screen.queryByTestId("needs-input-chart-0")).toBeNull();
     expectState("not applied");
     // The Use button comes back, because the field is free again.
     expect(screen.getByTestId("ai-use-keywords-chart-0")).toBeEnabled();
@@ -3980,8 +3937,8 @@ describe("typed import dialog ??readable by default", () => {
     expect(
       screen.queryByTestId("field-evidence-chart-0-notebookFile")
     ).toBeNull();
-    // A missing REQUIRED field is said on the card, once, and only after
-    // the curator has asked for that card and been refused.
+    // Nothing is required, so nothing is ever reported missing -- not
+    // before Add, and not after it.
     expect(screen.queryByTestId("needs-input-chart-0")).toBeNull();
     await user.click(
       screen.getByRole("checkbox", { name: /select figure1\.png/i })
@@ -3989,9 +3946,7 @@ describe("typed import dialog ??readable by default", () => {
     await user.click(
       screen.getByRole("button", { name: /add selected figures/i })
     );
-    expect(screen.getByTestId("needs-input-chart-0")).toHaveTextContent(
-      /Needs /i
-    );
+    expect(screen.queryByTestId("needs-input-chart-0")).toBeNull();
     expect(screen.queryByTestId("field-evidence-chart-0-caption")).toBeNull();
   });
 
@@ -4571,57 +4526,44 @@ describe("an RCC import may not create what a curator could not type", () => {
     ).toBeInTheDocument();
   });
 
-  it("asks only when Add is pressed, and points at the fields", async () => {
+  it("never refuses an Add for a blank field", async () => {
     axios.post.mockResolvedValue({ data: analysis });
     const user = noDelayUser();
     const { addMany } = renderWith();
     await openAnalysis(user);
-
-    // The button is live: a dead button explains nothing.
     await user.click(
       screen.getByRole("checkbox", { name: /select figure1\.png/i })
     );
-    expect(screen.getByTestId("apply-selected")).toBeEnabled();
 
     await askToAdd(user);
-    expect(addMany).not.toHaveBeenCalled();
 
-    // One sentence, in a live region, above the button that was pressed.
-    const status = screen.getByTestId("add-status");
-    expect(status).toHaveAttribute("aria-live", "polite");
-    expect(within(status).getByTestId("blocked-summary")).toHaveTextContent(
-      "1 selected item needs details before it can be added. Nothing was added."
+    expect(addMany).toHaveBeenCalledTimes(1);
+    const [kind, records] = addMany.mock.calls[0];
+    expect(kind).toBe("chart");
+    // Added as the folder had it: number and keywords blank.
+    expect(records[0]).toMatchObject({
+      imageFile: "figures/figure1.png",
+      number: "",
+      properties: [],
+    });
+    expect(screen.queryByTestId("blocked-summary")).toBeNull();
+    // And no input is marked invalid for being empty.
+    ["number", "properties", "caption"].forEach((field) =>
+      expect(
+        within(screen.queryByTestId(`field-group-chart-0-${field}`) || document.body)
+          .queryAllByRole("textbox")
+          .filter((box) => box.getAttribute("aria-invalid") === "true")
+      ).toHaveLength(0)
     );
-
-    // The detail is on the card, next to the inputs that answer it -- and
-    // the empty required inputs are marked, the optional ones are not.
-    expect(screen.getByTestId("needs-input-chart-0")).toHaveTextContent(
-      "Needs Figure Number, Keywords"
-    );
-    const errored = (field) =>
-      within(screen.getByTestId(`field-group-chart-0-${field}`))
-        .getByRole("textbox")
-        .getAttribute("aria-invalid");
-    expect(errored("number")).toBe("true");
-    expect(errored("properties")).toBe("true");
-    // Optional, empty, and not marked.
-    expect(errored("caption")).toBe("false");
-    expect(errored("notebookFile")).toBe("false");
-    // The image the folder DID answer is not marked either.
-    expect(errored("imageFile")).toBe("false");
   });
 
-  it("refuses the whole batch when one selected item is short a field",
-     async () => {
-    // NO PARTIAL IMPORT. Adding the ready ones and quietly dropping the rest
-    // is the worst outcome available: the curator asked for a batch, gets a
-    // smaller one, and has to work out which folder went missing.
+  it("adds a whole batch together, complete or not", async () => {
     axios.post.mockResolvedValue({
       data: {
         ...complete,
         candidates: {
           ...complete.candidates,
-          // Two figures: one ready, one with no keywords.
+          // Two figures: one complete, one with no keywords.
           charts: [
             complete.candidates.charts[0],
             {
@@ -4652,60 +4594,16 @@ describe("an RCC import may not create what a curator could not type", () => {
     await user.click(
       screen.getByRole("checkbox", { name: /select figure2\.png/i })
     );
-    // Live either way: what stops the batch is the answer to pressing it.
-    expect(screen.getByTestId("apply-selected")).toBeEnabled();
-
-    // Nothing at all was added -- not even the complete one.
     await askToAdd(user);
-    expect(addMany).not.toHaveBeenCalled();
-    expect(screen.getByTestId("blocked-summary")).toHaveTextContent(
-      "1 selected item needs details before it can be added"
-    );
 
-    // ...and it is the incomplete one that is asked, not the ready one.
-    expect(screen.getByTestId("needs-input-chart-1")).toHaveTextContent(
-      "Needs Keywords"
-    );
-    expect(screen.queryByTestId("needs-input-chart-0")).toBeNull();
-
-    // Fill it in on the card, and the batch goes together -- once.
-    completeRequired();
-    await user.click(screen.getByTestId("apply-selected"));
     expect(addMany).toHaveBeenCalledTimes(1);
     expect(addMany.mock.calls[0][1]).toHaveLength(2);
-    // And the refusal is gone with the reason for it.
     expect(screen.queryByTestId("blocked-summary")).toBeNull();
   });
 
-  it("adds each candidate exactly once across a refusal and a retry",
-     async () => {
-    // The refused attempt must not leave anything half-added, and the
-    // successful one must not repeat what the first tried to do.
-    axios.post.mockResolvedValue({ data: analysis });
-    const user = noDelayUser();
-    const { addMany } = renderWith();
-    await openAnalysis(user);
-    await user.click(
-      screen.getByRole("checkbox", { name: /select figure1\.png/i })
-    );
-
-    await askToAdd(user);
-    await askToAdd(user);
-    expect(addMany).not.toHaveBeenCalled();
-
-    completeRequired();
-    await askToAdd(user);
-
-    expect(addMany).toHaveBeenCalledTimes(1);
-    const [kind, records] = addMany.mock.calls[0];
-    expect(kind).toBe("chart");
-    expect(records).toHaveLength(1);
-    expect(records[0].properties).toEqual(["dos"]);
-  });
-
-  it("holds an AI suggestion to the same contract", async () => {
-    // The AI fills fields; it does not decide what may be added. Its answer
-    // lands in the same draft and is read by the same `missingRequired`.
+  it("adds an AI suggestion's values without asking for the rest", async () => {
+    // The AI fills fields; the figure's NUMBER is not something a model may
+    // invent, and it is simply left blank.
     axios.post.mockResolvedValue({ data: analysis });
     const user = noDelayUser();
     const { addMany } = renderWith();
@@ -4735,17 +4633,16 @@ describe("an RCC import may not create what a curator could not type", () => {
     await user.click(screen.getByTestId("ai-use-description-chart-0"));
     await user.click(screen.getByTestId("ai-use-keywords-chart-0"));
 
-    // Two of the three answered by the model; the figure's NUMBER is not
-    // something a model may invent, and it is still missing.
     await askToAdd(user);
-    expect(addMany).not.toHaveBeenCalled();
-    expect(screen.getByTestId("needs-input-chart-0")).toHaveTextContent(
-      "Needs Figure Number"
-    );
+    expect(addMany).toHaveBeenCalledTimes(1);
+    expect(addMany.mock.calls[0][1][0]).toMatchObject({
+      caption: "A density of states plot",
+      properties: ["dos"],
+      number: "",
+    });
   });
 
-  it("asks for the same fields manual entry asks for, and the same fields " +
-     "the server requires", () => {
+  it("agrees with manual entry and the server: nothing is required", () => {
     // Three statements of one contract, checked against each other rather
     // than trusted: the shared module the forms and the cards both read, and
     // the server's own publish schema.
@@ -4759,24 +4656,18 @@ describe("an RCC import may not create what a curator could not type", () => {
     // `id` is minted by the reducer and never entered by anyone, so it is
     // the one required key that is not a question for a curator.
     const serverRequires = (node) =>
-      (node.required || []).filter((key) => key !== "id").sort();
+      ((node && node.required) || []).filter((key) => key !== "id").sort();
 
-    expect(serverRequires(sections.charts.items)).toEqual(
-      requiredKeys("chart").slice().sort()
+    ["chart", "dataset", "script", "tool"].forEach((kind) =>
+      expect(requiredKeys(kind)).toEqual([])
     );
-    expect(serverRequires(sections.datasets.items)).toEqual(
-      requiredKeys("dataset").slice().sort()
-    );
-    expect(serverRequires(sections.scripts.items)).toEqual(
-      requiredKeys("script").slice().sort()
-    );
-    // A Tool is software or an experiment and the schema requires each
-    // kind's own fields; folder analysis only ever proposes software.
-    const software = (sections.tools.items.allOf || [])
-      .map((branch) => branch.then || {})
-      .find((branch) => (branch.required || []).includes("packageName"));
-    expect(serverRequires(software)).toEqual(
-      requiredKeys("tool").slice().sort()
+    expect(serverRequires(sections.charts.items)).toEqual([]);
+    expect(serverRequires(sections.datasets.items)).toEqual([]);
+    expect(serverRequires(sections.scripts.items)).toEqual([]);
+    // No tool branch requires a package, a version, a facility or a
+    // measurement.
+    (sections.tools.items.allOf || []).forEach((branch) =>
+      expect(serverRequires(branch.then)).toEqual([])
     );
   });
 });
@@ -4958,22 +4849,6 @@ describe("touching one candidate touches one candidate", () => {
     expect(distinct()).toEqual(["chart-4"]);
   });
 
-  it("renders only the candidates a refused Add has something to say about", async () => {
-    const user = noDelayUser();
-    await openCrowd(user);
-    await user.click(tick(0));
-    await user.click(tick(1));
-    toDraft.mockClear();
-
-    await askToAdd(user);
-
-    // Two cards gained a "Needs …" chip. The other twenty-two are unchanged
-    // and are not re-rendered to be told so.
-    expect(distinct().sort()).toEqual(["chart-0", "chart-1"]);
-  });
-
-  // --- what survives -------------------------------------------------------
-
   it("leaves another card's own DOM nodes in place when one is ticked", async () => {
     const user = noDelayUser();
     await openCrowd(user);
@@ -5050,51 +4925,6 @@ describe("touching one candidate touches one candidate", () => {
   });
 
   // --- what still changes --------------------------------------------------
-
-  it("updates the Add button and the notice from a single tick", async () => {
-    // The three things outside the card that a tick is allowed to change:
-    // whether Add is live, the card's own fields, and — only after an Add
-    // has been refused — what is missing.
-    const user = noDelayUser();
-    await openCrowd(user);
-    expect(screen.getByTestId("apply-selected")).toBeDisabled();
-    expect(screen.queryByTestId("fields-chart-12")).toBeNull();
-
-    await user.click(tick(12));
-
-    expect(screen.getByTestId("apply-selected")).toBeEnabled();
-    expect(screen.getByTestId("fields-chart-12")).toBeInTheDocument();
-    // Still nothing said about missing fields: that waits for an Add.
-    expect(screen.queryByTestId("needs-input-chart-12")).toBeNull();
-
-    await askToAdd(user);
-    expect(screen.getByTestId("needs-input-chart-12")).toBeInTheDocument();
-    expect(screen.getByTestId("blocked-summary")).toHaveTextContent(
-      /1 selected item needs details/i
-    );
-  });
-
-  it("clears one card's notice when its own fields are filled, and no other's", async () => {
-    const user = noDelayUser();
-    const { addMany } = renderWith();
-    await user.click(analyzeButton());
-    await screen.findByRole("tab", { name: new RegExp(`charts \\(${CROWD}\\)`, "i") });
-    await user.click(tick(0));
-    await user.click(tick(1));
-    await askToAdd(user);
-    expect(screen.getByTestId("needs-input-chart-0")).toBeInTheDocument();
-    expect(screen.getByTestId("needs-input-chart-1")).toBeInTheDocument();
-
-    completeRequired();
-
-    // All-or-nothing: filling both is what lets the Add through.
-    expect(screen.queryByTestId("needs-input-chart-0")).toBeNull();
-    expect(screen.queryByTestId("needs-input-chart-1")).toBeNull();
-    await askToAdd(user);
-    expect(addMany).toHaveBeenCalledTimes(1);
-  });
-
-  // --- what must not grow --------------------------------------------------
 
   it("asks the backend nothing at all for any of this", async () => {
     const user = noDelayUser();

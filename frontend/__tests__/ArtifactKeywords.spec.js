@@ -134,18 +134,17 @@ describe.each(FORMS)("%s form", (kind, Form, section) => {
     expect(edit.mock.calls[0][1].keywords).toEqual(["silicon", "band gap"]);
   });
 
-  it("blocks Save while a required field is empty", async () => {
+  it("saves with only Keywords filled in -- nothing is required", async () => {
     const user = userEvent.setup();
     const { add } = renderForm(kind, Form, section);
 
-    // Only the optional field is filled in.
     await user.type(keywords(), "silicon");
     await user.click(screen.getByRole("button", { name: /^save$/i }));
 
-    await waitFor(() =>
-      expect(screen.getAllByText(/^required$/i).length).toBeGreaterThan(0)
-    );
-    expect(add).not.toHaveBeenCalled();
+    await waitFor(() => expect(add).toHaveBeenCalledTimes(1));
+    expect(add.mock.calls[0][1].files).toEqual([]);
+    expect(add.mock.calls[0][1].keywords).toEqual(["silicon"]);
+    expect(screen.queryByText(/^required$/i)).not.toBeInTheDocument();
   });
 
   it("saves with Keywords left empty", async () => {

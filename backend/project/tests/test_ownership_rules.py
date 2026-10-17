@@ -88,6 +88,27 @@ class TestPublishRequiresOwner(PermissionTestBase):
         mail.send.assert_not_called()
         self.assertTrue(os.path.exists(publish_file_path()))
 
+    def test_a_blank_curator_email_falls_back_to_the_signed_in_account(self):
+        # Nothing on the form is required, the curator's email included; the
+        # verification link then goes to whoever is publishing.
+        self.login(OWNER)
+        payload = load_fixture()
+        payload["info"]["insertedBy"] = {"firstName": "", "lastName": "",
+                                         "emailId": ""}
+        response, mail = self.publish(payload)
+        self.assertEqual(200, response.status_code, response.text)
+        self.assertEqual(OWNER, mail.send.call_args[0][3])
+        with open(publish_file_path()) as f:
+            self.assertEqual(OWNER, json.load(f)["info"]["insertedBy"]["emailId"])
+
+    def test_a_typed_curator_email_is_kept(self):
+        self.login(OWNER)
+        payload = load_fixture()
+        payload["info"]["insertedBy"]["emailId"] = "curator@example.edu"
+        response, mail = self.publish(payload)
+        self.assertEqual(200, response.status_code, response.text)
+        self.assertEqual("curator@example.edu", mail.send.call_args[0][3])
+
     def test_skip_email_path_never_touches_the_real_mail_client(self):
         # No mailClient mock at all: if the skip path reached SMTP, the real
         # client would raise (no server configured) and this would 500.

@@ -19,9 +19,9 @@
 // uses them -- and `caption` is never softened into a generic "Description",
 // because a figure caption is a specific thing a paper already has.
 const CHART = [
-  { key: "imageFile", label: "Figure Image", required: true,
+  { key: "imageFile", label: "Figure Image", required: false, recommended: true,
     help: "The image file for this figure. One image per Chart." },
-  { key: "number", label: "Figure Number", required: true,
+  { key: "number", label: "Figure Number", required: false, recommended: true,
     help: "The figure's number in the paper (e.g. 2, S1). Qresp never " +
       "guesses it." },
   // Optional, but recommended: the guided setup still offers to fill it.
@@ -29,7 +29,7 @@ const CHART = [
     recommended: true, ai: "description",
     help: "Use the paper's caption for this figure. If the figure has no " +
       "published caption, write a concise description of what it shows." },
-  { key: "properties", label: "Keywords", required: true, list: true,
+  { key: "properties", label: "Keywords", required: false, recommended: true, list: true,
     ai: "keywords",
     help: "Keyword(s) for what the figure shows, comma separated." },
   { key: "files", label: "Input / Supporting Files", required: false,
@@ -45,7 +45,7 @@ const CHART = [
 // untouched on save (see carryLegacy below), but it is not offered on any new
 // surface and is never confused with keywords again.
 const DATA = [
-  { key: "files", label: "Files", required: true, list: true },
+  { key: "files", label: "Files", required: false, recommended: true, list: true },
   // Optional, but recommended: a resource may publish without one.
   { key: "readme", label: "Description", required: false, recommended: true,
     ai: "description" },
@@ -57,8 +57,8 @@ const DATA = [
 // inferred from a folder, so the experiment fields are declared for the
 // manual form and parity checks but are not part of the proposal shape.
 const TOOL_SOFTWARE = [
-  { key: "packageName", label: "Package Name", required: true },
-  { key: "version", label: "Version", required: true },
+  { key: "packageName", label: "Package Name", required: false, recommended: true },
+  { key: "version", label: "Version", required: false, recommended: true },
   { key: "executableName", label: "Executable Name", required: false },
   { key: "patches", label: "Patches", required: false, list: true },
   { key: "description", label: "Description", required: false,
@@ -67,8 +67,8 @@ const TOOL_SOFTWARE = [
 ];
 
 const TOOL_EXPERIMENT = [
-  { key: "facilityName", label: "Facility Name", required: true },
-  { key: "measurement", label: "Measurement", required: true },
+  { key: "facilityName", label: "Facility Name", required: false, recommended: true },
+  { key: "measurement", label: "Measurement", required: false, recommended: true },
 ];
 
 export const ARTIFACT_FIELDS = {
@@ -150,13 +150,16 @@ export const toRecord = (kind, draft = {}) => {
   return record;
 };
 
-// Only a MISSING REQUIRED field needs the curator, and `required` is per
-// KIND -- there is no field that is optional everywhere. A chart's Keywords
-// (`properties`) ARE required, alongside Figure Image and Figure Number; a
-// dataset's or script's Keywords are not. A figure's caption and a dataset's
-// or script's description are optional but RECOMMENDED: never blocking, but
-// offered by the guided setup. Genuinely optional, and never flagged: a
-// chart's Input / Supporting Files and its Reproduction Notebook.
+// NOTHING is required to publish: a curator may share a record with any
+// field blank (just the data dumped in is better than no record at all), so
+// every field's `required` is false and this returns [] for every kind. It
+// is kept because callers ask the question. The fields that used to be
+// required -- a figure's image, number and keywords, a resource's files, a
+// tool's package and version, an experiment's facility and measurement --
+// are RECOMMENDED instead, alongside a figure's caption and a resource's
+// description: never blocking, but offered by the guided setup. Genuinely
+// optional, and never flagged: a chart's Input / Supporting Files and its
+// Reproduction Notebook.
 export const missingRequired = (kind, draft = {}) =>
   requiredKeys(kind).filter((key) => !String(draft[key] || "").trim());
 

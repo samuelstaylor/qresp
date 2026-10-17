@@ -22,7 +22,6 @@ import {
   confirmLabel,
   useRowLink,
 } from "./ConnectionSection";
-import { RequiredFieldLegend } from "../Form/Util";
 
 import { useForm } from "react-hook-form";
 import { useInvalidFieldFocus } from "../../Utils/invalidField";
@@ -62,7 +61,8 @@ const DatasetsInfoForm = ({ hideTrigger = false }) => {
   );
 
   const schema = Yup.object({
-    files: Yup.string().required("Required"),
+    // Optional, like everything needed to publish.
+    files: Yup.string(),
     // Optional: a curator may publish without describing every resource.
     readme: Yup.string(),
     // Descriptive tags, in their own field. The input that used to sit here
@@ -111,7 +111,10 @@ const DatasetsInfoForm = ({ hideTrigger = false }) => {
   }, [def, open]);
 
   const onSubmit = (values) => {
-    values.files = values.files.split(",").map((el) => el.trim());
+    values.files = String(values.files || "")
+      .split(",")
+      .map((el) => el.trim())
+      .filter(Boolean);
     values.keywords = splitList(values.keywords);
     const extraFields = cleanExtraFields(values.extraFields);
     values.extraFields = extraFields;
@@ -190,9 +193,6 @@ const DatasetsInfoForm = ({ hideTrigger = false }) => {
           >
             <Grid container direction="column" spacing={1}>
               <Grid>
-                <RequiredFieldLegend />
-              </Grid>
-              <Grid>
                 <TextInputField
                   id="datasetFiles"
                   placeholder="Enter files for the dataset"
@@ -207,7 +207,6 @@ const DatasetsInfoForm = ({ hideTrigger = false }) => {
                     </IconButton>
                   }
                   defaultValue={def && def.files && def.files.join(", ")}
-                  required
                 />
               </Grid>
               <Grid>

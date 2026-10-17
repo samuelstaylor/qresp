@@ -170,8 +170,8 @@ class TestUpdatePaper(PermissionTestBase):
 
     def test_invalid_payload_returns_400(self):
         self.login(OWNER)
-        # license is a required StringField; nulling it must fail validation
-        response = self.update(self.owned_id, {"license": None})
+        # Nothing is required any more, but a wrong TYPE is still refused.
+        response = self.update(self.owned_id, {"tags": "not a list"})
         self.assertEqual(400, response.status_code)
 
 

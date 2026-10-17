@@ -20,7 +20,6 @@ import {
   confirmLabel,
   useRowLink,
 } from "./ConnectionSection";
-import { RequiredFieldLegend } from "../Form/Util";
 import StyledTooltip from "../tooltip";
 
 import { useForm } from "react-hook-form";
@@ -55,7 +54,6 @@ const Software = ({ errors, register, unregister, def, openFileSelector }) => {
           error={errors.packageName}
           register={register}
           defaultValue={def && def.packageName}
-          required
         />
       </Grid>
       <Grid>
@@ -68,7 +66,6 @@ const Software = ({ errors, register, unregister, def, openFileSelector }) => {
           error={errors.version}
           register={register}
           defaultValue={def && def.version}
-          required
         />
       </Grid>
       <Grid>
@@ -136,7 +133,6 @@ const Experiment = ({ errors, register, unregister, def }) => {
           error={errors.facilityName}
           register={register}
           defaultValue={def && def.facilityName}
-          required
         />
       </Grid>
       <Grid>
@@ -149,7 +145,6 @@ const Experiment = ({ errors, register, unregister, def }) => {
           error={errors.measurement}
           register={register}
           defaultValue={def && def.measurement}
-          required
         />
       </Grid>
     </Fragment>
@@ -177,35 +172,16 @@ const ToolsInfoForm = ({ hideTrigger = false }) => {
   );
 
   const schema = Yup.object({
-    kind: Yup.string().required("Required"),
-    facilityName: Yup.string().when("kind", {
-      is: "experiment",
-      then: (schema) => schema.required("Required"),
-    }),
-    measurement: Yup.string().when("kind", {
-      is: "experiment",
-      then: (schema) => schema.required("Required"),
-    }),
-    packageName: Yup.string().when("kind", {
-      is: "software",
-      then: (schema) => schema.required("Required"),
-    }),
-    version: Yup.string().when("kind", {
-      is: "software",
-      then: (schema) => schema.required("Required"),
-    }),
-    executableName: Yup.string().when("kind", {
-      is: "software",
-      then: (schema) => schema,
-    }),
-    patches: Yup.string().when("kind", {
-      is: "software",
-      then: (schema) => schema,
-    }),
-    description: Yup.string().when("kind", {
-      is: "software",
-      then: (schema) => schema,
-    }),
+    // Nothing is required to publish: a tool may be saved without its
+    // package name or version (software), or facility or measurement
+    // (experiment). The type is a choice with a default, not an input.
+    kind: Yup.string(),
+    facilityName: Yup.string(),
+    measurement: Yup.string(),
+    packageName: Yup.string(),
+    version: Yup.string(),
+    executableName: Yup.string(),
+    description: Yup.string(),
     urls: Yup.string(),
     patches: Yup.string(),
     extraFields: extraFieldsSchema,
@@ -267,8 +243,12 @@ const ToolsInfoForm = ({ hideTrigger = false }) => {
   const onSubmit = (values) => {
     const extraFields = cleanExtraFields(values.extraFields);
     values.extraFields = extraFields;
+    values.kind = values.kind || "software";
     if (values.kind == "software")
-      values.patches = values.patches.split(",").map((el) => el.trim());
+      values.patches = String(values.patches || "")
+        .split(",")
+        .map((el) => el.trim())
+        .filter(Boolean);
     if (def && tools.find((el) => el.id == def.id)) {
       edit("tool", { ...def, ...values, extraFields: extraFields });
     } else {
@@ -347,9 +327,6 @@ const ToolsInfoForm = ({ hideTrigger = false }) => {
           >
             <Grid container direction="column" spacing={1}>
               <Grid>
-                <RequiredFieldLegend />
-              </Grid>
-              <Grid>
                 <RadioInputField
                   id="kind"
                   name="kind"
@@ -360,7 +337,6 @@ const ToolsInfoForm = ({ hideTrigger = false }) => {
                   row={true}
                   control={control}
                   defVal={def ? def.kind : "software"}
-                  required
                 />
               </Grid>
               {def == null ? (

@@ -42,7 +42,9 @@ describe("the contract itself", () => {
       (field) => field.label === "Keywords"
     );
     expect(keywords.key).toBe("properties");
-    expect(keywords.required).toBe(true);
+    // Recommended, never required: nothing is required to publish.
+    expect(keywords.required).toBe(false);
+    expect(keywords.recommended).toBe(true);
   });
 
   it("names a chart's fields as the figure they describe", () => {
@@ -112,22 +114,21 @@ describe("the contract itself", () => {
     });
   });
 
-  it("marks exactly the required fields, per type", () => {
-    expect(requiredKeys("chart").sort()).toEqual([
-      "imageFile", "number", "properties",
-    ]);
-    expect(requiredKeys("dataset").sort()).toEqual(["files"]);
-    expect(requiredKeys("script").sort()).toEqual(["files"]);
-    expect(requiredKeys("tool").sort()).toEqual(["packageName", "version"]);
-    expect(
-      TOOL_EXPERIMENT_FIELDS.filter((field) => field.required).map((f) => f.key)
-    ).toEqual(["facilityName", "measurement"]);
+  it("requires nothing, for any type", () => {
+    ["chart", "dataset", "script", "tool"].forEach((kind) =>
+      expect(requiredKeys(kind)).toEqual([])
+    );
+    expect(TOOL_EXPERIMENT_FIELDS.filter((field) => field.required)).toEqual([]);
   });
 
-  it("recommends, but never requires, captions and descriptions", () => {
-    expect(recommendedKeys("chart")).toEqual(["caption"]);
-    expect(recommendedKeys("dataset")).toEqual(["readme"]);
-    expect(recommendedKeys("script")).toEqual(["readme"]);
+  it("recommends what used to be required, plus captions and descriptions", () => {
+    expect(recommendedKeys("chart")).toEqual(["imageFile", "number", "caption", "properties"]);
+    expect(recommendedKeys("dataset")).toEqual(["files", "readme"]);
+    expect(recommendedKeys("script")).toEqual(["files", "readme"]);
+    expect(recommendedKeys("tool")).toEqual(["packageName", "version"]);
+    expect(
+      TOOL_EXPERIMENT_FIELDS.filter((field) => field.recommended).map((f) => f.key)
+    ).toEqual(["facilityName", "measurement"]);
     expect(missingRecommended("dataset", { files: "a", readme: "" })).toEqual(["readme"]);
     expect(missingRequired("dataset", { files: "a", readme: "" })).toEqual([]);
     expect(
@@ -169,19 +170,13 @@ describe("AI may only propose what the type can hold", () => {
   });
 });
 
-describe("Needs input tracks required fields only", () => {
-  it("treats a chart's Keywords as required, and says so consistently", () => {
-    // `required` is per KIND: a chart's Keywords (properties) are required,
-    // a dataset's are not. The contract file used to carry a comment saying
-    // an empty Keywords was a complete record, which was true of datasets
-    // and false of the chart it sat next to.
+describe("Needs input: nothing is ever missing for publishing", () => {
+  it("recommends a chart's Keywords, and never requires them", () => {
+    const draft = { imageFile: "f.png", number: "1", caption: "c", properties: "" };
+    expect(missingRequired("chart", draft)).toEqual([]);
+    expect(missingRecommended("chart", draft)).toContain("properties");
     expect(
-      missingRequired("chart", {
-        imageFile: "f.png", number: "1", caption: "c", properties: "",
-      })
-    ).toContain("properties");
-    expect(
-      missingRequired("dataset", { files: "a.csv", readme: "r", keywords: "" })
+      missingRecommended("dataset", { files: "a.csv", readme: "r", keywords: "" })
     ).not.toContain("keywords");
 
     const source = fs.readFileSync(
@@ -191,10 +186,12 @@ describe("Needs input tracks required fields only", () => {
     expect(source).not.toMatch(/an empty Keywords[^.]*is a complete record/i);
   });
 
-  it("names a blank required field", () => {
-    expect(missingRequired("dataset", { files: "", readme: "r" })).toEqual([
-      "files",
-    ]);
+  it("lets every field be blank", () => {
+    expect(missingRequired("dataset", { files: "", readme: "" })).toEqual([]);
+    expect(missingRequired("tool", { packageName: "", version: "" })).toEqual([]);
+    expect(missingRequired("chart", {})).toEqual([]);
+    // ...while still suggesting what would help.
+    expect(missingRecommended("dataset", { files: "", readme: "r" })).toEqual(["files"]);
   });
 
   it("says nothing about a blank optional field", () => {

@@ -52,8 +52,9 @@ const referenceBlockFromInfo = (info = {}) => {
 const convertStatetoReqSchema = (state, servers) => {
   const biblio = state.referenceInfo || {};
   const info = {
-    ProjectName: biblio.doi,
-    doi: biblio.doi,
+    // Required KEYS (schema.json), blank when there is no DOI.
+    ProjectName: biblio.doi || "",
+    doi: biblio.doi || "",
     timeStamp: new Date().toLocaleString().replace(",", ""),
     notebookFile: state.paperInfo.notebookFile,
     notebookPath: state.paperInfo.notebookPath,
@@ -69,9 +70,9 @@ const convertStatetoReqSchema = (state, servers) => {
     // What is curated; see Utils/workTypes.js. Every legacy draft is a paper.
     work_type: workTypeOf(state.workType),
     PIs: namesUtil.get(state.paperInfo.PIs),
-    collections: state.paperInfo.collections,
-    tags: state.paperInfo.tags,
-    license: state.license,
+    collections: state.paperInfo.collections || [],
+    tags: state.paperInfo.tags || [],
+    license: state.license || "cc_by",
     // Record-level, optional -- see project.models.Paper.institution on the
     // backend. Never derived from PIs/collections/servers/DOIs; whatever the
     // curator typed (or left blank) here is the whole answer.
@@ -84,10 +85,11 @@ const convertStatetoReqSchema = (state, servers) => {
       // not silently rewrite its graph into a shape it never had.
       edges: state.workflow.edges.map(toStoredEdge),
     },
-    charts: state.charts.map((chart) => {
-      chart.number = chart.number.toString();
-      return chart;
-    }),
+    // A figure may be published with no number yet.
+    charts: state.charts.map((chart) => ({
+      ...chart,
+      number: chart.number == null ? "" : chart.number.toString(),
+    })),
     schema: getServer() + "/schema_v1.2.json",
     scripts: state.scripts,
     tools: state.tools,

@@ -192,10 +192,8 @@ describe("the reference section for each work type", () => {
     expect(screen.getByText(/repository or project name/i)).toBeInTheDocument();
     expect(screen.getByText("Developers")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /^save$/i }));
-    await waitFor(() => expect(screen.getAllByText(/^required$/i).length).toBeGreaterThan(0));
-    expect(setReferenceInfo).not.toHaveBeenCalled();
-
+    // The repository URL is asked for, but not required.
+    expect(screen.queryByText(/^required$/i)).not.toBeInTheDocument();
     await user.type(screen.getByPlaceholderText("https://github.com/org/repo"), "https://github.com/qresp/qresp");
     await user.click(screen.getByRole("button", { name: /^save$/i }));
     await waitFor(() => expect(editor).toHaveBeenCalled());

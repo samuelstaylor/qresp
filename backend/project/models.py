@@ -3,10 +3,13 @@ from mongoengine import *
 
 class Person(DynamicEmbeddedDocument):
     """ Class mapping creators,PIs,authors of paper to mongo database
+
+    Nothing a curator types is required to publish (schema.json), so a
+    person may be stored with only part of a name.
     """
-    firstName = StringField(max_length=50, required=True)
+    firstName = StringField(max_length=50)
     middleName = StringField(max_length=50)
-    lastName = StringField(max_length=50, required=True)
+    lastName = StringField(max_length=50)
     emailId = StringField(max_length=100)
     affiliation = StringField(max_length=100)
 
@@ -39,10 +42,12 @@ class Charts(DynamicEmbeddedDocument):
     """
     caption = StringField()
     id = StringField(required=True)
-    imageFile = StringField(required=True)
+    # Optional, like everything a curator types: a figure may be published
+    # before its image path or keywords are filled in.
+    imageFile = StringField()
     files = ListField()
     number = StringField()
-    properties = ListField(required=True)
+    properties = ListField()
     extraFields = ListField()
     saveas = StringField()
     meta = {'strict': False}
@@ -213,9 +218,11 @@ class Paper(Document):
     heads = ListField(EmbeddedDocumentField(Heads))
     workflow = EmbeddedDocumentField(Workflow)
     documentation = EmbeddedDocumentField(Documentation)
-    collections = ListField(required=True)
+    # Optional: mongoengine refuses an EMPTY list for a required ListField,
+    # which used to make collections and keywords mandatory by accident.
+    collections = ListField()
     schema = StringField(required=True)
-    tags = ListField(required=True)
+    tags = ListField()
     # The institution associated with this RECORD, as typed by the curator --
     # e.g. "University of Chicago". Optional, and deliberately never derived:
     # not from an author's name or affiliation, not from `collections`, not
@@ -227,7 +234,7 @@ class Paper(Document):
     # needs a migration to make that true.
     institution = StringField(max_length=200)
     versions = ListField()
-    license = StringField(required=True)
+    license = StringField(default="cc_by")
     # Verified identity (session email) of the account that published this
     # record; stamped at publish time (project/auth.py stamp_owner). Absent on
     # legacy records => "ownerless": readable by all, editable only by admins.

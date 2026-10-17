@@ -8,7 +8,7 @@ import * as Yup from "yup";
 import { Grid, Box } from "@mui/material";
 
 import { SelectInputField } from "../Form/InputFields";
-import { SubmitAndReset, RequiredFieldLegend } from "../Form/Util";
+import { SubmitAndReset } from "../Form/Util";
 import Drawer from "../drawer";
 import { RegularStyledButton } from "../button";
 
@@ -21,7 +21,8 @@ const LicenseInfoForm = ({ editor }) => {
     useContext(CuratorContext);
 
   const schema = Yup.object({
-    license: Yup.string().required("Required"),
+    // Optional: a new record starts under CC BY 4.0 anyway.
+    license: Yup.string(),
   });
 
   const { control, handleSubmit, formState: { errors }, getValues } = useForm({
@@ -50,9 +51,6 @@ const LicenseInfoForm = ({ editor }) => {
       <form onSubmit={handleSubmit(onSubmit)}>
         <Grid container spacing={1} direction="column">
           <Grid>
-            <RequiredFieldLegend />
-          </Grid>
-          <Grid>
             <SelectInputField
               id="license"
               placeholder="Select the license under which the data will be published"
@@ -62,7 +60,6 @@ const LicenseInfoForm = ({ editor }) => {
               name="license"
               error={errors.license}
               control={control}
-              required
             />
           </Grid>
           <Grid>

@@ -432,9 +432,9 @@ describe("GuidedSetup finish step", () => {
     expect(curator.setAll).toHaveBeenCalledWith(
       expect.objectContaining({ paperInfo: expect.objectContaining({ PIs: "Giulia Galli" }) })
     );
-    expect(screen.getByText(/these are optional/i)).toBeInTheDocument();
+    expect(screen.getByText(/all of this is optional/i)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /skip, leave blank/i }));
-    expect(screen.queryByText(/these are optional/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/all of this is optional/i)).not.toBeInTheDocument();
   });
 });
 
@@ -606,7 +606,8 @@ describe("GuidedSetup ready-to-publish", () => {
     expect(screen.getByTestId("record-ready")).toBeInTheDocument();
   });
 
-  it("still requires a resource's files", () => {
+  it("requires nothing: a resource with no files is only a suggestion", async () => {
+    const user = userEvent.setup();
     axios.post.mockResolvedValue({ data: { found: false } });
     renderSetup({
       state: {
@@ -617,7 +618,19 @@ describe("GuidedSetup ready-to-publish", () => {
         datasets: [{ id: "d0", files: [], readme: "Raw data." }],
       },
     });
-    expect(screen.getByText(/required to publish: 1 item is missing a required detail/i)).toBeInTheDocument();
+    expect(screen.queryByText(/required to publish/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/all of this is optional/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /skip, leave blank/i }));
+    expect(screen.getByTestId("record-ready")).toBeInTheDocument();
+  });
+
+  it("is ready to publish with nothing filled in at all", async () => {
+    const user = userEvent.setup();
+    axios.post.mockResolvedValue({ data: { found: false } });
+    renderSetup({ state: blankState });
+    expect(screen.queryByText(/is required/i)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /skip, leave blank/i }));
+    expect(screen.getByTestId("record-ready")).toBeInTheDocument();
   });
 
   it("saves a typed description with its Save button, once", async () => {

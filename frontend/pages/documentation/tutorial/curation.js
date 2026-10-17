@@ -114,10 +114,10 @@ const Curation = () => (
         })}
       />
       <Callout kind="info">
-        Only a published paper must name its journal, volume and page and have
-        at least one figure. Every other type needs a title, authors (or
-        developers or creators), a description and a year; a code repository
-        also needs its repository URL. A DOI is always optional.
+        Nothing is required to publish, for any type. You can publish a record
+        that is just its data or code and fill in the title, authors,
+        description, figures and the rest later by editing it. Everything you
+        add makes the record easier to find and to reproduce.
       </Callout>
       <P>
         The guided setup fills in what it can for each type. A published

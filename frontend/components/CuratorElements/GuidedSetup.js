@@ -1250,28 +1250,10 @@ const GuidedSetup = () => {
   const figuresWithoutKeywords = charts.filter((chart) => !(chart.properties || []).length).length;
 
   // 7. Finish ----------------------------------------------------------------
-  // What publishing actually requires: a figure's image, a dataset's or
-  // script's files, a tool's name and version. Captions, figure numbers,
-  // keywords and descriptions may be empty, so those are optional here and
-  // can be skipped.
-  const REQUIRED_TO_PUBLISH = {
-    chart: ["imageFile"],
-    dataset: ["files"],
-    script: ["files"],
-    tool: ["packageName", "version"],
-  };
-  const allNeeding = recordsNeedingDetails(metadata, { recommended: true });
-  const splitNeeding = (wantRequired) =>
-    allNeeding
-      .map((entry) => ({
-        ...entry,
-        missing: entry.missing.filter(
-          (field) => (REQUIRED_TO_PUBLISH[entry.type] || []).includes(field) === wantRequired
-        ),
-      }))
-      .filter((entry) => entry.missing.length);
-  const requiredNeeding = splitNeeding(true);
-  const optionalNeeding = splitNeeding(false);
+  // Nothing is required to publish (schema.json): every detail below is a
+  // suggestion that helps readers, and the curator may skip all of it -- a
+  // record that is just its data is still worth publishing.
+  const optionalNeeding = recordsNeedingDetails(metadata, { recommended: true });
   const optionalFigures = optionalNeeding.filter((entry) => entry.type === "chart").length;
   const optionalResources = optionalNeeding.length - optionalFigures;
   const missingPI = !(
@@ -1279,15 +1261,13 @@ const GuidedSetup = () => {
     (!Array.isArray(paperInfo.PIs) || paperInfo.PIs.length)
   );
   const missingOptional = [
+    missingPI && "principal investigator",
     !(paperInfo.collections && paperInfo.collections.length) && "collections",
     !(paperInfo.tags && paperInfo.tags.length) && "keywords",
   ].filter(Boolean);
-  // Collections, keywords, captions, figure numbers and descriptions may
-  // publish empty; a P.I. may not.
   const [skipOptional, setSkipOptional] = useState(false);
   const optionalLeft = !skipOptional && (missingOptional.length > 0 || optionalNeeding.length > 0);
-  // A code repository may be just its code: no figures, data or scripts.
-  const recordReady = (artifactCount > 0 || isCode) && !missingPI && requiredNeeding.length === 0 && !optionalLeft;
+  const recordReady = !optionalLeft;
   const [draftNote, setDraftNote] = useState("");
   const [draftSaving, setDraftSaving] = useState(false);
   const saveDraftNow = () => {
@@ -1481,7 +1461,7 @@ const GuidedSetup = () => {
                   </ToggleButtonGroup>
                   <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.5 }}>
                     {codeHost === "repository"
-                      ? "The repository link is all Qresp needs; no RCC folder is required. Step 3 reads its scripts, data and dependencies."
+                      ? "Step 3 reads the repository from its link: figures, the scripts that make them, their data and dependencies. No RCC folder needed."
                       : codeHost === "fileserver"
                       ? "Point Qresp at the folder in step 3; a repository link is optional."
                       : "Give the repository link here and the RCC folder in step 3."}
@@ -2616,15 +2596,11 @@ const GuidedSetup = () => {
           <Step completed={steps.finish} expanded>
             {stepLabel("finish", "Finish the details", "Captions and anything only you know")}
             <StepContent>
-              {!artifactCount && !isCode ? (
-                <Typography variant="body2" color="text.secondary">
-                  Available once figures are in the record.
-                </Typography>
-              ) : (
+              {(
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-                  {missingPI && (
+                  {missingPI && !skipOptional && (
                     <Alert
-                      severity="warning"
+                      severity="info"
                       action={
                         <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", justifyContent: "flex-end" }}>
                           {lastAuthor && (
@@ -2636,21 +2612,8 @@ const GuidedSetup = () => {
                         </Box>
                       }
                     >
-                      A principal investigator is required to publish.
+                      No principal investigator yet. Optional, but it tells readers whose group the work is from.
                     </Alert>
-                  )}
-                  {requiredNeeding.length > 0 && (
-                    <>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {`Required to publish: ${plural(requiredNeeding.length, "item is", "items are")} missing a required detail.`}
-                      </Typography>
-                      <FinishDetails
-                        needing={requiredNeeding}
-                        fileServerPath={fileServerPath}
-                        paperTags={paperTags}
-                        edit={edit}
-                      />
-                    </>
                   )}
 
                   {optionalLeft && (
@@ -2664,7 +2627,7 @@ const GuidedSetup = () => {
                         }
                       >
                         {[
-                          missingOptional.length ? `The paper has no ${missingOptional.join(" or ")}` : "",
+                          missingOptional.length ? `The ${typeInfo.noun} has no ${joinWords(missingOptional)}` : "",
                           optionalFigures
                             ? `${plural(optionalFigures, "figure is", "figures are")} missing a caption, number or keywords`
                             : "",
@@ -2673,7 +2636,7 @@ const GuidedSetup = () => {
                             : "",
                         ]
                           .filter(Boolean)
-                          .join("; ") + ". These are optional: they help readers, but you can publish without them."}
+                          .join("; ") + ". All of this is optional: it helps readers, but you can publish without it and add it later."}
                         {optionalResources > 0 && authenticated
                           ? " Suggest descriptions in step 6 can draft the descriptions for you."
                           : ""}

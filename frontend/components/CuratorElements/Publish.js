@@ -10,7 +10,6 @@ import { RegularStyledButton } from "../button";
 import { convertStatetoReqSchema } from "../../Utils/model";
 import { getServer } from "../../Utils/utils";
 import { deleteServerDraft } from "../../Utils/serverDrafts";
-import { workTypeInfo } from "../../Utils/workTypes";
 
 import Schema from "../../public/schema_v1.2.json";
 import CuratorContext from "../../Context/Curator/curatorContext";
@@ -19,16 +18,6 @@ import ServerContext from "../../Context/Servers/serverContext";
 import AlertContext from "../../Context/Alert/alertContext";
 import LoadingContext from "../../Context/Loading/loadingContext";
 import { saveThenPreview } from "./TopActions";
-
-const variableTotext = {
-  curatorInfo: "Curator Information",
-  paperInfo: "Qresp Curation Information",
-  fileServerPathInfo: "File Server Information",
-  referenceInfo: "Publication / work information",
-  documentationInfo: "Documentation Information",
-  licenseInfo: "License Information",
-  workflowInfo: "Workflow Graph",
-};
 
 // `$id`/`id` anchors removed; property schemas NAMED "id" are kept (their
 // value is an object, an anchor's is a string).
@@ -60,60 +49,14 @@ export const publishSchemaValidator = () => {
 
 const validate = (editing, metadata) => {
   /*
-  Validate before sending a publish request
-    1. Check if any of the sections are in edit mode 
-    2. Check if there any charts and datasets
-    3. Use the json schema validator for sanity check (each individual section was fixed before only) 
+  Validate before sending a publish request.
+
+  Nothing a curator types is required to publish, for any work type: a
+  record can go out with every field blank, so data is shared first and
+  described later. Sections still open are not a blocker either -- the
+  caller publishes what is typed in them (collectDraftState). What remains
+  is the same STRUCTURE/format check the server makes (schema.json).
   */
-
-  const errors = [];
-  const { charts, datasets } = metadata;
-
-  const incomplete = Object.keys(editing)
-    .map((el) => (editing[el] ? el : null))
-    .filter((el) => el != null && el != "documentationInfo");
-
-  if (incomplete.length > 0) {
-    errors.push(
-      <Fragment>
-        <strong>
-          The following required sections are not saved, please complete them
-          (if not already) and save them:
-        </strong>
-        <ul>
-          {incomplete.map((el, i) => (
-            <li key={i}>{variableTotext[el]}</li>
-          ))}
-        </ul>
-      </Fragment>
-    );
-  }
-
-  // A published paper links figures to their data, so it needs at least one
-  // of each. A code repository, dataset, report or other work may have no
-  // figure at all (schema.json's work_type rules).
-  const needsFigures = workTypeInfo(metadata.work_type).needsFigures;
-  if (needsFigures && (charts.length == 0 || datasets.length == 0)) {
-    let str = "";
-    if (errors.length == 0) {
-      str += "Also, you ";
-    } else {
-      str += "You ";
-    }
-    str +=
-      "need at least one item in each of the sections below to publish on Qresp:";
-    errors.push(
-      <Fragment>
-        <strong>{str}</strong>
-        <ul>
-          {charts.length == 0 && <li>Charts</li>}
-          {datasets.length == 0 && <li>Datasets</li>}
-        </ul>
-      </Fragment>
-    );
-  }
-  if (errors.length > 0) return { valid: false, errors: errors };
-
   // The same schema the server checks. Its draft-04-era `$id` anchors are
   // duplicated (e.g. "#/properties/collections/items" twice), which Ajv 8
   // refuses to compile -- so they are stripped from a copy first. If it
@@ -139,7 +82,7 @@ const validate = (editing, metadata) => {
     }
   }
 
-  return { valid: true, errors: errors };
+  return { valid: true, errors: [] };
 };
 
 // Reused by the edit flow (EditMode.js) so create and edit validate alike.
@@ -309,7 +252,9 @@ const Publish = () => {
   };
 
   const onClick = () => {
-    const paper = convertStatetoReqSchema(metadata, selectedHttp);
+    // Everything on the page, including sections still open for editing.
+    const current = collectDraftState ? collectDraftState() : metadata;
+    const paper = convertStatetoReqSchema(current, selectedHttp);
     const isValid = validate(editing, paper);
     if (!isValid.valid) {
       setAlert(
@@ -353,9 +298,10 @@ const Publish = () => {
         }}
       >
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
-          All required sections must be saved before publishing. After submitting,
-          your paper will be queued for verification and you&rsquo;ll receive a
-          confirmation email with a verification link.
+          Nothing is required: publish what you have now, even if it is just
+          the data, and fill in the details later by editing the record.
+          Anything typed in a section you have not saved is included. After
+          submitting, you&rsquo;ll receive an email with a verification link.
         </Typography>
         <Button
           fullWidth
@@ -372,7 +318,7 @@ const Publish = () => {
             borderRadius: 2,
           }}
         >
-          Publish Paper
+          Publish
         </Button>
         <Box
           sx={{

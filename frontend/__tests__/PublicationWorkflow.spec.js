@@ -192,10 +192,9 @@ describe("DOI Fetch fills the form without committing it", () => {
     expect(editor).toHaveBeenCalledTimes(1);
   });
 
-  it("blocks Save while a required field is empty", async () => {
+  it("saves with the publication, year and abstract left empty", async () => {
     const user = userEvent.setup();
-    // Journal Name, Page, Volume, Abstract and Year are all required again --
-    // the relaxation that came in with the dropped PDF/AI scope is gone.
+    // Nothing is required to publish, for any kind of work.
     const { setReferenceInfo, editor } = renderForm({
       publication: "",
       year: "",
@@ -204,11 +203,9 @@ describe("DOI Fetch fills the form without committing it", () => {
 
     await user.click(screen.getByRole("button", { name: /^save$/i }));
 
-    await waitFor(() =>
-      expect(screen.getAllByText(/^required$/i).length).toBeGreaterThan(0)
-    );
-    expect(setReferenceInfo).not.toHaveBeenCalled();
-    expect(editor).not.toHaveBeenCalled();
+    await waitFor(() => expect(setReferenceInfo).toHaveBeenCalledTimes(1));
+    expect(editor).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/^required$/i)).not.toBeInTheDocument();
   });
 });
 
@@ -279,8 +276,8 @@ describe("Qresp Curation Information keywords are human-entered", () => {
 // The form and backend/project/schema.json enforce ONE rule set. The mirror
 // image of this block is test_publish_validation.py; if either side moves,
 // one of the two fails.
-describe("the required-field contract, identical on both layers", () => {
-  const REQUIRED = [
+describe("no field is required, and a given value must still be well formed", () => {
+  const FIELDS = [
     ["title", /enter title/i],
     ["journal", /enter full journal name/i],
     ["page", /enter page number/i],
@@ -289,22 +286,19 @@ describe("the required-field contract, identical on both layers", () => {
     ["year", /enter year of publication/i],
   ];
 
-  // Emptying any one of them must stop the commit. The message differs by
-  // field -- yup reports a type error for the two numeric ones rather than
-  // "Required" -- so the assertion is on the behaviour, not the wording.
-  it.each(REQUIRED)("blocks Save when %s is empty", async (field, placeholder) => {
+  it.each(FIELDS)("saves when %s is empty", async (field, placeholder) => {
     const user = userEvent.setup();
     const { setReferenceInfo, editor } = renderForm();
 
     await user.clear(screen.getByPlaceholderText(placeholder));
     await user.click(screen.getByRole("button", { name: /^save$/i }));
 
-    await waitFor(() => expect(editor).not.toHaveBeenCalled());
-    expect(setReferenceInfo).not.toHaveBeenCalled();
+    await waitFor(() => expect(setReferenceInfo).toHaveBeenCalledTimes(1));
+    expect(editor).toHaveBeenCalledTimes(1);
   });
 
   it.each(["preprint", "dissertation"])(
-    "holds a %s to the same rules as a journal article",
+    "saves a %s with no publication details",
     async (kind) => {
       const user = userEvent.setup();
       const { setReferenceInfo, editor } = renderForm({
@@ -314,13 +308,30 @@ describe("the required-field contract, identical on both layers", () => {
 
       await user.click(screen.getByRole("button", { name: /^save$/i }));
 
-      await waitFor(() =>
-        expect(screen.getAllByText(/^required$/i).length).toBeGreaterThan(0)
-      );
-      expect(setReferenceInfo).not.toHaveBeenCalled();
-      expect(editor).not.toHaveBeenCalled();
+      await waitFor(() => expect(setReferenceInfo).toHaveBeenCalledTimes(1));
+      expect(editor).toHaveBeenCalledTimes(1);
     }
   );
+
+  it.each([
+    ["year", /enter year of publication/i, "nineteen"],
+    ["year", /enter year of publication/i, "1500"],
+    ["volume", /enter volume number/i, "twelve"],
+    ["url", /enter url/i, "not a url"],
+    ["doi", /enter doi of the paper/i, "not-a-doi"],
+  ])("still refuses a malformed %s (%s)", async (field, placeholder, bad) => {
+    const user = userEvent.setup();
+    const { setReferenceInfo, editor } = renderForm();
+
+    const input = screen.getByPlaceholderText(placeholder);
+    await user.clear(input);
+    await user.type(input, bad);
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() => expect(input).toHaveAttribute("aria-invalid", "true"));
+    expect(setReferenceInfo).not.toHaveBeenCalled();
+    expect(editor).not.toHaveBeenCalled();
+  });
 
   it("saves with DOI and URL left empty", async () => {
     const user = userEvent.setup();

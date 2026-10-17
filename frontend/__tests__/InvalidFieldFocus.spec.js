@@ -17,15 +17,12 @@ import {
   revealControl,
 } from "../Utils/invalidField";
 
-// Pressing Save with a required field empty used to do nothing a curator
-// could see: the form refused to submit and left them to find the offender,
-// which on a long dialog is usually scrolled off the top.
-//
-// Now the form sends them to the FIRST invalid field in the form's own order
-// — not the first key the resolver happened to report, and not whichever one
-// is nearest the button — scrolls it to the middle, and focuses it. Nothing
-// is saved until every required field is filled, which is exactly the rule
-// that was already enforced; only the feedback changed.
+// Nothing a curator enters is required to publish, so a blank form saves.
+// What can still be invalid is a value that is malformed -- in these forms,
+// a custom field with a label and no value (or the reverse). Pressing Save
+// then sends the curator to the FIRST invalid field in the form's own order
+// -- not the first key the resolver happened to report, and not whichever
+// one is nearest the button -- scrolls it to the middle, and focuses it.
 
 const FORMS = {
   chart: ChartsInfoForm,
@@ -83,6 +80,20 @@ const renderForm = (kind, { def = null, records = [] } = {}) => {
 const save = async (user) =>
   user.click(screen.getByRole("button", { name: /^(save|update)$/i }));
 
+// A record whose custom field has a label and no value.
+const INCOMPLETE = {
+  chart: { id: "c9", extraFields: [{ label: "Temperature", value: "" }] },
+  dataset: { id: "d9", files: ["a.csv"], extraFields: [{ label: "Temperature", value: "" }] },
+  script: { id: "s9", files: ["a.py"], extraFields: [{ label: "Temperature", value: "" }] },
+  tool: { id: "t9", kind: "software", extraFields: [{ label: "Temperature", value: "" }] },
+};
+const renderIncomplete = (kind, extraFields) =>
+  renderForm(kind, {
+    def: extraFields ? { ...INCOMPLETE[kind], extraFields } : INCOMPLETE[kind],
+  });
+const customLabel = (index = 0) => screen.getAllByPlaceholderText(/enter custom label/i)[index];
+const customValue = (index = 0) => screen.getAllByPlaceholderText(/^enter value$/i)[index];
+
 // jsdom has no layout, so scrollIntoView is not implemented there.
 let scrollSpy;
 beforeEach(() => {
@@ -90,19 +101,30 @@ beforeEach(() => {
   Element.prototype.scrollIntoView = scrollSpy;
 });
 
-describe("a failed Save goes to the first missing field", () => {
-  it("chart: the topmost required field, not the last error reported", async () => {
+describe("nothing is required to save", () => {
+  it.each(["chart", "dataset", "script", "tool"])(
+    "%s: saves with every field blank, and moves nothing",
+    async (kind) => {
+      const user = userEvent.setup({ delay: null });
+      const { add } = renderForm(kind);
+
+      await save(user);
+
+      await waitFor(() => expect(add).toHaveBeenCalled());
+      expect(scrollSpy).not.toHaveBeenCalled();
+    }
+  );
+});
+
+describe("a failed Save goes to the first invalid field", () => {
+  it("chart: an incomplete custom field, not the blank fields above it", async () => {
     const user = userEvent.setup({ delay: null });
-    const { add, edit } = renderForm("chart");
+    const { add, edit } = renderIncomplete("chart");
 
     await save(user);
 
-    // Figure Caption comes first in the form but is optional; Figure Number
-    // is prefilled, so the topmost missing required field is the Figure
-    // Image -- only that one is touched.
-    const image = screen.getByPlaceholderText(/enter chart image file name/i);
-    await waitFor(() => expect(image).toHaveFocus());
-    expect(screen.getByPlaceholderText(/enter the figure caption/i)).not.toHaveFocus();
+    await waitFor(() => expect(customLabel()).toHaveFocus());
+    expect(screen.getByPlaceholderText(/enter chart image file name/i)).not.toHaveFocus();
     expect(scrollSpy).toHaveBeenCalledTimes(1);
     expect(scrollSpy).toHaveBeenCalledWith(
       expect.objectContaining({ block: "center" })
@@ -112,110 +134,37 @@ describe("a failed Save goes to the first missing field", () => {
     expect(edit).not.toHaveBeenCalled();
   });
 
-  it("moves to the NEXT remaining error on the next Save", async () => {
-    const user = userEvent.setup({ delay: null });
-    renderForm("chart");
-
-    // The caption is optional and Figure Number is prefilled from the
-    // record count, so the first gap is the Figure Image...
-    await save(user);
-    const image = screen.getByPlaceholderText(/enter chart image file name/i);
-    await waitFor(() => expect(image).toHaveFocus());
-    expect(scrollSpy).toHaveBeenCalledTimes(1);
-
-    // ...and the next one the Keywords.
-    await user.type(image, "figures/f1.png");
-    await save(user);
-    const keywords = screen.getByPlaceholderText(/enter keywords/i);
-    await waitFor(() => expect(keywords).toHaveFocus());
-    expect(scrollSpy).toHaveBeenCalledTimes(2);
-  });
-
-  it("saves normally, and scrolls nothing, once the form is complete",
+  it("saves normally, and scrolls nothing, once the custom field is complete",
      async () => {
     const user = userEvent.setup({ delay: null });
-    const { add } = renderForm("chart");
+    const { add } = renderIncomplete("chart");
 
-    await user.type(
-      screen.getByPlaceholderText(/enter the figure caption/i),
-      "Density of states"
-    );
-    await user.type(
-      screen.getByPlaceholderText(/enter chart image file name/i),
-      "figures/f1.png"
-    );
-    await user.type(screen.getByPlaceholderText(/enter keywords/i), "silicon");
+    await user.type(customValue(), "300 K");
     await save(user);
 
     await waitFor(() => expect(add).toHaveBeenCalled());
     expect(add).toHaveBeenCalledWith(
       "chart",
       expect.objectContaining({
-        caption: "Density of states",
-        imageFile: "figures/f1.png",
+        extraFields: [{ label: "Temperature", value: "300 K" }],
       })
     );
     expect(scrollSpy).not.toHaveBeenCalled();
   });
 
-  it("dataset: the first required field", async () => {
-    const user = userEvent.setup({ delay: null });
-    const { add } = renderForm("dataset");
+  it.each(["dataset", "script", "tool"])(
+    "%s: goes to the incomplete custom field",
+    async (kind) => {
+      const user = userEvent.setup({ delay: null });
+      const { add } = renderIncomplete(kind);
 
-    await save(user);
+      await save(user);
 
-    await waitFor(() =>
-      expect(
-        screen.getByPlaceholderText(/enter files for the dataset/i)
-      ).toHaveFocus()
-    );
-    expect(scrollSpy).toHaveBeenCalledTimes(1);
-    expect(add).not.toHaveBeenCalled();
-  });
-
-  it("script: the first required field", async () => {
-    const user = userEvent.setup({ delay: null });
-    const { add } = renderForm("script");
-
-    await save(user);
-
-    await waitFor(() =>
-      expect(
-        screen.getByPlaceholderText(/enter files for the scripts/i)
-      ).toHaveFocus()
-    );
-    expect(add).not.toHaveBeenCalled();
-  });
-
-  it("tool: the first required field of the selected type", async () => {
-    const user = userEvent.setup({ delay: null });
-    const { add } = renderForm("tool");
-
-    await save(user);
-
-    await waitFor(() =>
-      expect(
-        screen.getByPlaceholderText(/enter name of the software package/i)
-      ).toHaveFocus()
-    );
-    expect(add).not.toHaveBeenCalled();
-  });
-
-  it("marks the field it lands on invalid, and says why", async () => {
-    const user = userEvent.setup({ delay: null });
-    renderForm("dataset");
-
-    await save(user);
-    const files = screen.getByPlaceholderText(/enter files for the dataset/i);
-    await waitFor(() => expect(files).toHaveFocus());
-
-    // The message survives the focus it was just given, and is announced with
-    // the field rather than sitting loose beside it.
-    expect(files).toHaveAttribute("aria-invalid", "true");
-    const describedBy = files.getAttribute("aria-describedby");
-    expect(describedBy).toBeTruthy();
-    expect(document.getElementById(describedBy)).toHaveTextContent("Required");
-  });
+      await waitFor(() => expect(customLabel()).toHaveFocus());
+      expect(scrollSpy).toHaveBeenCalledTimes(1);
+      expect(add).not.toHaveBeenCalled();
+    }
+  );
 
   it("respects prefers-reduced-motion", async () => {
     const matchMedia = jest.fn().mockReturnValue({
@@ -229,7 +178,7 @@ describe("a failed Save goes to the first missing field", () => {
       value: matchMedia,
     });
     const user = userEvent.setup({ delay: null });
-    renderForm("dataset");
+    renderIncomplete("dataset");
 
     await save(user);
     await waitFor(() => expect(scrollSpy).toHaveBeenCalled());
@@ -243,7 +192,7 @@ describe("a failed Save goes to the first missing field", () => {
 
   it("uses smooth scrolling when no such preference is set", async () => {
     const user = userEvent.setup({ delay: null });
-    renderForm("dataset");
+    renderIncomplete("dataset");
 
     await save(user);
     await waitFor(() => expect(scrollSpy).toHaveBeenCalled());
@@ -387,21 +336,21 @@ describe("only one thing moves the focus", () => {
      async () => {
     const focusSpy = watchFocus();
     const user = userEvent.setup({ delay: null });
-    renderForm("chart");
+    renderIncomplete("chart");
 
     await save(user);
-    const image = screen.getByPlaceholderText(/enter chart image file name/i);
-    await waitFor(() => expect(image).toHaveFocus());
+    const target = customLabel();
+    await waitFor(() => expect(target).toHaveFocus());
 
-    expect(focusSpy.on(image)).toBe(1);
+    expect(focusSpy.on(target)).toBe(1);
     expect(scrollSpy).toHaveBeenCalledTimes(1);
 
     // react-hook-form's own focus runs after the invalid callback, and MUI
     // transitions settle on a timer; neither may add a second one.
     await new Promise((resolve) => setTimeout(resolve, 150));
-    expect(focusSpy.on(image)).toBe(1);
+    expect(focusSpy.on(target)).toBe(1);
     expect(scrollSpy).toHaveBeenCalledTimes(1);
-    expect(image).toHaveFocus();
+    expect(target).toHaveFocus();
 
     focusSpy.restore();
   });
@@ -410,18 +359,18 @@ describe("only one thing moves the focus", () => {
      async () => {
     const focusSpy = watchFocus();
     const user = userEvent.setup({ delay: null });
-    renderForm("chart");
+    renderIncomplete("chart");
 
     await save(user);
-    const image = screen.getByPlaceholderText(/enter chart image file name/i);
-    await waitFor(() => expect(image).toHaveFocus());
+    await waitFor(() => expect(customLabel()).toHaveFocus());
 
     // Every other field is left alone: one jump, one field.
-    ["enter the figure caption", "enter keywords"].forEach((placeholder) => {
+    ["enter the figure caption", "enter keywords", "enter chart image file name"].forEach((placeholder) => {
       const other = screen.getByPlaceholderText(new RegExp(placeholder, "i"));
       expect(focusSpy.on(other)).toBe(0);
       expect(other).not.toHaveFocus();
     });
+    expect(focusSpy.on(customValue())).toBe(0);
 
     focusSpy.restore();
   });
@@ -431,13 +380,7 @@ describe("only one thing moves the focus", () => {
     const user = userEvent.setup({ delay: null });
     const { add } = renderForm("chart");
 
-    const caption = screen.getByPlaceholderText(/enter the figure caption/i);
-    await user.type(caption, "Density of states");
-    await user.type(
-      screen.getByPlaceholderText(/enter chart image file name/i),
-      "figures/f1.png"
-    );
-    await user.type(screen.getByPlaceholderText(/enter keywords/i), "silicon");
+    await user.type(screen.getByPlaceholderText(/enter the figure caption/i), "Density of states");
     const focusesBefore = focusSpy.instances.length;
     await save(user);
 
@@ -450,19 +393,14 @@ describe("only one thing moves the focus", () => {
   });
 
   it("holds for every artifact form, not just charts", async () => {
-    const targets = {
-      dataset: /enter files for the dataset/i,
-      script: /enter files for the scripts/i,
-      tool: /enter name of the software package/i,
-    };
-    for (const [kind, placeholder] of Object.entries(targets)) {
+    for (const kind of ["dataset", "script", "tool"]) {
       const focusSpy = watchFocus();
       const user = userEvent.setup({ delay: null });
-      const { unmount } = renderForm(kind);
+      const { unmount } = renderIncomplete(kind);
 
       // eslint-disable-next-line no-await-in-loop
       await save(user);
-      const field = screen.getByPlaceholderText(placeholder);
+      const field = customLabel();
       // eslint-disable-next-line no-await-in-loop
       await waitFor(() => expect(field).toHaveFocus());
       // eslint-disable-next-line no-await-in-loop

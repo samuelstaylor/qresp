@@ -330,14 +330,27 @@ describe("the file server section for a code repository", () => {
     expect(screen.getByTestId("fileserver-not-needed")).toHaveTextContent(/not needed/i);
   });
 
-  it("still asks for the folder when the code is on the file server", () => {
+  it("suggests a folder, without requiring one, when the code is on the file server", () => {
     const setEditing = renderCode("fileserver");
-    expect(setEditing).toHaveBeenLastCalledWith("fileServerPathInfo", true);
-    expect(screen.queryByTestId("fileserver-not-needed")).toBeNull();
+    expect(setEditing).toHaveBeenLastCalledWith("fileServerPathInfo", false);
+    expect(screen.getByTestId("fileserver-not-needed")).toHaveTextContent(/optional/i);
   });
 
-  it("still asks for the folder when the code is in both places", () => {
-    expect(renderCode("both")).toHaveBeenLastCalledWith("fileServerPathInfo", true);
+  it("never blocks publishing for any kind of record", () => {
+    for (const workType of ["paper", "report", "dataset", "other"]) {
+      const setEditing = jest.fn();
+      const { unmount } = render(
+        <AlertContext.Provider value={{ setAlert: jest.fn() }}>
+          <CuratorContext.Provider value={{ fileServerPath: "", workType, addMany: jest.fn() }}>
+            <CuratorHelperContext.Provider value={{ editing: { fileServerPathInfo: false }, setEditing }}>
+              <FileServerElement />
+            </CuratorHelperContext.Provider>
+          </CuratorContext.Provider>
+        </AlertContext.Provider>
+      );
+      expect(setEditing).toHaveBeenLastCalledWith("fileServerPathInfo", false);
+      unmount();
+    }
   });
 });
 

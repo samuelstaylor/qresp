@@ -132,7 +132,7 @@ const ReferenceInfo = ({ referenceData, actions }) => {
               component="h1"
               sx={{ fontWeight: 700, color: "#222", lineHeight: 1.25, fontSize: { xs: "1.6rem", md: "2.1rem" } }}
             >
-              {title}
+              {title || "Untitled record"}
             </Typography>
           </Box>
           <Box sx={{ display: "flex", alignItems: "center", flexShrink: 0 }}>

@@ -165,9 +165,8 @@ export const WorkTypeBadge = () => {
         <DialogTitle>What are you curating?</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Changing the type keeps everything you have entered. A published
-            paper also needs its journal, volume and page, and at least one
-            figure.
+            Changing the type keeps everything you have entered; it only changes
+            which details Qresp asks about. None of them is required to publish.
           </Typography>
           <TypeGrid value={workType} onSelect={choose} />
         </DialogContent>
