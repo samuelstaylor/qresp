@@ -22,7 +22,7 @@ import LoadingContext from "../Context/Loading/loadingContext";
 import AuthContext from "../Context/Auth/authContext";
 import { TableSearchContext } from "../components/Table/TableSearch";
 import { convertReqSchematoState, convertStatetoReqSchema } from "../Utils/model";
-import { WORK_TYPE_KEYS, workTypeOf } from "../Utils/workTypes";
+import { WORK_TYPE_KEYS, codeHostOf, needsFolder, needsRepoUrl, workTypeOf } from "../Utils/workTypes";
 
 const ShowType = () => {
   const { workType } = useContext(CuratorContext);
@@ -59,6 +59,42 @@ describe("choosing what to curate", () => {
     await user.click(screen.getByTestId("work-type-change"));
     await user.click(within(screen.getByRole("dialog")).getByTestId("work-type-report"));
     expect(setWorkType).toHaveBeenCalledWith("report");
+  });
+});
+
+describe("where a code repository's code lives", () => {
+  const URL = "https://github.com/a/b";
+  const FOLDER = "https://notebook.rcc.uchicago.edu/files/x";
+
+  it("uses the curator's choice", () => {
+    expect(codeHostOf({ codeHost: "fileserver", referenceInfo: { url: URL } })).toBe("fileserver");
+  });
+
+  it("otherwise reads it from what the record has", () => {
+    expect(codeHostOf({ referenceInfo: { url: URL } })).toBe("repository");
+    expect(codeHostOf({ fileServerPath: FOLDER })).toBe("fileserver");
+    expect(codeHostOf({ referenceInfo: { url: URL }, fileServerPath: FOLDER })).toBe("both");
+    expect(codeHostOf({ codeHost: "", referenceInfo: { url: "" } })).toBe("repository");
+    expect(codeHostOf()).toBe("repository");
+  });
+
+  it("asks for the URL, the folder or both", () => {
+    expect([needsRepoUrl("software", "repository"), needsFolder("software", "repository")]).toEqual([true, false]);
+    expect([needsRepoUrl("software", "fileserver"), needsFolder("software", "fileserver")]).toEqual([false, true]);
+    expect([needsRepoUrl("software", "both"), needsFolder("software", "both")]).toEqual([true, true]);
+  });
+
+  it("leaves every other work type as it was", () => {
+    ["paper", "report", "dataset", "other"].forEach((type) => {
+      expect(needsRepoUrl(type, "repository")).toBe(false);
+      expect(needsFolder(type, "repository")).toBe(true);
+    });
+  });
+
+  it("does not ask code on the file server for a repository URL", () => {
+    const reference = { title: "west", authors: "Ada Lovelace", abstract: "GW code", url: "" };
+    expect(isCompleteReference(reference, "software", "repository")).toBe(false);
+    expect(isCompleteReference(reference, "software", "fileserver")).toBe(true);
   });
 });
 

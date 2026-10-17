@@ -32,6 +32,7 @@ import AlertContext from "../../Context/Alert/alertContext";
 import SourceTreeContext from "../../Context/SourceTree/SourceTreeContext";
 import LoadingContext from "../../Context/Loading/loadingContext";
 import CuratorContext from "../../Context/Curator/curatorContext";
+import { workTypeInfo } from "../../Utils/workTypes";
 
 // Two distinct steps, deliberately separated:
 //   Search  — browse a file server and PICK a folder (nothing is committed)
@@ -61,7 +62,7 @@ const FileServerInfoForm = ({ editor }) => {
     setMultiple,
   } = useContext(SourceTreeContext);
   const { showLoader, hideLoader } = useContext(LoadingContext);
-  const { fileServerPath, setFileServerPath, registerDraftFlusher, charts } =
+  const { fileServerPath, setFileServerPath, registerDraftFlusher, charts, workType } =
     useContext(CuratorContext);
 
   // The folder the curator has picked but not yet committed. Seeded from the
@@ -176,7 +177,7 @@ const FileServerInfoForm = ({ editor }) => {
   }, [fileServerPath, selectedFolder, getValues, registerDraftFlusher]);
 
   return (
-    <Drawer heading="Where is the paper" defaultOpen={true} editing unsaved>
+    <Drawer heading={`Where is the ${workTypeInfo(workType).noun}`} defaultOpen={true} editing unsaved>
       <form onSubmit={handleSubmit(onSubmit)}>
         <Grid direction="column" container spacing={1}>
           <Grid>

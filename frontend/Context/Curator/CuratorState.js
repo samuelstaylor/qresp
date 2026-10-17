@@ -4,7 +4,7 @@ import CuratorContext from "./curatorContext";
 
 import WebStore from "../../Utils/Persist";
 import { summarizeBrowserDraft } from "../../Utils/browserDraft";
-import { workTypeOf } from "../../Utils/workTypes";
+import { codeHostOf, workTypeOf } from "../../Utils/workTypes";
 import { listServerDrafts, saveServerDraft } from "../../Utils/serverDrafts";
 import { isNamedDraftTitle, sameDraftTitle as sameTitle } from "../../Utils/draftTitle";
 import { collapseAllSections } from "../../Utils/sectionCollapse";
@@ -19,6 +19,7 @@ import {
   SET_DOCUMENTATION,
   SET_LICENSE,
   SET_WORK_TYPE,
+  SET_CODE_HOST,
   SET,
   ADD,
   ADD_MANY,
@@ -153,6 +154,9 @@ const CuratorState = (props) => {
     // What is being curated (Utils/workTypes.js). "" until the curator picks
     // one in the "What are you curating?" step a new record opens with.
     workType: "",
+    // Where a code repository's code lives (CODE_HOSTS). "" until chosen;
+    // the context resolves it from what the record has (codeHostOf).
+    codeHost: "",
   };
 
   const [state, dispatch] = useReducer(CuratorReducer, initialState);
@@ -536,6 +540,9 @@ const CuratorState = (props) => {
   const setWorkType = (workType) =>
     dispatch({ type: SET_WORK_TYPE, payload: workTypeOf(workType) });
 
+  const setCodeHost = (codeHost) =>
+    dispatch({ type: SET_CODE_HOST, payload: codeHost });
+
   const set = (type, value) =>
     dispatch({ type: SET, payload: { type: type + "s", value } });
 
@@ -581,6 +588,8 @@ const CuratorState = (props) => {
         referenceInfo: state.referenceInfo,
         workType: state.workType,
         setWorkType,
+        codeHost: codeHostOf(state),
+        setCodeHost,
         documentation: state.documentation,
         charts: state.charts,
         tools: state.tools,

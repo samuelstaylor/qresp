@@ -7,7 +7,7 @@ import CuratorContext from "../../Context/Curator/curatorContext";
 import CuratorHelperContext from "../../Context/CuratorHelpers/curatorHelperContext";
 
 import SwitchFade from "../switchFade";
-import { workTypeInfo } from "../../Utils/workTypes";
+import { needsRepoUrl, workTypeInfo } from "../../Utils/workTypes";
 import {
   guidedChangesAccepted,
   matchesSaved,
@@ -20,18 +20,19 @@ const filled = (value) =>
 
 /** Every field the publication form requires has something in it. A
  * published paper (the default, and every legacy draft) also needs its kind
- * and publication; a code repository needs its URL. */
-export const isCompleteReference = (reference, workType) => {
+ * and publication; a code repository needs its URL unless the code is on
+ * the file server instead (codeHost, see CODE_HOSTS). */
+export const isCompleteReference = (reference, workType, codeHost) => {
   const r = reference || {};
   const info = workTypeInfo(workType);
   const keys = ["title", "authors", "abstract"];
   if (info.paperFields) keys.push("kind", "publication");
-  if (info.urlRequired) keys.push("url");
+  if (needsRepoUrl(workType, codeHost)) keys.push("url");
   return keys.every((key) => filled(r[key]));
 };
 
 const ReferenceInfoElement = () => {
-  const { referenceInfo, workType } = useContext(CuratorContext);
+  const { referenceInfo, workType, codeHost } = useContext(CuratorContext);
   const { editing, setEditing } = useContext(CuratorHelperContext);
 
   const signature = signatureOf(referenceInfo);
@@ -48,7 +49,7 @@ const ReferenceInfoElement = () => {
     }
     // Filled in by the guided setup (the DOI or arXiv lookup, the abstract
     // from the LaTeX): saved, once every required field has something in it.
-    if (editing.referenceInfo && guidedChangesAccepted() && isCompleteReference(referenceInfo, workType)) {
+    if (editing.referenceInfo && guidedChangesAccepted() && isCompleteReference(referenceInfo, workType, codeHost)) {
       openedForBlank.current = false;
       setEditing("referenceInfo", false);
       return;

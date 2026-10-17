@@ -7,6 +7,7 @@ import {
   SET_REFERENCEINFO,
   SET_LICENSE,
   SET_WORK_TYPE,
+  SET_CODE_HOST,
   SET,
   ADD,
   ADD_MANY,
@@ -72,6 +73,8 @@ export default (state, action) => {
       return { ...state, license: action.payload };
     case SET_WORK_TYPE:
       return { ...state, workType: action.payload };
+    case SET_CODE_HOST:
+      return { ...state, codeHost: action.payload };
     case SET:
       return { ...state, [action.payload.type]: [...action.payload.value] };
     case ADD:

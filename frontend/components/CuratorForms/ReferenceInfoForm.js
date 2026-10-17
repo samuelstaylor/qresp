@@ -19,11 +19,11 @@ import * as Yup from "yup";
 import CuratorContext from "../../Context/Curator/curatorContext";
 import AlertContext from "../../Context/Alert/alertContext";
 import LoadingContext from "../../Context/Loading/loadingContext";
-import { workTypeInfo, workTypeOf } from "../../Utils/workTypes";
+import { needsRepoUrl, workTypeInfo, workTypeOf } from "../../Utils/workTypes";
 import { lookupRepo } from "../../Utils/repoLookup";
 
 const ReferenceInfoForm = ({ editor }) => {
-  const { referenceInfo, setReferenceInfo, registerDraftFlusher, workType } =
+  const { referenceInfo, setReferenceInfo, registerDraftFlusher, workType, codeHost } =
     useContext(CuratorContext);
   // A published paper (and every legacy record) asks for its kind, journal,
   // volume and page; other work types have none of those. A report may name
@@ -32,6 +32,8 @@ const ReferenceInfoForm = ({ editor }) => {
   const typeInfo = workTypeInfo(type);
   const isPaper = Boolean(typeInfo.paperFields);
   const hasVenue = Boolean(typeInfo.venueLabel);
+  // Code on the RCC file server needs no repository URL.
+  const urlRequired = needsRepoUrl(type, codeHost);
   const optionalNumber = Yup.number()
     .transform((value, original) => (original === "" || original == null ? undefined : value))
     .typeError("Please enter a number");
@@ -78,7 +80,7 @@ const ReferenceInfoForm = ({ editor }) => {
       .min(1750, "Cannot be less than 1700")
       .integer("Plese enter a valid year")
       .required("Required"),
-    url: typeInfo.urlRequired
+    url: urlRequired
       ? Yup.string().required("Required").url("Please enter a valid url")
       : Yup.string()
           .transform((value, original) => (original === "" ? undefined : value))
@@ -480,12 +482,16 @@ const ReferenceInfoForm = ({ editor }) => {
               id="url"
               placeholder={type === "software" ? "https://github.com/org/repo" : "Enter url"}
               name="url"
-              helperText={typeInfo.urlHelp}
+              helperText={
+                type === "software" && !urlRequired
+                  ? "Optional. A public repository, if the code also has one"
+                  : typeInfo.urlHelp
+              }
               label={typeInfo.urlLabel}
               register={register}
               error={errors.url}
               defaultValue={referenceInfo.url}
-              required={Boolean(typeInfo.urlRequired)}
+              required={urlRequired}
               action={
                 type === "software" ? (
                   <Tooltip

@@ -164,12 +164,24 @@ class TestWorkTypes(unittest.TestCase):
                              journal={"fullName": ""})
         validate(document, SCHEMA)
 
-    def test_software_needs_its_repository_url(self):
-        with self.assertRaises(ValidationError):
-            validate(self.work("software"), SCHEMA)
-        with self.assertRaises(ValidationError):
-            validate(self.work("software", URLs=""), SCHEMA)
-        validate(self.work("software", URLs="https://github.com/a/b"), SCHEMA)
+    def code(self, folder, **reference):
+        document = self.work("software", **reference)
+        document["info"]["fileServerPath"] = folder
+        return document
+
+    def test_software_needs_a_repository_url_or_a_folder(self):
+        for folder in ("", None):
+            with self.assertRaises(ValidationError):
+                validate(self.code(folder), SCHEMA)
+            with self.assertRaises(ValidationError):
+                validate(self.code(folder, URLs=""), SCHEMA)
+        # On GitHub or GitLab: no folder needed.
+        validate(self.code("", URLs="https://github.com/a/b"), SCHEMA)
+        # On the RCC file server: no repository URL needed.
+        validate(self.code("https://notebook.rcc.uchicago.edu/files/x"), SCHEMA)
+        # Both.
+        validate(self.code("https://notebook.rcc.uchicago.edu/files/x",
+                           URLs="https://github.com/a/b"), SCHEMA)
 
     def test_every_work_type_still_needs_the_basics(self):
         for field in ("authors", "title", "publishedAbstract", "year"):

@@ -21,7 +21,7 @@ import { rememberSaved, signatureOf } from "../../Utils/savedSection";
 // Rendered OUTSIDE the form remounter: loading a draft rebuilds the form
 // tree, and this must handle each load exactly once, not once per rebuild.
 const LoadedDraftSaver = () => {
-  const { loadVersion, referenceInfo, workflow, workType } = useContext(CuratorContext) || {};
+  const { loadVersion, referenceInfo, workflow, workType, codeHost } = useContext(CuratorContext) || {};
   const { setEditing } = useContext(CuratorHelperContext) || {};
   const handled = useRef(0);
 
@@ -29,7 +29,7 @@ const LoadedDraftSaver = () => {
     if (!loadVersion || handled.current === loadVersion || !setEditing) return;
     handled.current = loadVersion;
 
-    if (isCompleteReference(referenceInfo, workType)) {
+    if (isCompleteReference(referenceInfo, workType, codeHost)) {
       rememberSaved("referenceInfo", signatureOf(referenceInfo));
       setEditing("referenceInfo", false);
     }

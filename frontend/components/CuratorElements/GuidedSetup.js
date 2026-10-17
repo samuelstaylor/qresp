@@ -51,7 +51,7 @@ import ServerContext from "../../Context/Servers/serverContext";
 import SourceTreeContext from "../../Context/SourceTree/SourceTreeContext";
 import { getList } from "../../Utils/Scraper";
 import { arxivIdOf, doiUtil } from "../../Utils/doi";
-import { workTypeInfo, workTypeOf } from "../../Utils/workTypes";
+import { CODE_HOSTS, CODE_HOST_KEYS, needsFolder, workTypeInfo, workTypeOf } from "../../Utils/workTypes";
 import { lookupRepo, referenceFromRepo } from "../../Utils/repoLookup";
 import { buildFileUrl, isPdfFile } from "../../Utils/fileServerUrl";
 import { initialsOf } from "../Profile/ProfileLinks";
@@ -355,7 +355,15 @@ const GuidedSetup = () => {
     resetVersion,
     saveDraftToServer,
     getDraftTitle,
+    codeHost,
+    setCodeHost,
   } = ctx;
+  // A code repository says where its code lives. Code on GitHub or GitLab
+  // has no project folder to find, read or scan, so those steps are left out
+  // unless a folder was added anyway.
+  const isCode = workTypeOf(workType) === "software";
+  const folderNeeded = needsFolder(workType, codeHost);
+  const folderSteps = folderNeeded || Boolean(fileServerPath);
   const { setAlert } = useContext(AlertContext) || {};
   const { loading: authLoading, authenticated, user } = useContext(AuthContext);
 
@@ -505,9 +513,9 @@ const GuidedSetup = () => {
   };
 
   useEffect(() => {
-    if (!fileServerPath && referenceInfo.doi && authenticated) locate(referenceInfo.doi);
+    if (!fileServerPath && folderNeeded && referenceInfo.doi && authenticated) locate(referenceInfo.doi);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [referenceInfo.doi, authenticated, fileServerPath]);
+  }, [referenceInfo.doi, authenticated, fileServerPath, folderNeeded]);
 
   // Choosing the folder here: paste/type an address, or browse the file
   // server with the same picker the full form uses.
@@ -1242,7 +1250,8 @@ const GuidedSetup = () => {
   // publish empty; a P.I. may not.
   const [skipOptional, setSkipOptional] = useState(false);
   const optionalLeft = !skipOptional && (missingOptional.length > 0 || optionalNeeding.length > 0);
-  const recordReady = artifactCount > 0 && !missingPI && requiredNeeding.length === 0 && !optionalLeft;
+  // A code repository may be just its code: no figures, data or scripts.
+  const recordReady = (artifactCount > 0 || isCode) && !missingPI && requiredNeeding.length === 0 && !optionalLeft;
   const [draftNote, setDraftNote] = useState("");
   const [draftSaving, setDraftSaving] = useState(false);
   const saveDraftNow = () => {
@@ -1313,12 +1322,11 @@ const GuidedSetup = () => {
     ai: charts.length > 0 && figuresWithoutKeywords === 0,
     finish: recordReady,
   };
-  const done = Object.keys(steps).filter(
-    (key) => steps[key] && (key !== "captions" || hasLatex)
-  ).length;
-  const STEP_KEYS = ["you", "paper", "folder", "import", "captions", "ai", "finish"].filter(
-    (key) => key !== "captions" || hasLatex
-  );
+  const offered = (key) =>
+    (key !== "captions" || hasLatex) &&
+    (folderSteps || !["folder", "import", "ai"].includes(key));
+  const done = Object.keys(steps).filter((key) => steps[key] && offered(key)).length;
+  const STEP_KEYS = ["you", "paper", "folder", "import", "captions", "ai", "finish"].filter(offered);
   const firstOpen = STEP_KEYS.findIndex((k) => !steps[k] && !skipped[k]);
 
   const stepLabel = (key, title, subtitle) => (
@@ -1348,6 +1356,8 @@ const GuidedSetup = () => {
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
           {isPaper
             ? "Qresp fills in what it can from your profile, the paper's DOI and its project folder. You review it and add what only you know."
+            : !folderSteps
+            ? `Qresp fills in what it can from your profile and the repository. You describe the ${typeInfo.noun} and add what only you know.`
             : `Qresp fills in what it can from your profile and the project folder. You describe the ${typeInfo.noun} and add what only you know.`}
         </Typography>
         <LinearProgress
@@ -1408,6 +1418,40 @@ const GuidedSetup = () => {
                 : `Its ${typeInfo.titleLabel.toLowerCase()}, ${typeInfo.authorsLabel.toLowerCase()} and ${typeInfo.abstractLabel.toLowerCase()}`
             )}
             <StepContent>
+              {isCode && (
+                <Box sx={{ mb: 1.5 }} data-testid="guided-code-host">
+                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.75 }}>
+                    Where is the code?
+                  </Typography>
+                  <ToggleButtonGroup
+                    exclusive
+                    size="small"
+                    color="primary"
+                    value={codeHost}
+                    onChange={(_event, value) => value && setCodeHost(value)}
+                    aria-label="Where is the code"
+                    sx={{ flexWrap: "wrap" }}
+                  >
+                    {CODE_HOST_KEYS.map((key) => (
+                      <ToggleButton
+                        key={key}
+                        value={key}
+                        data-testid={`code-host-${key}`}
+                        sx={{ textTransform: "none", px: 1.5 }}
+                      >
+                        {CODE_HOSTS[key].label}
+                      </ToggleButton>
+                    ))}
+                  </ToggleButtonGroup>
+                  <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.5 }}>
+                    {codeHost === "repository"
+                      ? "The repository link is all Qresp needs; no RCC folder is required."
+                      : codeHost === "fileserver"
+                      ? "Point Qresp at the folder in step 3; a repository link is optional."
+                      : "Give the repository link here and the RCC folder in step 3."}
+                  </Typography>
+                </Box>
+              )}
               {referenceInfo.title && !changingPaper ? (
                 <Summary>
                   <Typography variant="body2" fontWeight={700}>{referenceInfo.title}</Typography>
@@ -1436,7 +1480,7 @@ const GuidedSetup = () => {
                       />
                     )}
                     <Box sx={{ flex: 1 }} />
-                    {type === "software" ? (
+                    {type === "software" && codeHost !== "fileserver" ? (
                       <Button size="small" onClick={() => setChangingPaper(true)} sx={{ textTransform: "none" }}>
                         Use a different repository
                       </Button>
@@ -1453,7 +1497,7 @@ const GuidedSetup = () => {
                     </Typography>
                   )}
                 </Summary>
-              ) : type === "software" && !repoUseDoi ? (
+              ) : type === "software" && !repoUseDoi && codeHost !== "fileserver" ? (
                 <Box data-testid="guided-repo-lookup">
                   <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start", flexWrap: "wrap" }}>
                     <TextField
@@ -1545,7 +1589,7 @@ const GuidedSetup = () => {
                   <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.75 }} data-testid="guided-doi-hint">
                     {DOI_PROMPTS[type].hint}{" "}
                     <SectionLink target="curate-reference">Enter the details by hand</SectionLink>
-                    {type === "software" && (
+                    {type === "software" && codeHost !== "fileserver" && (
                       <>
                         {" · "}
                         <Link
@@ -1567,6 +1611,7 @@ const GuidedSetup = () => {
           </Step>
 
           {/* 3. Folder */}
+          {folderSteps && (
           <Step completed={steps.folder} expanded>
             {stepLabel("folder", "Project folder", "Where the figures, data and scripts are stored")}
             <StepContent>
@@ -1712,8 +1757,10 @@ const GuidedSetup = () => {
               )}
             </StepContent>
           </Step>
+          )}
 
           {/* 4. Import */}
+          {folderSteps && (
           <Step completed={steps.import} expanded>
             {stepLabel("import", "Figures, data & scripts", "Read from the project folder")}
             <StepContent>
@@ -1949,6 +1996,7 @@ const GuidedSetup = () => {
               )}
             </StepContent>
           </Step>
+          )}
 
           {/* 5. Captions (papers and reports only) */}
           {hasLatex && (
@@ -2189,6 +2237,7 @@ const GuidedSetup = () => {
           )}
 
           {/* 6. AI assistant */}
+          {folderSteps && (
           <Step completed={steps.ai} expanded id="guided-ai" sx={{ scrollMarginTop: 96 }}>
             {stepLabel("ai", "AI assistant (optional)", "Fill the gaps: keywords, descriptions, links and a review of the record")}
             <StepContent>
@@ -2503,12 +2552,13 @@ const GuidedSetup = () => {
               )}
             </StepContent>
           </Step>
+          )}
 
           {/* 7. Finish */}
           <Step completed={steps.finish} expanded>
             {stepLabel("finish", "Finish the details", "Captions and anything only you know")}
             <StepContent>
-              {!artifactCount ? (
+              {!artifactCount && !isCode ? (
                 <Typography variant="body2" color="text.secondary">
                   Available once figures are in the record.
                 </Typography>

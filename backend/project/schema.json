@@ -982,7 +982,7 @@
       }
     }
   },
-  "comment_work_type": "A published paper (work_type absent or 'paper') is held to the full bibliographic contract: kind, journal name, page and volume required and non-empty, and at least one figure. Other work types (an unpublished paper or report, a code repository, a dataset, anything else) need authors, title, abstract and year; a code repository also needs its repository URL.",
+  "comment_work_type": "A published paper (work_type absent or 'paper') is held to the full bibliographic contract: kind, journal name, page and volume required and non-empty, and at least one figure. Other work types (an unpublished paper or report, a code repository, a dataset, anything else) need authors, title, abstract and year; a code repository also needs to say where its code is: a repository URL (GitHub, GitLab), a file server folder (RCC), or both.",
   "allOf": [
     {
       "if": { "properties": { "work_type": { "const": "paper" } } },
@@ -1010,12 +1010,24 @@
         "required": ["work_type"]
       },
       "then": {
-        "properties": {
-          "reference": {
-            "required": ["URLs"],
-            "properties": { "URLs": { "type": "string", "minLength": 1 } }
+        "anyOf": [
+          {
+            "properties": {
+              "reference": {
+                "required": ["URLs"],
+                "properties": { "URLs": { "type": "string", "minLength": 1 } }
+              }
+            }
+          },
+          {
+            "properties": {
+              "info": {
+                "required": ["fileServerPath"],
+                "properties": { "fileServerPath": { "type": "string", "minLength": 1 } }
+              }
+            }
           }
-        }
+        ]
       }
     }
   ]

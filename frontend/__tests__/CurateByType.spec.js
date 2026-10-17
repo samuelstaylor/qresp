@@ -232,6 +232,8 @@ describe("the guided setup for a code repository", () => {
 
   const renderSetup = (state = blank) => {
     const curator = {
+      codeHost: "repository",
+      setCodeHost: jest.fn(),
       ...state,
       resetVersion: 0,
       metadata: state,
@@ -285,6 +287,37 @@ describe("the guided setup for a code repository", () => {
     await user.click(screen.getByRole("link", { name: /look it up by doi/i }));
     expect(screen.getByLabelText("Software DOI")).toBeInTheDocument();
     await user.click(screen.getByRole("link", { name: /use the repository link instead/i }));
+    expect(screen.getByTestId("guided-repo-input")).toBeInTheDocument();
+  });
+
+  it("needs no project folder when the code is on GitHub or GitLab", () => {
+    renderSetup();
+    expect(screen.getByTestId("code-host-repository")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByText("Project folder")).not.toBeInTheDocument();
+    expect(screen.queryByText("Figures, data & scripts")).not.toBeInTheDocument();
+    expect(screen.getByText(/no rcc folder is required/i)).toBeInTheDocument();
+    // Code needs no figures, so Finish is open straight away.
+    expect(screen.queryByText(/available once figures/i)).not.toBeInTheDocument();
+  });
+
+  it("lets the curator say the code is on the RCC file server instead", async () => {
+    const user = userEvent.setup();
+    const curator = renderSetup();
+    await user.click(screen.getByTestId("code-host-fileserver"));
+    expect(curator.setCodeHost).toHaveBeenCalledWith("fileserver");
+  });
+
+  it("asks code on the file server for its folder, not a repository link", () => {
+    renderSetup({ ...blank, codeHost: "fileserver" });
+    expect(screen.getByText("Project folder")).toBeInTheDocument();
+    expect(screen.queryByTestId("guided-repo-input")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Software DOI")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /use the repository link instead/i })).not.toBeInTheDocument();
+  });
+
+  it("asks for both when the code is in both places", () => {
+    renderSetup({ ...blank, codeHost: "both" });
+    expect(screen.getByText("Project folder")).toBeInTheDocument();
     expect(screen.getByTestId("guided-repo-input")).toBeInTheDocument();
   });
 

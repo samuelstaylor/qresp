@@ -61,6 +61,7 @@ export const WORK_TYPES = {
     abstractHelp: "What the code does and what it is used for",
     urlLabel: "Repository URL",
     urlHelp: "Where the code lives, e.g. https://github.com/org/repo",
+    // Required unless the code is on a file server instead (CODE_HOSTS).
     urlRequired: true,
   },
   dataset: {
@@ -106,3 +107,41 @@ export const workTypeOf = (value) =>
   Object.prototype.hasOwnProperty.call(WORK_TYPES, value) ? value : "paper";
 
 export const workTypeInfo = (value) => WORK_TYPES[workTypeOf(value)];
+
+// Where a code repository's code lives. A GitHub/GitLab repository needs its
+// URL and no file server folder; code kept on the RCC file server needs the
+// folder and no URL; "both" needs both. schema.json asks a code repository
+// for at least one of the two. Only code records make this choice: every
+// other work type keeps its project folder.
+export const CODE_HOSTS = {
+  repository: {
+    label: "GitHub or GitLab",
+    description: "A public or private Git repository.",
+  },
+  fileserver: {
+    label: "RCC file server",
+    description: "A folder on the research computing file server.",
+  },
+  both: {
+    label: "Both",
+    description: "A Git repository, plus files on the RCC file server.",
+  },
+};
+
+export const CODE_HOST_KEYS = Object.keys(CODE_HOSTS);
+
+// The curator's choice, or -- for edit mode and drafts from before it was
+// asked -- whatever the record already has filled in.
+export const codeHostOf = ({ codeHost, referenceInfo, fileServerPath } = {}) => {
+  if (Object.prototype.hasOwnProperty.call(CODE_HOSTS, codeHost)) return codeHost;
+  const url = Boolean(String((referenceInfo && referenceInfo.url) || "").trim());
+  const folder = Boolean(String(fileServerPath || "").trim());
+  if (url && folder) return "both";
+  return folder ? "fileserver" : "repository";
+};
+
+export const needsRepoUrl = (workType, codeHost) =>
+  Boolean(workTypeInfo(workType).urlRequired) && codeHost !== "fileserver";
+
+export const needsFolder = (workType, codeHost) =>
+  workTypeOf(workType) !== "software" || codeHost !== "repository";

@@ -303,6 +303,44 @@ describe("File Server display card", () => {
   });
 });
 
+// Code on GitHub or GitLab has no folder; the empty section must not count as
+// unsaved, or publishing is refused with "File Server Information".
+describe("the file server section for a code repository", () => {
+  const renderCode = (codeHost) => {
+    const setEditing = jest.fn();
+    render(
+      <AlertContext.Provider value={{ setAlert: jest.fn() }}>
+        <CuratorContext.Provider
+          value={{ fileServerPath: "", workType: "software", codeHost, addMany: jest.fn() }}
+        >
+          <CuratorHelperContext.Provider
+            value={{ editing: { fileServerPathInfo: false }, setEditing }}
+          >
+            <FileServerElement />
+          </CuratorHelperContext.Provider>
+        </CuratorContext.Provider>
+      </AlertContext.Provider>
+    );
+    return setEditing;
+  };
+
+  it("is finished, not unsaved, when the code is on GitHub or GitLab", () => {
+    const setEditing = renderCode("repository");
+    expect(setEditing).toHaveBeenLastCalledWith("fileServerPathInfo", false);
+    expect(screen.getByTestId("fileserver-not-needed")).toHaveTextContent(/not needed/i);
+  });
+
+  it("still asks for the folder when the code is on the file server", () => {
+    const setEditing = renderCode("fileserver");
+    expect(setEditing).toHaveBeenLastCalledWith("fileServerPathInfo", true);
+    expect(screen.queryByTestId("fileserver-not-needed")).toBeNull();
+  });
+
+  it("still asks for the folder when the code is in both places", () => {
+    expect(renderCode("both")).toHaveBeenLastCalledWith("fileServerPathInfo", true);
+  });
+});
+
 // Every chart, dataset, script and tool path is stored RELATIVE to the file
 // server folder. Changing the folder re-points all of them at once, which
 // shows up much later as "the images stopped working".
