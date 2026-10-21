@@ -8,7 +8,7 @@
  * everyone here directly, so this page is the first thing a visitor sees and
  * it has to be honest about which of the three states it is in.
  */
-import { render, screen, act, within } from "@testing-library/react";
+import { render, screen, act, within, waitFor } from "@testing-library/react";
 
 const routerEvents = {
   handlers: {},
@@ -394,8 +394,8 @@ describe("the record-type filter", () => {
     expect(screen.getByTestId("record-count")).toHaveTextContent("4 Records Available");
   });
 
-  // A record's title appears more than once in its row, hence the *All*
-  // queries below.
+  // Removed rows fade out (Table's 100 ms exit transition) and stay in the
+  // DOM until it ends, so absence is awaited and presence uses *All*.
   it("narrows the list to one type, and back to all", async () => {
     await mixed();
     act(() => {
@@ -403,14 +403,14 @@ describe("the record-type filter", () => {
     });
     expect(screen.getByTestId("record-count")).toHaveTextContent("1 Records Available");
     expect(screen.getAllByText("A code repository").length).toBeGreaterThan(0);
-    expect(screen.queryAllByText("A journal paper")).toHaveLength(0);
+    await waitFor(() => expect(screen.queryAllByText("A journal paper")).toHaveLength(0));
 
     act(() => {
       screen.getByRole("button", { name: "Published papers (2)" }).click();
     });
     expect(screen.getAllByText("A journal paper").length).toBeGreaterThan(0);
     expect(screen.getAllByText("A legacy record").length).toBeGreaterThan(0);
-    expect(screen.queryAllByText("A code repository")).toHaveLength(0);
+    await waitFor(() => expect(screen.queryAllByText("A code repository")).toHaveLength(0));
 
     act(() => {
       screen.getByRole("button", { name: "All (4)" }).click();
