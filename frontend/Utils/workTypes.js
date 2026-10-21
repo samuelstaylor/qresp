@@ -12,6 +12,8 @@ export const WORK_TYPES = {
     noun: "paper",
     label: "Published paper",
     short: "Paper",
+    // Explore's filter: "show me only …".
+    plural: "Published papers",
     description:
       "A journal article, conference paper or preprint. Link each figure to the data and code that made it.",
     heading: "Publication Information for This Paper",
@@ -31,6 +33,7 @@ export const WORK_TYPES = {
     noun: "report",
     label: "Unpublished paper or report",
     short: "Report",
+    plural: "Unpublished papers & reports",
     description:
       "A manuscript in preparation, technical report, thesis or white paper that has not been published.",
     heading: "About This Report",
@@ -50,6 +53,7 @@ export const WORK_TYPES = {
     noun: "code repository",
     label: "Code repository",
     short: "Code",
+    plural: "Code repositories",
     description:
       "A GitHub or GitLab repository or other code base: what it does, who wrote it, and its scripts and tools.",
     heading: "About This Code Repository",
@@ -69,6 +73,7 @@ export const WORK_TYPES = {
     noun: "dataset",
     label: "Dataset",
     short: "Dataset",
+    plural: "Datasets",
     description:
       "A collection of data files: what they contain, how they were produced and where they live.",
     heading: "About This Dataset",
@@ -86,6 +91,7 @@ export const WORK_TYPES = {
     noun: "work",
     label: "Other",
     short: "Other",
+    plural: "Other works",
     description:
       "Anything else worth making reproducible: slides, a poster, a tutorial, a simulation campaign.",
     heading: "About This Work",

@@ -27,6 +27,7 @@ Major Update
   - Publishing is immediate for a signed-in curator; the per-record email verification link is gone (old links still work)
   - Optional, consent-gated Gemini suggestions for keywords and RCC descriptions
 - Explorer
+  - Filter by record type: published papers, unpublished papers and reports, code repositories, datasets, other works, or all (default)
   - Sort by title, author, year and journal; Advanced Search with node selector
   - Work-type badges, lock badges for private records, "Your record" / "Shared with you" labels
   - Related Research for each record

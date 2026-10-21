@@ -56,6 +56,13 @@ const Exploration = () => (
         Alternatively, the user can click the search button to view all papers
         without applying any filter.
       </P>
+      <P>
+        The buttons above the results show one kind of record at a time:
+        published papers, unpublished papers and reports, code repositories,
+        datasets or other works. Each shows how many records it holds;{" "}
+        <strong>All</strong> (the default) shows every kind. The choice also
+        applies to the results of an advanced search.
+      </P>
     </Section>
 
     <Section title="View paper information">

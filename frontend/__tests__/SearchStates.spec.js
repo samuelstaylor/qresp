@@ -356,3 +356,63 @@ describe("search page: record-source vs filter failures", () => {
     expect(screen.queryByTestId("record-count")).toBeNull();
   });
 });
+
+describe("the record-type filter", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    routerEvents.handlers = {};
+  });
+
+  const typed = (id, title, workType) => ({
+    ...PAPER(id, title),
+    ...(workType ? { _Search__work_type: workType } : {}),
+  });
+
+  const mixed = () =>
+    renderSearch({
+      initialdata: dataWith({
+        [ALPHA]: [
+          typed("p", "A journal paper", "paper"),
+          // A server from before work types: a published paper.
+          typed("l", "A legacy record"),
+          typed("c", "A code repository", "software"),
+          typed("r", "A draft report", "report"),
+        ],
+      }),
+    });
+
+  it("shows every record by default, with a count per type", async () => {
+    await mixed();
+    expect(screen.getByRole("button", { name: "All (4)" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    expect(screen.getByRole("button", { name: "Published papers (2)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Code repositories (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Unpublished papers & reports (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Datasets (0)" })).toBeInTheDocument();
+    expect(screen.getByTestId("record-count")).toHaveTextContent("4 Records Available");
+  });
+
+  it("narrows the list to one type, and back to all", async () => {
+    await mixed();
+    act(() => {
+      screen.getByRole("button", { name: "Code repositories (1)" }).click();
+    });
+    expect(screen.getByTestId("record-count")).toHaveTextContent("1 Records Available");
+    expect(screen.getByText("A code repository")).toBeInTheDocument();
+    expect(screen.queryByText("A journal paper")).toBeNull();
+
+    act(() => {
+      screen.getByRole("button", { name: "Published papers (2)" }).click();
+    });
+    expect(screen.getByText("A journal paper")).toBeInTheDocument();
+    expect(screen.getByText("A legacy record")).toBeInTheDocument();
+    expect(screen.queryByText("A code repository")).toBeNull();
+
+    act(() => {
+      screen.getByRole("button", { name: "All (4)" }).click();
+    });
+    expect(screen.getByTestId("record-count")).toHaveTextContent("4 Records Available");
+  });
+});

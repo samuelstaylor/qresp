@@ -142,6 +142,15 @@ confirmation link") instead of being emailed.
 - [ ] Anonymous `PUT /api/paper/{id}` → 401
 - [ ] `/api/ui/` swagger page loads
 
+## Explore record-type filter
+
+- [ ] `/search` shows "All (n)" selected, then one button per type with its
+      count; legacy records (no type) count as Published papers
+- [ ] Each type shows only its records and the record count follows; All
+      brings everything back
+- [ ] Run an Advanced Search, then pick a type → the type narrows the
+      search results
+
 ## Publish → account round trip
 
 - [ ] Signed in, publish a staging test record → success dialog says "Your

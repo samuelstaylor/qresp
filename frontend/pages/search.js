@@ -17,6 +17,10 @@ import { RegularStyledButton } from "../components/button";
 import RecordTable from "../components/Table/Table";
 import AdvancedSearch from "../components/AdvancedSearch";
 import Summary from "../components/Paper/Summary";
+import WorkTypeFilter, {
+  ALL_WORK_TYPES,
+  filterRowsByWorkType,
+} from "../components/WorkTypeFilter";
 
 import axios from "axios";
 import AlertContext from "../Context/Alert/alertContext";
@@ -287,6 +291,12 @@ const search = ({
   // sort and the empty state all operate on the same combined list.
   const rows = mergeRecordsByServer(papers, servernames, selectedservers);
 
+  // Explore's record-type filter (All by default). It narrows whatever the
+  // page currently holds, Advanced Search results included, so the two
+  // combine; the counts on each option come from the same rows.
+  const [workType, setWorkType] = useState(ALL_WORK_TYPES);
+  const shownRows = filterRowsByWorkType(rows, workType);
+
   useEffect(() => {
     if (resolvedServers !== null) setSelected(resolvedServers);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -347,8 +357,9 @@ const search = ({
               Search Reproducible Research Records
             </Typography>
             <Typography variant="body1" sx={{ color: "#555", mt: 0.75, maxWidth: 720 }}>
-              Find curated papers across Qresp servers and trace each figure
-              back to the datasets, scripts and tools that produced it.
+              Find curated papers, reports, code and datasets across Qresp
+              servers and trace each result back to the datasets, scripts and
+              tools that produced it.
             </Typography>
           </Box>
           {/* NO banner when only some sources failed.
@@ -451,8 +462,9 @@ const search = ({
             </Box>
           ) : (
             <Fragment>
+              <WorkTypeFilter rows={rows} value={workType} onChange={setWorkType} />
               <RecordTable
-                rows={rows}
+                rows={shownRows}
                 columns={columns}
                 defaultOrderBy="year"
                 defaultOrder="desc"
