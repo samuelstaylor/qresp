@@ -1,5 +1,8 @@
 # Qresp 2.0 Implementation Checklist
 
+> Working name. This work was released as **v3.0.0** (see `CHANGELOG.md`);
+> the published v2.0.x line is the 2020-2021 release.
+
 Baseline: **`chore/frontend-modernization` @ `f226f78`** (backend Flask 3/Connexion 3/py3.14 +
 frontend Next 16/React 19/MUI 9, all verified locally + staging: `PAPERSTACK_STAGING_NOTES.md`).
 Direction change 2026-07-03: curation-assistant/AI-workflow-automation work is **paused**;

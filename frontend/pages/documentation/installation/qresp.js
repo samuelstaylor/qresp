@@ -13,21 +13,16 @@ import {
 
 const REPOSITORY = "https://github.com/qresp-code-development/qresp";
 
-const CONFIG_INI = `
-[GLOBAL]
-MAIL_ADDR = x@y.com
-SMTP_SERVER = smtp.gmail.com
-SMTP_PORT = 587
-
-[PROD]
-MONGODB_HOST = db.y.com
-MONGODB_PORT = 27017
-MONGODB_USERNAME = username
-MONGODB_PASSWORD = password
-MONGODB_DB_NAME = index_name
-
-[SECRETS]
-MAIL_PWD = Password for the MAIL_ADDR (specified above) in the SMTP server
+const ENV_PROD = `
+QRESP_FLASK_SECRET_KEY=long-random-string
+QRESP_GOOGLE_CLIENT_ID=...
+QRESP_GOOGLE_CLIENT_SECRET=...
+QRESP_GOOGLE_REDIRECT_URI=https://your.host/api/auth/google/callback
+QRESP_FROM_ADDR=x@y.com
+QRESP_MAIL_PWD=password-for-the-from-address
+QRESP_SMTP_SERVER=smtp.gmail.com
+QRESP_SMTP_PORT=587
+QRESP_ADMIN_EMAILS=admin@y.com
 `;
 
 const QrespInstallation = () => (
@@ -62,71 +57,63 @@ const QrespInstallation = () => (
         Clone the Qresp source from the{" "}
         <ExternalLink href={REPOSITORY}>Qresp GitHub repository</ExternalLink>{" "}
         and use{" "}
-        <ExternalLink href="https://docs.docker.com/compose/">Docker Compose</ExternalLink>:
+        <ExternalLink href="https://docs.docker.com/compose/">Docker Compose</ExternalLink>.
+        The production compose file runs MongoDB 4.4, the backend, the
+        frontend and nginx:
       </P>
       <CodeBlock label="shell">{`
 git clone https://github.com/qresp-code-development/qresp.git
 cd qresp
 git checkout master
+cp .env.prod.example .env.prod      # then fill it in (see below)
 docker-compose up -d --build
 `}</CodeBlock>
     </Section>
 
     <Section title="Configuration">
       <P>
-        Please make sure you edit all the variables in{" "}
-        <ExternalLink href={`${REPOSITORY}/blob/develop/backend/project/config.ini`}>
-          <Code>config.ini</Code>
-        </ExternalLink>{" "}
-        to utilize all the capabilities of Qresp. If not, you&rsquo;ll still be
-        able to use the explorer section but the curator sections wouldn&rsquo;t
-        work as intended.
+        Settings are environment variables in <Code>.env.prod</Code>, which
+        is never committed. Every variable is listed, with comments, in{" "}
+        <ExternalLink href={`${REPOSITORY}/blob/master/.env.prod.example`}>
+          <Code>.env.prod.example</Code>
+        </ExternalLink>
+        ; the main ones are below (with examples). Any value in{" "}
+        <Code>backend/project/config.ini</Code> can be overridden the same way
+        by a <Code>QRESP_</Code>-prefixed variable.
       </P>
-      <P>See the list of required variables below (with examples).</P>
-      <CodeBlock label="config.ini">{CONFIG_INI}</CodeBlock>
+      <CodeBlock label=".env.prod">{ENV_PROD}</CodeBlock>
+      <Bullets
+        dense
+        items={[
+          <span key="o">
+            The OAuth redirect URI must also be registered with the provider
+            (Google, and optionally Microsoft or GitHub).
+          </span>,
+          <span key="m">
+            The database settings (<Code>QRESP_MONGODB_HOST</Code>,{" "}
+            <Code>QRESP_MONGODB_PORT</Code>, <Code>QRESP_MONGODB_DB_NAME</Code>)
+            already point at the bundled MongoDB. To use an external MongoDB
+            (4.0 or newer) instead, set them together with{" "}
+            <Code>QRESP_MONGODB_USERNAME</Code> and{" "}
+            <Code>QRESP_MONGODB_PASSWORD</Code>.
+          </span>,
+        ]}
+      />
 
       <Callout kind="warning">
-        If you don&rsquo;t have the correct SSL certificates, you&rsquo;ll need
-        to remove (or comment out) a few lines, otherwise you&rsquo;ll run into
-        build issues. Specifically:
-        <Bullets
-          dense
-          items={[
-            <span key="d">
-              <ExternalLink href={`${REPOSITORY}/blob/develop/nginx/Dockerfile#L13`}>
-                Lines 13 &amp; 14
-              </ExternalLink>
-              , in the Dockerfile
-            </span>,
-            <span key="n">
-              <ExternalLink href={`${REPOSITORY}/blob/develop/nginx/default.conf#L43`}>
-                Lines 43 &amp; 44
-              </ExternalLink>
-              , in the nginx (reverse proxy) configuration
-            </span>,
-          ]}
-        />
-        Delete the above mentioned lines or add a <Code>#</Code> at the start
-        of each line.
+        nginx needs a TLS certificate and key at <Code>nginx/nginx.crt</Code>{" "}
+        and <Code>nginx/nginx.key</Code> before the build. Use your
+        site&rsquo;s certificate, or create a self-signed pair for testing
+        with <Code>sh nginx/generate-local-certs.sh</Code>.
       </Callout>
-
-      <P>
-        We recommend setting up the MongoDB instance outside of the Docker
-        services, but you can use <Code>docker-compose.yml</Code> services to
-        run both MongoDB and nginx containers.
-      </P>
     </Section>
 
     <Section title="Accessing the portal">
       <P>
-        Once the installation is completed, please use your browser to access
-        the Qresp portal using the port number used in <Code>docker run</Code>,
-        for example <Code>http://localhost:8080</Code>.
+        Once the containers are up, open <Code>https://localhost</Code> (or
+        your server&rsquo;s host name) in a browser. Plain HTTP on port 80
+        redirects to HTTPS.
       </P>
-      <Callout kind="note">
-        Once the installation is completed, please use your browser to access
-        the Qresp portal using the address reported in the output.
-      </Callout>
     </Section>
   </DocsLayout>
 );

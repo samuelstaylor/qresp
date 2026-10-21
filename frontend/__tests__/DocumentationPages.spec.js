@@ -97,11 +97,14 @@ describe("the documentation content", () => {
     expect(text).toContain("https://qresp.hybrid3.duke.edu/");
   });
 
-  it("gives the Docker install commands and every config.ini variable", () => {
+  it("gives the Docker install commands and the main environment variables", () => {
     const text = textOf("/documentation/installation/qresp");
+    expect(text).toContain("cp .env.prod.example .env.prod");
     expect(text).toContain("docker-compose up -d --build");
-    ["MAIL_ADDR", "SMTP_SERVER", "SMTP_PORT", "MONGODB_HOST", "MONGODB_PORT",
-      "MONGODB_USERNAME", "MONGODB_PASSWORD", "MONGODB_DB_NAME", "MAIL_PWD"]
+    ["QRESP_FLASK_SECRET_KEY", "QRESP_GOOGLE_CLIENT_ID", "QRESP_GOOGLE_REDIRECT_URI",
+      "QRESP_FROM_ADDR", "QRESP_MAIL_PWD", "QRESP_SMTP_SERVER", "QRESP_SMTP_PORT",
+      "QRESP_ADMIN_EMAILS", "QRESP_MONGODB_HOST", "QRESP_MONGODB_USERNAME",
+      "QRESP_MONGODB_PASSWORD"]
       .forEach((name) => expect(text).toContain(name));
   });
 

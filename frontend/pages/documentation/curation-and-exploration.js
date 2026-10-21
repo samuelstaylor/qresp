@@ -11,7 +11,7 @@ import {
 
 // Public Qresp nodes, as listed by the Qresp project.
 const NODES = [
-  ["The University of Chicago", "v2.0.5", "https://paperstack.uchicago.edu"],
+  ["The University of Chicago", "v3.0.0", "https://paperstack.uchicago.edu"],
   ["Duke University", "v1.2.0", "https://qresp.hybrid3.duke.edu/"],
 ];
 

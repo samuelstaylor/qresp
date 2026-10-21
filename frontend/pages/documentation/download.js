@@ -15,8 +15,8 @@ const RELEASES = [
   {
     name: "Qresp",
     page: "/documentation/installation/qresp",
-    version: "v2.0.5",
-    archive: "https://github.com/qresp-code-development/qresp/archive/v2.0.5.tar.gz",
+    version: "v3.0.0",
+    archive: "https://github.com/qresp-code-development/qresp/archive/v3.0.0.tar.gz",
     label: "qresp:latest",
   },
   {

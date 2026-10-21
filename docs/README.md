@@ -17,12 +17,13 @@
 
 ## Operations
 
+- [Production deployment](operations/production-deploy.md)
 - [Microsoft Entra sign-in setup](operations/microsoft-entra-login.md)
 - [Staging QA](operations/staging-qa.md)
 
 ## Current plans
 
-- [Qresp 2.0 implementation checklist](roadmap/qresp-2-implementation.md)
+- [Implementation checklist](roadmap/qresp-2-implementation.md) (planned as "Qresp 2.0"; released as v3.0.0)
 
 ## Archive
 

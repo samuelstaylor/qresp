@@ -70,6 +70,9 @@ sh nginx/generate-local-certs.sh     # self-signed dev certs, git-ignored
 docker compose -f docker-compose.dev.yml up --build
 ```
 
+With the standalone Compose v1 (`docker-compose` 1.22, as on paperstack)
+use `docker-compose -f docker-compose.dev.yml up --build`.
+
 This starts MongoDB, the backend, the frontend and nginx. nginx sends `/api`
 to the backend and everything else to the frontend.
 
@@ -78,4 +81,5 @@ to the backend and everything else to the frontend.
 - [RCC folder analysis](../curation/rcc-folder-analysis.md)
 - [Microsoft Entra sign-in setup](../operations/microsoft-entra-login.md)
 - [Staging QA](../operations/staging-qa.md)
+- [Production deployment](../operations/production-deploy.md)
 - [Documentation index](../README.md)

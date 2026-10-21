@@ -40,8 +40,8 @@ const Installation = () => (
           caption="Qresp requirements"
           columns={["Software", "Version requirement"]}
           rows={[
-            ["Docker CE", ">=17.12"],
-            ["Docker Compose", ">=3"],
+            ["Docker CE", ">=18.06"],
+            ["Docker Compose", ">=1.22 (compose file format 2.4)"],
           ]}
         />
       </SubSection>

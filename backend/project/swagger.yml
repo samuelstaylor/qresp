@@ -1,8 +1,8 @@
 swagger: "2.0"
 info:
-  description: This is the swagger file that provides the API to fetch data from Qresp server
-  version: "1.0"
-  title: Swagger REST Article
+  description: REST API of a Qresp server (explore, curate, publish, accounts)
+  version: "3.0.0"
+  title: Qresp API
 consumes:
   - "application/json"
 produces:
