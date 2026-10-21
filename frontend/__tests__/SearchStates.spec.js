@@ -394,21 +394,23 @@ describe("the record-type filter", () => {
     expect(screen.getByTestId("record-count")).toHaveTextContent("4 Records Available");
   });
 
+  // A record's title appears more than once in its row, hence the *All*
+  // queries below.
   it("narrows the list to one type, and back to all", async () => {
     await mixed();
     act(() => {
       screen.getByRole("button", { name: "Code repositories (1)" }).click();
     });
     expect(screen.getByTestId("record-count")).toHaveTextContent("1 Records Available");
-    expect(screen.getByText("A code repository")).toBeInTheDocument();
-    expect(screen.queryByText("A journal paper")).toBeNull();
+    expect(screen.getAllByText("A code repository").length).toBeGreaterThan(0);
+    expect(screen.queryAllByText("A journal paper")).toHaveLength(0);
 
     act(() => {
       screen.getByRole("button", { name: "Published papers (2)" }).click();
     });
-    expect(screen.getByText("A journal paper")).toBeInTheDocument();
-    expect(screen.getByText("A legacy record")).toBeInTheDocument();
-    expect(screen.queryByText("A code repository")).toBeNull();
+    expect(screen.getAllByText("A journal paper").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("A legacy record").length).toBeGreaterThan(0);
+    expect(screen.queryAllByText("A code repository")).toHaveLength(0);
 
     act(() => {
       screen.getByRole("button", { name: "All (4)" }).click();
