@@ -1,9 +1,23 @@
+# docker-compose 1.22 on paperstack rejects a file with no version key, and
+# pids_limit needs the 2.x format.
+version: "2.4"
+
 services:
   backend:
     restart: always
     build: ./backend
     depends_on:
       - mongodb
+    # Docker 18.06 on paperstack: without these the backend hits the thread/pids
+    # limit and requests fail with "RuntimeError: can't start new thread"
+    # (same settings as docker-compose.dev.yml).
+    security_opt:
+      - seccomp:unconfined
+    pids_limit: -1
+    # Production secrets (OAuth, Flask key, SMTP, admins). Gitignored; copy
+    # .env.prod.example to .env.prod and fill it in.
+    env_file:
+      - .env.prod
     environment:
       - PYTHONUNBUFFERED=TRUE
       # Docker-only MongoDB connectivity, read by project/config.py via QRESP_*.
