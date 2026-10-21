@@ -15,7 +15,7 @@ import functools
 import hashlib
 import re
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import urlencode
 
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -739,21 +739,26 @@ def github_callback(state=None, code=None, error=None):
         print("GitHub sign-in failed: %s" % type(e).__name__)
         return {"error": "GitHub sign-in failed, please try again."}, 400
 
-    # GitHub may not expose email on the user profile if it's set to private;
-    # the user:email scope lets us fetch it from the emails endpoint.
-    email = (user_info.get("email") or "").strip().lower()
-    if not email:
-        try:
-            emails = oauth.get(GITHUB_EMAILS_URI,
-                               headers={"Accept": "application/json"}).json()
-            primary = next(
-                (e for e in emails if e.get("primary") and e.get("verified")),
-                None,
-            )
-            if primary:
-                email = (primary.get("email") or "").strip().lower()
-        except Exception:
-            pass
+    # Email is the ownership key, so only an address GitHub reports as
+    # VERIFIED is accepted: the primary one if verified, else the profile's
+    # public email if it is among the verified ones. The emails endpoint
+    # (user:email scope) is the only source of the verified flag.
+    email = ""
+    try:
+        emails = oauth.get(GITHUB_EMAILS_URI,
+                           headers={"Accept": "application/json"}).json()
+        verified = [(e.get("email") or "").strip().lower()
+                    for e in emails
+                    if isinstance(e, dict) and e.get("verified")]
+        primary = next(
+            ((e.get("email") or "").strip().lower() for e in emails
+             if isinstance(e, dict) and e.get("primary") and e.get("verified")),
+            "",
+        )
+        public = (user_info.get("email") or "").strip().lower()
+        email = primary or (public if public and public in verified else "")
+    except Exception:
+        pass
 
     if not email:
         return {"error": "GitHub account did not provide a verified email address. "
@@ -836,14 +841,97 @@ def public_profile(email):
     return out
 
 
-def local_register(body):
-    """POST /api/auth/register — create a new email/password account.
+# Email/password accounts must prove the address before they can sign in:
+# email is the key for record ownership and the admin allowlist, so an
+# unverified address would let anyone claim someone else's records.
+VERIFY_TOKEN_TTL = timedelta(hours=24)
+VERIFY_RESEND_INTERVAL = timedelta(minutes=2)
 
-    On success the new account is immediately signed in. Email is
+
+def _token_hash(token):
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _public_url():
+    """Origin used in emailed links. Taken from QRESP_PUBLIC_URL (or
+    [GLOBAL] PUBLIC_URL), never from the request: Origin and Host are
+    client-controlled, and a forged one would mail the token to another site.
+    Only with dev-login on (local/staging) does it fall back to the request's
+    own host. Returns None when no trusted origin is available."""
+    configured = (Config.get_setting("GLOBAL", "PUBLIC_URL") or "").strip()
+    if configured:
+        return configured.rstrip("/")
+    if _dev_login_enabled():
+        return (request.host_url or "").rstrip("/") or None
+    return None
+
+
+def _skip_email():
+    value = Config.get_setting("PUBLISH", "PUBLISH_SKIP_EMAIL") or ""
+    return value.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _send_verification(account, base_url):
+    """Issue a fresh confirmation token for ``account`` (replacing any older
+    one) and email the link. Returns the link only in skip-email mode
+    (staging QA), otherwise None. Raises if the email cannot be sent."""
+    token = secrets.token_urlsafe(32)
+    account.verify_token_hash = _token_hash(token)
+    account.verify_sent_at = datetime.utcnow()
+    account.save()
+    link = "%s/verify-email?token=%s" % (base_url, token)
+    if _skip_email():
+        return link
+
+    from project.utils.mail import mailClient
+    name = account.name or account.email
+    html = """
+    <html>
+        <body>
+            <p>
+                Hello {0},<br><br>
+                Please confirm your email address to finish creating your
+                Qresp account. Open the link below and enter the password you
+                chose:<br><br>
+                <a href="{1}">{1}</a><br><br>
+                The link expires in 24 hours. If you did not create a Qresp
+                account, ignore this email; no account will be activated.<br><br>
+                The Qresp Team
+            </p>
+        </body>
+    </html>
+    """.format(name, link)
+    text = ("Please confirm your email address to finish creating your "
+            "Qresp account: %s\n\nThe link expires in 24 hours. If you did "
+            "not create a Qresp account, ignore this email." % link)
+    mailClient.send("Confirm your Qresp account", text, html, account.email)
+    return None
+
+
+def _local_session_user(account):
+    user = _with_profile({
+        "email": account.email,
+        "name": account.name or account.email,
+        "is_admin": account.email in _admin_emails(),
+        "provider": "local",
+    })
+    session[AUTH_SESSION_KEY] = user
+    return user
+
+
+def local_register(body):
+    """POST /api/auth/register — create an email/password account.
+
+    The account stays inactive until the emailed confirmation link is
+    opened (``verify_email``); nobody is signed in here. Email is
     case-insensitively normalised and serves as the linking key across all
     sign-in providers: a LocalAccount and an ExternalIdentity (Google /
     Microsoft) that share the same email address share the same paper
     ownership records.
+
+    Registering an address that is still unconfirmed replaces the pending
+    sign-up (new password, new link, old link void), so whoever started it
+    first cannot hold the address hostage: only the inbox owner can confirm.
     """
     email = (body.get("email") or "").strip().lower()
     password = body.get("password") or ""
@@ -857,38 +945,51 @@ def local_register(body):
     if len(affiliation) > 300:
         return {"error": "Affiliation is too long (max 300 characters)."}, 400
 
+    base_url = _public_url()
+    if not base_url:
+        print("Email sign-up refused: QRESP_PUBLIC_URL is not set.")
+        return {"error": "Creating an account with email is not available "
+                         "on this server. Please use another sign-in "
+                         "option."}, 503
+
     from project.models import LocalAccount, UserProfile
     now = datetime.utcnow()
 
-    if LocalAccount.objects(email=email).first():
+    account = LocalAccount.objects(email=email).first()
+    if account and account.email_verified:
         return {"error": "An account with this email already exists. "
                          "Please sign in instead."}, 409
-
-    account = LocalAccount(
-        email=email,
-        password_hash=generate_password_hash(password),
-        name=name or email,
-        created_at=now,
-        last_login_at=now,
-    )
+    if not account:
+        account = LocalAccount(email=email, created_at=now)
+    account.password_hash = generate_password_hash(password)
+    account.name = name or email
+    account.email_verified = False
     account.save()
 
     if affiliation:
         UserProfile.objects(email=email).update_one(
             upsert=True, set__affiliation=affiliation, set__updated_at=now)
 
-    user = _with_profile({
-        "email": email,
-        "name": account.name,
-        "is_admin": email in _admin_emails(),
-        "provider": "local",
-    })
-    session[AUTH_SESSION_KEY] = user
-    return {"authenticated": True, "user": user}, 200
+    try:
+        link = _send_verification(account, base_url)
+    except Exception as e:
+        print("Confirmation email failed: %s" % type(e).__name__)
+        return {"error": "We could not send the confirmation email. Please "
+                         "try again later."}, 503
+
+    out = {"authenticated": False, "verification_required": True,
+           "email": email}
+    if link:
+        out["verify_link"] = link
+    return out, 200
 
 
 def local_login(body):
-    """POST /api/auth/local-login — sign in with email and password."""
+    """POST /api/auth/local-login — sign in with email and password.
+
+    An unconfirmed account is refused (403) after the password checks out,
+    and a new confirmation link is sent unless one went out moments ago.
+    """
     email = (body.get("email") or "").strip().lower()
     password = body.get("password") or ""
 
@@ -900,16 +1001,61 @@ def local_login(body):
     if not account or not check_password_hash(account.password_hash, password):
         return {"error": "Invalid email or password."}, 401
 
+    if not account.email_verified:
+        out = {"verification_required": True, "email": email}
+        sent_at = account.verify_sent_at
+        recent = sent_at and datetime.utcnow() - sent_at < VERIFY_RESEND_INTERVAL
+        base_url = _public_url()
+        if not recent and base_url:
+            try:
+                link = _send_verification(account, base_url)
+                if link:
+                    out["verify_link"] = link
+            except Exception as e:
+                print("Confirmation email failed: %s" % type(e).__name__)
+        out["error"] = ("Please confirm your email address first. We sent a "
+                        "confirmation link to %s; it may take a few minutes "
+                        "to arrive." % email)
+        return out, 403
+
     account.last_login_at = datetime.utcnow()
     account.save()
+    user = _local_session_user(account)
+    return {"authenticated": True, "user": user}, 200
 
-    user = _with_profile({
-        "email": email,
-        "name": account.name or email,
-        "is_admin": email in _admin_emails(),
-        "provider": "local",
-    })
-    session[AUTH_SESSION_KEY] = user
+
+def verify_email(body):
+    """POST /api/auth/verify-email — confirm an email/password account.
+
+    Needs the token from the emailed link AND the account's password: the
+    password proves the person confirming is the one who signed up, so a
+    stranger who registers your address cannot get you to activate it for
+    them by clicking the link. Success signs the account in.
+    """
+    token = (body.get("token") or "").strip()
+    password = body.get("password") or ""
+    invalid = ({"error": "This confirmation link is invalid or has expired. "
+                         "Sign in with your email and password to get a new "
+                         "one."}, 400)
+    if not token or not password:
+        return invalid
+
+    from project.models import LocalAccount
+    account = LocalAccount.objects(verify_token_hash=_token_hash(token)).first()
+    if (not account or not account.verify_sent_at
+            or datetime.utcnow() - account.verify_sent_at > VERIFY_TOKEN_TTL):
+        return invalid
+    if not check_password_hash(account.password_hash, password):
+        return {"error": "Incorrect password. Enter the password you chose "
+                         "when you created the account."}, 401
+
+    now = datetime.utcnow()
+    account.email_verified = True
+    account.verify_token_hash = None
+    account.verify_sent_at = None
+    account.last_login_at = now
+    account.save()
+    user = _local_session_user(account)
     return {"authenticated": True, "user": user}, 200
 
 

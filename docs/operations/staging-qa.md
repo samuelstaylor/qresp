@@ -103,6 +103,23 @@ a single server-wide `limit_req` throttled every request, so one page load's
 - [ ] No secret, token, provider response body, or stack trace appears in any
       user-visible error
 
+## Email/password accounts — confirmation link
+
+With `QRESP_PUBLISH_SKIP_EMAIL=1` the link is shown on the page ("Open
+confirmation link") instead of being emailed.
+
+- [ ] Create account with email → info message "We sent a confirmation link
+      to …"; you are NOT signed in; the form is back in Sign in mode
+- [ ] Sign in with that email/password before confirming → info message
+      "Please confirm your email address first"; still not signed in
+- [ ] Open the link → "Confirm your email" page → wrong password is refused,
+      right password lands on `/account` signed in
+- [ ] Open the same link again → "invalid or has expired"
+- [ ] Create account again for an address already confirmed → "already
+      exists. Please sign in instead."
+- [ ] Production only (real email): the message arrives, and its link starts
+      with `QRESP_PUBLIC_URL`
+
 ## API smoke (curl -k through the tunnel)
 
 - [ ] `curl -k https://localhost:8443/api/auth/me` → 200, `authenticated:false`, a `csrf_token`

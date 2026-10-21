@@ -11,7 +11,7 @@ Major Update
   - nginx: per-traffic-class rate limits, HTTP to HTTPS redirect
   - Configuration through `QRESP_*` environment variables (`.env.prod.example`) instead of editing `config.ini`
 - Added accounts
-  - Sign in with Google or Microsoft (work/school accounts)
+  - Sign in with Google, Microsoft (work/school accounts), GitHub, or an email/password account confirmed by an emailed link
   - Account pages: profile (affiliation, ORCID, Google Scholar, website, avatar), My Records, drafts, favorites
   - Record ownership, editor and viewer roles, owner reassignment and an audit trail
   - Admin pages for all records and ownerless records

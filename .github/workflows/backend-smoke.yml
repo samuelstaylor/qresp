@@ -85,6 +85,7 @@ jobs:
             project.tests.test_google_auth \
             project.tests.test_keyword_assist \
             project.tests.test_latex \
+            project.tests.test_local_accounts \
             project.tests.test_locate_folder \
             project.tests.test_manuscript_import \
             project.tests.test_microsoft \

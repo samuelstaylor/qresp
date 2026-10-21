@@ -76,7 +76,9 @@ git clone https://github.com/qresp-code-development/qresp.git /home/sushant/qres
 cd /home/sushant/qresp_v2 && git checkout vX.Y.Z
 cp .env.prod.example .env.prod && chmod 600 .env.prod   # fill it in
 ```
-Mail settings can be copied from `[GLOBAL]`/`[SECRETS]` in the old
+`QRESP_PUBLIC_URL=https://paperstack.uchicago.edu` is required: email/password
+sign-up is refused without it, because confirmation links are never built from
+request headers. Mail settings can be copied from `[GLOBAL]`/`[SECRETS]` in the old
 `backend/project/config.ini`. Generate the Flask key with `openssl rand -hex 32`.
 Never set `QRESP_ENABLE_DEV_LOGIN`, `QRESP_PUBLISH_SKIP_EMAIL` or
 `QRESP_OAUTHLIB_INSECURE_TRANSPORT` here.
@@ -117,7 +119,9 @@ sudo docker-compose logs --tail=100 backend
 ```
 In a private window: home and Explore load with all records; Google sign-in
 returns you signed in; old records open; a test publish sends the
-verification email; `http://` redirects to `https://`.
+verification email; creating an email/password account sends a confirmation
+link that opens on `https://paperstack.uchicago.edu/verify-email` and, with
+the password, signs you in; `http://` redirects to `https://`.
 
 ## Rollback
 

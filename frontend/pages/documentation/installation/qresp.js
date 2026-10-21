@@ -14,6 +14,7 @@ import {
 const REPOSITORY = "https://github.com/qresp-code-development/qresp";
 
 const ENV_PROD = `
+QRESP_PUBLIC_URL=https://your.host
 QRESP_FLASK_SECRET_KEY=long-random-string
 QRESP_GOOGLE_CLIENT_ID=...
 QRESP_GOOGLE_CLIENT_SECRET=...

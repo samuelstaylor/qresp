@@ -217,7 +217,8 @@ class TestRetiredProviders(unittest.TestCase):
             ["/auth/dev-login", "/auth/github", "/auth/github/callback",
              "/auth/google", "/auth/google/callback", "/auth/local-login",
              "/auth/logout", "/auth/me", "/auth/microsoft",
-             "/auth/microsoft/callback", "/auth/profile", "/auth/register"],
+             "/auth/microsoft/callback", "/auth/profile", "/auth/register",
+             "/auth/verify-email"],
             providers)
 
 

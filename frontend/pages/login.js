@@ -6,6 +6,7 @@ import {
   CircularProgress,
   Container,
   Divider,
+  Link as MuiLink,
   Paper,
   TextField,
   Typography,
@@ -57,6 +58,9 @@ const LoginPage = () => {
   const [affiliation, setAffiliation] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  // Shown after sign-up, or when signing in to an account whose email is
+  // not confirmed yet: { text, link } (link only on staging, no email sent).
+  const [notice, setNotice] = useState(null);
 
   useEffect(() => {
     if (!loading && authenticated && router) {
@@ -79,6 +83,7 @@ const LoginPage = () => {
   const switchMode = (newMode) => {
     setMode(newMode);
     setError("");
+    setNotice(null);
     setPassword("");
     setConfirmPassword("");
   };
@@ -86,6 +91,7 @@ const LoginPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setNotice(null);
 
     if (mode === "register") {
       if (password !== confirmPassword) {
@@ -104,6 +110,16 @@ const LoginPage = () => {
         ? await localLogin(email, password)
         : await register(email, password, name, affiliation);
     setSubmitting(false);
+
+    if (result.verificationRequired) {
+      const text =
+        mode === "register"
+          ? `We sent a confirmation link to ${result.email || email}. Open it and enter your password to finish creating your account.`
+          : result.error;
+      switchMode("signin");
+      setNotice({ text, link: result.verifyLink });
+      return;
+    }
 
     if (result.ok) {
       router.replace(requested && requested !== "/login" ? requested : "/account");
@@ -200,6 +216,18 @@ const LoginPage = () => {
             {error && (
               <Alert severity="error" sx={{ mb: 2 }}>
                 {error}
+              </Alert>
+            )}
+
+            {notice && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                {notice.text}
+                {notice.link && (
+                  <>
+                    {" "}
+                    <MuiLink href={notice.link}>Open confirmation link</MuiLink>
+                  </>
+                )}
               </Alert>
             )}
 

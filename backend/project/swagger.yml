@@ -1939,7 +1939,7 @@ paths:
       operationId: "project.auth.local_register"
       tags:
         - "Authentication"
-      summary: "Create a new email/password account and sign in"
+      summary: "Create an email/password account and email a confirmation link"
       parameters:
         - in: body
           name: body
@@ -1962,11 +1962,13 @@ paths:
                 maxLength: 300
       responses:
         200:
-          description: Account created and signed in
+          description: Account created (not signed in); confirmation link emailed
         400:
           description: Invalid email or password too short
         409:
-          description: Email already registered
+          description: Email already registered and confirmed
+        503:
+          description: Email sign-up unavailable (no QRESP_PUBLIC_URL) or the email could not be sent
   /auth/local-login:
     post:
       operationId: "project.auth.local_login"
@@ -1995,6 +1997,36 @@ paths:
           description: Missing email or password
         401:
           description: Invalid email or password
+        403:
+          description: Email not confirmed yet; a new confirmation link is sent
+  /auth/verify-email:
+    post:
+      operationId: "project.auth.verify_email"
+      tags:
+        - "Authentication"
+      summary: "Confirm an email/password account and sign in"
+      parameters:
+        - in: body
+          name: body
+          required: true
+          description: Token from the emailed link and the account password
+          schema:
+            type: object
+            required:
+              - token
+              - password
+            properties:
+              token:
+                type: string
+              password:
+                type: string
+      responses:
+        200:
+          description: Email confirmed and signed in
+        400:
+          description: Link invalid or expired
+        401:
+          description: Incorrect password
   /auth/me:
     get:
       operationId: "project.auth.me"

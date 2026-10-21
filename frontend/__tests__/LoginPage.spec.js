@@ -219,6 +219,81 @@ describe("/login", () => {
   });
 });
 
+describe("/login email confirmation", () => {
+  beforeEach(() => {
+    query = {};
+  });
+  afterEach(() => {
+    jest.resetAllMocks();
+    mockReplace.mockReset();
+  });
+
+  it("tells a new account to confirm its email instead of signing in", async () => {
+    anonymous();
+    axios.post.mockResolvedValue({
+      data: { authenticated: false, verification_required: true, email: "x@y.com" },
+    });
+    renderLogin();
+    await screen.findByRole("heading", { name: /sign in to qresp/i });
+
+    fireEvent.click(screen.getByRole("button", { name: /create account/i }));
+    fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: "x@y.com" } });
+    fireEvent.change(screen.getByLabelText(/^password\b/i), { target: { value: "abcdefgh" } });
+    fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: "abcdefgh" } });
+    fireEvent.click(screen.getByRole("button", { name: /create account with email/i }));
+
+    expect(await screen.findByText(/we sent a confirmation link to x@y\.com/i)).toBeInTheDocument();
+    expect(mockReplace).not.toHaveBeenCalled();
+    // Back in sign-in mode, with the address kept for the next attempt.
+    expect(screen.getByRole("button", { name: /sign in with email/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/email address/i)).toHaveValue("x@y.com");
+  });
+
+  it("offers the staging confirmation link when no email is sent", async () => {
+    anonymous();
+    axios.post.mockResolvedValue({
+      data: {
+        authenticated: false, verification_required: true, email: "x@y.com",
+        verify_link: "https://localhost:8444/verify-email?token=t",
+      },
+    });
+    renderLogin();
+    await screen.findByRole("heading", { name: /sign in to qresp/i });
+
+    fireEvent.click(screen.getByRole("button", { name: /create account/i }));
+    fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: "x@y.com" } });
+    fireEvent.change(screen.getByLabelText(/^password\b/i), { target: { value: "abcdefgh" } });
+    fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: "abcdefgh" } });
+    fireEvent.click(screen.getByRole("button", { name: /create account with email/i }));
+
+    expect(
+      await screen.findByRole("link", { name: /open confirmation link/i })
+    ).toHaveAttribute("href", "https://localhost:8444/verify-email?token=t");
+  });
+
+  it("explains an unconfirmed account on sign-in rather than calling it an error", async () => {
+    anonymous();
+    axios.post.mockRejectedValue({
+      response: {
+        status: 403,
+        data: {
+          verification_required: true,
+          error: "Please confirm your email address first. We sent a confirmation link to a@b.com.",
+        },
+      },
+    });
+    renderLogin();
+    await screen.findByRole("heading", { name: /sign in to qresp/i });
+
+    fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: "a@b.com" } });
+    fireEvent.change(screen.getByLabelText(/^password\b/i), { target: { value: "secret123" } });
+    fireEvent.click(screen.getByRole("button", { name: /sign in with email/i }));
+
+    expect(await screen.findByText(/please confirm your email address first/i)).toBeInTheDocument();
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+});
+
 describe("safeNext", () => {
   it("accepts same-origin paths only", () => {
     expect(safeNext("/curator")).toBe("/curator");

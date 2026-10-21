@@ -102,15 +102,22 @@ const AuthState = (props) => {
     }
   };
 
+  // Email/password accounts are inactive until the emailed link is opened
+  // (pages/verify-email.js), so neither sign-up nor signing in to an
+  // unconfirmed account creates a session; both report
+  // `verificationRequired` instead. `verifyLink` is only present on staging
+  // (QRESP_PUBLISH_SKIP_EMAIL), where no email is sent.
   const localLogin = async (email, password) => {
     try {
       const res = await axios.post("/api/auth/local-login", { email, password });
       dispatch({ type: SET_AUTH, payload: res.data });
       return { ok: true };
     } catch (err) {
-      const msg =
-        (err.response && err.response.data && err.response.data.error) ||
-        "Sign-in failed. Please check your email and password.";
+      const data = (err.response && err.response.data) || {};
+      const msg = data.error || "Sign-in failed. Please check your email and password.";
+      if (data.verification_required) {
+        return { ok: false, verificationRequired: true, error: msg, verifyLink: data.verify_link };
+      }
       dispatch({ type: AUTH_ERROR, payload: msg });
       return { ok: false, error: msg };
     }
@@ -119,6 +126,14 @@ const AuthState = (props) => {
   const register = async (email, password, name, affiliation) => {
     try {
       const res = await axios.post("/api/auth/register", { email, password, name, affiliation });
+      if (res.data && res.data.verification_required) {
+        return {
+          ok: true,
+          verificationRequired: true,
+          email: res.data.email,
+          verifyLink: res.data.verify_link,
+        };
+      }
       dispatch({ type: SET_AUTH, payload: res.data });
       return { ok: true };
     } catch (err) {
@@ -126,6 +141,19 @@ const AuthState = (props) => {
         (err.response && err.response.data && err.response.data.error) ||
         "Registration failed. Please try again.";
       dispatch({ type: AUTH_ERROR, payload: msg });
+      return { ok: false, error: msg };
+    }
+  };
+
+  const verifyEmail = async (token, password) => {
+    try {
+      const res = await axios.post("/api/auth/verify-email", { token, password });
+      dispatch({ type: SET_AUTH, payload: res.data });
+      return { ok: true };
+    } catch (err) {
+      const msg =
+        (err.response && err.response.data && err.response.data.error) ||
+        "Could not confirm your email. Please try again.";
       return { ok: false, error: msg };
     }
   };
@@ -179,6 +207,7 @@ const AuthState = (props) => {
         refresh,
         localLogin,
         register,
+        verifyEmail,
         devLogin,
         logout,
       }}

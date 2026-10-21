@@ -321,6 +321,14 @@ class LocalAccount(Document):
     name = StringField(max_length=200, default="")
     created_at = DateTimeField()
     last_login_at = DateTimeField()
+    # Email is the ownership key, so an account cannot sign in until the
+    # address is proven by the emailed link. Accounts created before this
+    # field existed load as unverified and get a link on their next sign-in.
+    email_verified = BooleanField(default=False)
+    # SHA-256 of the outstanding confirmation token (the token itself is only
+    # ever in the email), and when it was sent (expiry + resend throttle).
+    verify_token_hash = StringField()
+    verify_sent_at = DateTimeField()
     meta = {
         'collection': 'local_accounts',
         'indexes': [{'fields': ['email'], 'unique': True}],
