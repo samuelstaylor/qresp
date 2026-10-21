@@ -16,6 +16,9 @@ services:
       - QRESP_ENABLE_DEV_LOGIN=1
       - QRESP_ADMIN_EMAILS=admin@example.com
       - QRESP_PUBLISH_SKIP_EMAIL=1
+      # Origin for emailed links (account confirmation); never taken from
+      # request headers. Email sign-up is refused without it.
+      - QRESP_PUBLIC_URL=https://localhost:8444
       - QRESP_FILESERVER_ROOTS=https://notebook.rcc.uchicago.edu/files
       - QRESP_FILESERVER_INSECURE_TLS_HOSTS=notebook.rcc.uchicago.edu
     env_file:

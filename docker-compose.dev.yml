@@ -46,6 +46,9 @@ services:
       # No mail server in dev: Publish shows the verification link on screen
       # instead of emailing it (same as docker-compose.staging-full.yml).
       - QRESP_PUBLISH_SKIP_EMAIL=1
+      # Origin for emailed links (account confirmation); never taken from
+      # request headers. Email sign-up is refused without it.
+      - QRESP_PUBLIC_URL=https://localhost:8444
     volumes:
       - ./backend:/home/flask/app/web/
     networks:
