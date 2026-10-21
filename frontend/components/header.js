@@ -76,7 +76,7 @@ const Header = () => {
 
   const isActive = (url) => {
     if (url === "/explorer") return pathname === "/explorer" || pathname === "/search";
-    return pathname === url || pathname.startsWith(url + "/");
+    return pathname === url || (pathname || "").startsWith(url + "/");
   };
 
   const handleOpen = () => {

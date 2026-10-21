@@ -5,10 +5,13 @@ import {
   Button,
   ButtonBase,
   Chip,
+  ClickAwayListener,
   Divider,
   ListItemIcon,
-  Menu,
   MenuItem,
+  MenuList,
+  Paper,
+  Popper,
   Typography,
 } from "@mui/material";
 import {
@@ -81,7 +84,9 @@ const AuthControls = () => {
       >
         <ButtonBase
           ref={anchorRef}
-          onClick={() => setOpen((v) => !v)}
+          // Open, not toggle: hovering already opened the menu, so a toggle
+          // would shut it on the very click meant to use it.
+          onClick={handleOpen}
           aria-haspopup="true"
           aria-expanded={open ? "true" : undefined}
           aria-label={`Account menu for ${fullName}${user.is_admin ? " (admin)" : ""}`}
@@ -140,71 +145,87 @@ const AuthControls = () => {
             }}
           />
         </ButtonBase>
-        <Menu
-          anchorEl={anchorRef.current}
+        {/* A Popper, not a Menu: Menu is a modal, and with disablePortal
+            (needed so hover-out covers badge + menu) the modal marks the
+            whole app — this menu included — aria-hidden while open. */}
+        <Popper
           open={open}
-          onClose={closeNow}
+          anchorEl={anchorRef.current}
+          placement="bottom-end"
           disablePortal
-          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-          transformOrigin={{ vertical: "top", horizontal: "right" }}
-          slotProps={{
-            paper: { elevation: 4, sx: { mt: 0.75, minWidth: 240, borderRadius: 2 } },
-          }}
+          sx={{ zIndex: 1300 }}
         >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, px: 2, pt: 1, pb: 1.5 }}>
-            <Avatar
-              src={avatarSrc}
-              alt=""
-              sx={{ width: 40, height: 40, bgcolor: "#800000", fontWeight: 700, fontSize: "1rem" }}
-            >
-              {initials}
-            </Avatar>
-            <Box sx={{ minWidth: 0 }}>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
-                <Typography variant="subtitle2" fontWeight={700} noWrap sx={{ maxWidth: 170 }}>
-                  {fullName}
-                </Typography>
-                {user.is_admin && (
-                  <Chip label="Admin" size="small" color="primary" sx={{ height: 18, fontSize: "0.65rem" }} />
-                )}
-              </Box>
-              <Typography variant="caption" color="text.secondary" noWrap display="block" sx={{ maxWidth: 190 }}>
-                {user.email}
-              </Typography>
-            </Box>
-          </Box>
-          <Divider />
-          <MenuItem component={Link} href="/account" onClick={closeNow}>
-            <ListItemIcon><AccountCircle fontSize="small" /></ListItemIcon>
-            My Profile
-          </MenuItem>
-          <MenuItem component={Link} href="/account/records" onClick={closeNow}>
-            <ListItemIcon><Article fontSize="small" /></ListItemIcon>
-            My Records
-          </MenuItem>
-          <MenuItem component={Link} href="/account/favorites" onClick={closeNow}>
-            <ListItemIcon><FavoriteIcon fontSize="small" /></ListItemIcon>
-            My Favorites
-          </MenuItem>
-          <MenuItem component={Link} href="/account/drafts" onClick={closeNow}>
-            <ListItemIcon><EditNote fontSize="small" /></ListItemIcon>
-            My Drafts
-          </MenuItem>
-          {user.is_admin && (
-            <MenuItem component={Link} href="/account/admin" onClick={closeNow}>
-              <ListItemIcon><AdminPanelSettings fontSize="small" /></ListItemIcon>
-              Admin
-            </MenuItem>
-          )}
-          <Divider />
-          <MenuItem
-            onClick={() => { closeNow(); logout(); }}
-            sx={{ color: "error.main" }}
+          <ClickAwayListener
+            onClickAway={(e) => {
+              // The badge itself is not "away": clicking it opens the menu.
+              if (anchorRef.current && anchorRef.current.contains(e.target)) return;
+              closeNow();
+            }}
           >
-            <ListItemIcon><Logout fontSize="small" sx={{ color: "error.main" }} /></ListItemIcon>
-            Sign out
-          </MenuItem>
-        </Menu>
+            <Paper elevation={4} sx={{ mt: 0.75, minWidth: 240, borderRadius: 2 }}>
+              <MenuList
+                aria-label="Account"
+                onKeyDown={(e) => {
+                  if (e.key === "Escape" || e.key === "Tab") closeNow();
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, px: 2, pt: 1, pb: 1.5 }}>
+                  <Avatar
+                    src={avatarSrc}
+                    alt=""
+                    sx={{ width: 40, height: 40, bgcolor: "#800000", fontWeight: 700, fontSize: "1rem" }}
+                  >
+                    {initials}
+                  </Avatar>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                      <Typography variant="subtitle2" fontWeight={700} noWrap sx={{ maxWidth: 170 }}>
+                        {fullName}
+                      </Typography>
+                      {user.is_admin && (
+                        <Chip label="Admin" size="small" color="primary" sx={{ height: 18, fontSize: "0.65rem" }} />
+                      )}
+                    </Box>
+                    <Typography variant="caption" color="text.secondary" noWrap display="block" sx={{ maxWidth: 190 }}>
+                      {user.email}
+                    </Typography>
+                  </Box>
+                </Box>
+                <Divider />
+                <MenuItem component={Link} href="/account" onClick={closeNow}>
+                  <ListItemIcon><AccountCircle fontSize="small" /></ListItemIcon>
+                  My Profile
+                </MenuItem>
+                <MenuItem component={Link} href="/account/records" onClick={closeNow}>
+                  <ListItemIcon><Article fontSize="small" /></ListItemIcon>
+                  My Records
+                </MenuItem>
+                <MenuItem component={Link} href="/account/favorites" onClick={closeNow}>
+                  <ListItemIcon><FavoriteIcon fontSize="small" /></ListItemIcon>
+                  My Favorites
+                </MenuItem>
+                <MenuItem component={Link} href="/account/drafts" onClick={closeNow}>
+                  <ListItemIcon><EditNote fontSize="small" /></ListItemIcon>
+                  My Drafts
+                </MenuItem>
+                {user.is_admin && (
+                  <MenuItem component={Link} href="/account/admin" onClick={closeNow}>
+                    <ListItemIcon><AdminPanelSettings fontSize="small" /></ListItemIcon>
+                    Admin
+                  </MenuItem>
+                )}
+                <Divider />
+                <MenuItem
+                  onClick={() => { closeNow(); logout(); }}
+                  sx={{ color: "error.main" }}
+                >
+                  <ListItemIcon><Logout fontSize="small" sx={{ color: "error.main" }} /></ListItemIcon>
+                  Sign out
+                </MenuItem>
+              </MenuList>
+            </Paper>
+          </ClickAwayListener>
+        </Popper>
       </Box>
     );
   }

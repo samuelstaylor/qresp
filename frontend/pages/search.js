@@ -128,7 +128,9 @@ const search = ({
       })
     ).then((results) => {
       const newData = { papers: {}, authors: [], collections: [], publications: [] };
-      const newError = { ...EMPTY_ERROR };
+      // Fresh lists: a shallow copy would push into EMPTY_ERROR's own arrays,
+      // and every later load would inherit this one's failures.
+      const newError = { ...EMPTY_ERROR, failed: [], filters: {} };
       results.forEach((r) => {
         if (r.status !== "fulfilled") return;
         const { server, searchRes, collectionsRes, authorsRes, pubsRes } = r.value;
@@ -138,11 +140,14 @@ const search = ({
           newError.is = true;
           if (!newError.failed.includes(server)) newError.failed.push(server);
         }
+        // A node whose records could not be read is simply down: its filter
+        // lists failing too is the same outage, not a separate notice.
+        const nodeIsDown = searchRes.status !== "fulfilled";
         [["collections", collectionsRes], ["authors", authorsRes], ["publications", pubsRes]].forEach(
           ([key, res]) => {
             if (res.status === "fulfilled") {
               newData[key].push(...(res.value.data || []));
-            } else {
+            } else if (!nodeIsDown) {
               newError.is = true;
               newError.filters[server] = (newError.filters[server] || []).concat(key);
             }
@@ -175,7 +180,11 @@ const search = ({
     setRuntime({
       failed: failedServers,
       total: totalFailure,
-      keptPrevious: totalFailure && Object.keys(data.papers || {}).length > 0,
+      // Only RECORDS on screen are worth keeping; nodes that answered with
+      // nothing leave nothing to fall back on.
+      keptPrevious:
+        totalFailure &&
+        Object.values(data.papers || {}).some((list) => (list || []).length > 0),
       retry,
     });
   };
@@ -437,8 +446,7 @@ const search = ({
                 {failed.length
                   ? `No records could be loaded — ${sourcesUnavailable(failed)}.`
                   : "No records could be loaded — no source could be reached."}{" "}
-                No records could be loaded — this is a connection problem, not
-                an empty node.
+                This is a connection problem, not an empty node.
               </Alert>
             </Box>
           ) : (
