@@ -24,6 +24,7 @@ Major Update
   - Server-side drafts, unsaved-changes guards, editing of published records
   - Workflow built with buttons, shown as a left-to-right graph and described in words
   - Nothing a curator types is required to publish
+  - Publishing is immediate for a signed-in curator; the per-record email verification link is gone (old links still work)
   - Optional, consent-gated Gemini suggestions for keywords and RCC descriptions
 - Explorer
   - Sort by title, author, year and journal; Advanced Search with node selector

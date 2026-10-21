@@ -20,169 +20,95 @@ def load_fixture():
         return json.load(f)
 
 
-PUBLISH_ID = "PUBLISH_test_ownership_rules"
-
-
-def publish_file_path():
-    return os.path.join(os.getcwd(), "papers", "publish",
-                        PUBLISH_ID + ".json")
-
-
 class TestPublishRequiresOwner(PermissionTestBase):
-    """POST /api/publish — production ownership rules for NEW records."""
+    """POST /api/publish — production ownership rules for NEW records.
 
-    def tearDown(self):
-        if os.path.exists(publish_file_path()):
-            os.remove(publish_file_path())
-        super().tearDown()
+    Publishing inserts the record immediately: the signed-in session already
+    proves who is publishing, so no per-record email link is sent."""
 
-    def publish(self, payload, origin="https://localhost:8443",
-                mail_send_side_effect=None):
-        # Publish builds the verify link from the Origin header (browsers
-        # always send it on cross-page POSTs); provide it like a browser.
+    def publish(self, payload):
         headers = {}
-        if origin:
-            headers["Origin"] = origin
         if getattr(self, "csrf", None):
             headers["X-CSRF-Token"] = self.csrf
-        with mock.patch("project.controllers.publish.mailClient") as mail, \
-                mock.patch("project.controllers.publish.Publish.generateId",
-                           return_value=PUBLISH_ID):
-            if mail_send_side_effect is not None:
-                mail.send.side_effect = mail_send_side_effect
+        with mock.patch("project.utils.mail.mailClient") as mail:
             response = self.client.post(
                 "/api/publish", json=payload, headers=headers
             )
-        return response, mail
-
-    def test_anonymous_publish_denied_401(self):
-        response, mail = self.publish(load_fixture())
-        self.assertEqual(401, response.status_code, response.text)
         mail.send.assert_not_called()
-        self.assertFalse(os.path.exists(publish_file_path()))
+        return response
 
-    def test_authenticated_publish_stamps_session_owner(self):
-        self.login(OWNER)
-        response, mail = self.publish(load_fixture())
-        self.assertEqual(200, response.status_code, response.text)
-        mail.send.assert_called_once()
-        with open(publish_file_path()) as f:
-            stored = json.load(f)
-        self.assertEqual(OWNER, stored["owner_email"])
-
-    def test_authenticated_publish_without_origin_header_uses_request_host(self):
-        self.login(OWNER)
-        response, mail = self.publish(load_fixture(), origin=None)
-        self.assertEqual(200, response.status_code, response.text)
-        mail.send.assert_called_once()
-
-    def test_publish_can_skip_email_for_staging_and_return_verify_link(self):
-        self.login(OWNER)
-        with mock.patch.dict(os.environ, {"QRESP_PUBLISH_SKIP_EMAIL": "1"}):
-            response, mail = self.publish(load_fixture())
+    def published(self, response):
         self.assertEqual(200, response.status_code, response.text)
         body = response.json()
         self.assertTrue(body["success"])
-        self.assertFalse(body["email_sent"])
-        self.assertIn("/verify/%s" % PUBLISH_ID, body["verify_link"])
-        mail.send.assert_not_called()
-        self.assertTrue(os.path.exists(publish_file_path()))
+        return Paper.objects.get(id=body["id"])
+
+    def test_anonymous_publish_denied_401(self):
+        before = Paper.objects.count()
+        response = self.publish(load_fixture())
+        self.assertEqual(401, response.status_code, response.text)
+        self.assertEqual(before, Paper.objects.count())
+
+    def test_publish_inserts_the_record_at_once_with_the_session_owner(self):
+        self.login(OWNER)
+        before = Paper.objects.count()
+        record = self.published(self.publish(load_fixture()))
+        self.assertEqual(before + 1, Paper.objects.count())
+        self.assertEqual(OWNER, record.owner_email)
+        self.assertNotIn("verify_link", self.publish(load_fixture()).json())
 
     def test_a_blank_curator_email_falls_back_to_the_signed_in_account(self):
-        # Nothing on the form is required, the curator's email included; the
-        # verification link then goes to whoever is publishing.
         self.login(OWNER)
         payload = load_fixture()
         payload["info"]["insertedBy"] = {"firstName": "", "lastName": "",
                                          "emailId": ""}
-        response, mail = self.publish(payload)
-        self.assertEqual(200, response.status_code, response.text)
-        self.assertEqual(OWNER, mail.send.call_args[0][3])
-        with open(publish_file_path()) as f:
-            self.assertEqual(OWNER, json.load(f)["info"]["insertedBy"]["emailId"])
+        record = self.published(self.publish(payload))
+        self.assertEqual(OWNER, record.info.insertedBy.emailId)
 
     def test_a_typed_curator_email_is_kept(self):
         self.login(OWNER)
         payload = load_fixture()
         payload["info"]["insertedBy"]["emailId"] = "curator@example.edu"
-        response, mail = self.publish(payload)
-        self.assertEqual(200, response.status_code, response.text)
-        self.assertEqual("curator@example.edu", mail.send.call_args[0][3])
+        record = self.published(self.publish(payload))
+        self.assertEqual("curator@example.edu", record.info.insertedBy.emailId)
 
-    def test_skip_email_path_never_touches_the_real_mail_client(self):
-        # No mailClient mock at all: if the skip path reached SMTP, the real
-        # client would raise (no server configured) and this would 500.
+    def test_client_supplied_owner_is_discarded(self):
         self.login(OWNER)
-        headers = {
-            "Origin": "https://localhost:8443",
-            "X-CSRF-Token": self.csrf,
-        }
-        with mock.patch.dict(os.environ, {"QRESP_PUBLISH_SKIP_EMAIL": "1"}), \
-                mock.patch(
-                    "project.controllers.publish.Publish.generateId",
-                    return_value=PUBLISH_ID):
-            response = self.client.post(
-                "/api/publish", json=load_fixture(), headers=headers
-            )
-        self.assertEqual(200, response.status_code, response.text)
-        self.assertFalse(response.json()["email_sent"])
+        payload = load_fixture()
+        payload["owner_email"] = "attacker@evil.com"
+        record = self.published(self.publish(payload))
+        self.assertEqual(OWNER, record.owner_email)
 
-    def test_queue_write_failure_returns_specific_message(self):
+    def test_a_record_the_model_refuses_is_a_400(self):
+        from mongoengine.errors import ValidationError
         self.login(OWNER)
-        from project.controllers.publish import Publish
+        with mock.patch("project.controllers.publish.PaperDAO") as dao:
+            dao.return_value.insertIntoPapers.side_effect = ValidationError("bad year")
+            response = self.publish(load_fixture())
+        self.assertEqual(400, response.status_code, response.text)
+        self.assertIn("could not be saved", response.json()["msg"])
 
-        original_init = Publish.__init__
-
-        def broken_dir_init(instance):
-            original_init(instance)
-            instance.dir_prefix = os.path.join(
-                os.getcwd(), "papers", "no-such-queue-dir") + os.sep
-
-        with mock.patch.object(Publish, "__init__", broken_dir_init):
-            response, mail = self.publish(load_fixture())
+    def test_a_database_failure_is_a_500_without_details(self):
+        self.login(OWNER)
+        with mock.patch("project.controllers.publish.PaperDAO") as dao:
+            dao.return_value.insertIntoPapers.side_effect = RuntimeError("db down")
+            response = self.publish(load_fixture())
         self.assertEqual(500, response.status_code, response.text)
-        self.assertIn("Could not queue the paper for verification",
-                      response.json()["msg"])
-        mail.send.assert_not_called()
-
-    def test_smtp_failure_returns_specific_message(self):
-        self.login(OWNER)
-        response, _ = self.publish(
-            load_fixture(),
-            mail_send_side_effect=Exception("connection refused"),
-        )
-        self.assertEqual(500, response.status_code, response.text)
-        self.assertEqual(
-            "Verification email could not be sent. Check SMTP configuration.",
-            response.json()["msg"],
-        )
+        self.assertNotIn("db down", response.json()["msg"])
 
     def test_publish_controller_error_is_returned_as_json_message(self):
         self.login(OWNER)
-        headers = {
-            "Origin": "https://localhost:8443",
-            "X-CSRF-Token": self.csrf,
-        }
         with mock.patch("project.api.Publish") as publish_cls:
             publish_cls.return_value.publish.return_value = {
                 "msg": "schema failed",
                 "code": 400,
             }
             response = self.client.post(
-                "/api/publish", json=load_fixture(), headers=headers
+                "/api/publish", json=load_fixture(),
+                headers={"X-CSRF-Token": self.csrf},
             )
         self.assertEqual(400, response.status_code, response.text)
         self.assertEqual("schema failed", response.json()["msg"])
-
-    def test_client_supplied_owner_is_discarded(self):
-        self.login(OWNER)
-        payload = load_fixture()
-        payload["owner_email"] = "attacker@evil.com"
-        response, _ = self.publish(payload)
-        self.assertEqual(200, response.status_code, response.text)
-        with open(publish_file_path()) as f:
-            stored = json.load(f)
-        self.assertEqual(OWNER, stored["owner_email"])
 
     def test_preview_stays_anonymous(self):
         payload = load_fixture()

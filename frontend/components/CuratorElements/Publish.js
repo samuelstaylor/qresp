@@ -115,11 +115,9 @@ const makePublishRequest = (
   axios
     .post(getServer() + "/api/publish", paper)
     .then((res) => {
-      const verifyLink = res.data && res.data.verify_link;
-      // Only safe to clear the account draft AFTER the paper is verified
-      // (the verify link/email finishes publishing). So we don't auto-delete;
-      // instead, when publishing from a saved draft, we offer an explicit
-      // "delete that draft" action the user can take once they've verified.
+      // The record is live as soon as this returns, so the account draft it
+      // came from can be deleted right away -- still only on request.
+      const id = res.data && res.data.id;
       const removeDraft = () => {
         deleteServerDraft(activeDraftId)
           .then(() => {
@@ -143,44 +141,32 @@ const makePublishRequest = (
           Delete the saved draft
         </RegularStyledButton>
       ) : null;
+      const viewButton = id ? (
+        <RegularStyledButton
+          component="a"
+          href={`/paperdetails/${encodeURIComponent(id)}?server=${getServer()}`}
+        >
+          View the record
+        </RegularStyledButton>
+      ) : null;
       setAlert(
         "Success",
-        verifyLink ? (
-          <p style={{ textAlign: "justify" }}>
-            Queued for verification. Click this verification link to finish
-            publishing.
-            <br />
-            <a href={verifyLink}>{verifyLink}</a>
-            {activeDraftId ? (
-              <Fragment>
-                <br />
-                <br />
-                Once you have finished verifying, you can delete the saved
-                draft you published from.
-              </Fragment>
-            ) : null}
-          </p>
-        ) : (
-          <p style={{ textAlign: "justify" }}>
-            We've sent you an email with a link to publish the paper. Check the
-            email you provided, just click the link in there to publish the
-            paper.
-            <br /> If you have any questions or issues, please feel free to
-            write to us.
-            <br />
-            <br /> Thank You
-          </p>
-        ),
-        verifyLink ? (
+        <p style={{ textAlign: "justify" }}>
+          Your record is published and can now be found in the Explorer.
+          {activeDraftId ? (
+            <Fragment>
+              <br />
+              <br />
+              You can now delete the saved draft you published from.
+            </Fragment>
+          ) : null}
+        </p>,
+        viewButton || draftButton ? (
           <Fragment>
-            <RegularStyledButton component="a" href={verifyLink}>
-              Open verification link
-            </RegularStyledButton>
+            {viewButton}
             {draftButton}
           </Fragment>
-        ) : (
-          draftButton
-        )
+        ) : null
       );
     })
     .catch((err) => {

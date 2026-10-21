@@ -4,19 +4,15 @@ import json
 import traceback
 from uuid import uuid4
 
-from project.utils.mail import mailClient
+from mongoengine.errors import FieldDoesNotExist, ValidationError
+
 from project.utils.validate import Validate
 from project.paperdao import PaperDAO
-from project.config import Config
 
 
 # Written into a queue file once its link has been verified, so the same link
 # resolves to the same record however many times it is clicked.
 PUBLISHED_ID_KEY = '_published_id'
-
-
-def _truthy(value):
-    return str(value or '').strip().lower() in ('1', 'true', 'yes', 'on')
 
 
 class Publish:
@@ -80,9 +76,15 @@ class Publish:
             print(e, file=stderr)
             return {"msg": "Internal Server Error", "code": 500}
 
-    def publish(self, paper, server):
+    def publish(self, paper):
         '''
-        Generate a new link to verify the identity of the user and then publish
+        Validate the metadata and insert it as a new record straight away.
+
+        Publishing needs a signed-in session (api.publish), and every sign-in
+        provider has already proven the account's email -- email/password
+        accounts confirm theirs once, at sign-up -- so there is no second,
+        per-record email link any more. verify() stays for links that were
+        emailed before this change.
 
         Parameters
         -----------
@@ -91,8 +93,8 @@ class Publish:
 
         Return
         ------
-        200, if no errors
-        msg and html error code, if error
+        {"id": new record id}, if no errors
+        {"msg", "code"}, if error
         '''
 
         try:
@@ -105,66 +107,11 @@ class Publish:
             print(e, file=stderr)
             return {'msg': 'Schema not found, Internal Server Error', 'code': 500}
 
-        curatorDetails = paper['info'].get('insertedBy') or {}
-
-        # Every curator field is optional, so the greeting is built from
-        # whatever parts are there.
-        name = " ".join(part for part in (
-            curatorDetails.get('firstName'), curatorDetails.get('middleName'),
-            curatorDetails.get('lastName')) if part) or "there"
-
-        id = self.generateId()
-
-        subject = 'Qresp Publish Verification'
-
-        server = (server or '').strip().rstrip('/')
-
-        if server.startswith('http://'):
-            server = server.replace('http://', 'https://', 1)
-
-        server = server.replace('http://', 'https://')
-        verifyLinkUrl = "{0}/verify/{1}?server={0}".format(server, id)
-        html = '''
-        <html>
-            <body>
-                <p>
-                    Hello {0},<br>
-                    Thank you, for publishing on Qresp. Here is the link to publish the paper below.<br>
-                    Click on the link below or paste it in the browser <br>
-                    <br>
-                    <a href={1}>{1}</a><br><br>
-                    Have a great day !<br>
-                    The Qresp Team
-                </p>
-            </body>
-        </html>
-        '''.format(name, verifyLinkUrl)
-
         try:
-            with open("{}{}.json".format(self.dir_prefix, id), 'w') as f:
-                json.dump(paper, f, ensure_ascii=False)
-        except Exception as e:
-            traceback.print_exc(file=stderr)
-            return {
-                "msg": "Could not queue the paper for verification: %s" % e,
-                "code": 500,
-            }
-
-        if _truthy(Config.get_setting('PUBLISH', 'PUBLISH_SKIP_EMAIL')):
-            return {
-                "id": id,
-                "verify_link": verifyLinkUrl,
-                "email_sent": False,
-            }
-
-        try:
-            mailClient.send(subject, "", html, curatorDetails.get('emailId'))
-            return 200
+            return {"id": PaperDAO().insertIntoPapers(paper)}
+        except (ValidationError, FieldDoesNotExist) as e:
+            return {"msg": "The record could not be saved: %s" % e, "code": 400}
         except Exception:
-            # Full cause goes to the server log only; the client gets a
-            # stable, secret-free message.
             traceback.print_exc(file=stderr)
-            return {
-                "msg": "Verification email could not be sent. Check SMTP configuration.",
-                "code": 500,
-            }
+            return {"msg": "The record could not be saved. Please try again.",
+                    "code": 500}

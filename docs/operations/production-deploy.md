@@ -118,8 +118,7 @@ curl -s https://paperstack.uchicago.edu/api/healthz
 sudo docker-compose logs --tail=100 backend
 ```
 In a private window: home and Explore load with all records; Google sign-in
-returns you signed in; old records open; a test publish sends the
-verification email; creating an email/password account sends a confirmation
+returns you signed in; old records open; a test publish goes live at once; creating an email/password account sends a confirmation
 link that opens on `https://paperstack.uchicago.edu/verify-email` and, with
 the password, signs you in; `http://` redirects to `https://`.
 

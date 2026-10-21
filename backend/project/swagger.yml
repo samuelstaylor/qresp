@@ -354,7 +354,7 @@ paths:
             type: object
       responses:
         200:
-          description: Successfully generated the verify link
+          description: Published; returns the new record id
         400:
           description: Incorrect paper object
         401:

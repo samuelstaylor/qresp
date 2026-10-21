@@ -352,12 +352,11 @@ const Curation = () => (
 
     <Section title="Publish Metadata">
       <P>
-        When you click the publish button, the data will be validated. If there
-        are no errors, you will see a confirmation, and an email will be sent
-        to the address you provided in the{" "}
-        <DocLink href="#curator-information">Curator Information</DocLink>{" "}
-        section. Otherwise, you&rsquo;ll see a message indicating what the
-        error is.
+        Publishing needs you to be signed in. When you click the publish
+        button, the data will be validated. If there are no errors, the record
+        is published at once and you will see a confirmation with a link to
+        it. Otherwise, you&rsquo;ll see a message indicating what the error
+        is.
       </P>
     </Section>
 
@@ -378,8 +377,7 @@ const Curation = () => (
 
     <Section title="Finish">
       <P>
-        Once you click the verification link sent to you by email, you&rsquo;ll
-        be redirected to Qresp, and your paper will be available using the{" "}
+        Once published, your record is available using the{" "}
         <DocLink href="/explorer">Explorer</DocLink>. If there were any errors,
         you&rsquo;ll be notified and can take them up with the admins or with
         us, the <DocLink href="/contact">Qresp team</DocLink>. We&rsquo;re

@@ -1,30 +1,30 @@
 # Publish
 
-## How was it done
+## How it works
 
-Up to release 1.2.2, there was a strong dependence on Google services because that was the authentication/verification method.
-
-Basically, on publish we would ask the user to login using a google account and if successful we publish.
-
-## How it's done currently
-
-Now, we generate a publish link and send it to the user's email. And when the user clicks on that link in the email, it redirects to Qresp and the paper is published.
-
-## Why ?
-
-No Google dependence anymore, more fluent. We maintain most of the routes, people with their university emails can curate and publish.
-
-## Technically
-
-Let's talk about exactly what'll happen when the user clicks the publish button
+Publishing requires a signed-in account. Every sign-in proves the account's
+email address once: Google, Microsoft and GitHub through the provider, and
+email/password accounts through the confirmation link sent when the account
+is created. A record is therefore published as soon as the curator clicks
+**Publish**; there is no per-record email step.
 
 ### Flow
 
-1. On click, the data comes in a json format as defined in the schema at the route `/api/publish`. We store that data temporarily in the publish folder on disk (This needs to be database in the future, really).
-2. We process the data and send back a verify(or the actual) publish link to the curator via email.
-3. If there are any errors the user is provided with the error and no email is sent.
+1. The curator form sends the record as JSON (see `backend/project/schema.json`)
+   to `POST /api/publish`, with the session cookie and CSRF token.
+2. The backend refuses anonymous requests (401), checks the workflow graph and
+   the schema (400 with the reason), stamps `owner_email` from the session
+   (any client-supplied owner is discarded), and inserts the record.
+3. The response is `{"success": true, "id": "<record id>"}`; the curator sees
+   a confirmation with a link to `/paperdetails/<id>`.
 
-4. The user clicks on the link in the url in the email and is redirected to the GUI of the instance. The link would be like `instance/publish/{id}`, the frontend then takes in the id, calls the api at `/api/verify/{id}`. This is where we notify the user that paper is successfully published or if there was error.
+## History
+
+Up to release 1.2.2, publishing asked the curator to sign in with Google.
+From 2.0 until 3.0, `POST /api/publish` queued the record in
+`papers/publish/` and emailed a link; opening it (`/verify/{id}`, which calls
+`GET /api/verify/{id}`) inserted the record. That route is kept so links
+emailed before the change still work, but new publishes never queue.
 
 ## Contributing
 

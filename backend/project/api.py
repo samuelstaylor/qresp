@@ -305,10 +305,10 @@ def getPreview(id):
 @csrf_protect
 def publish(paper):
     """
-    Validate the paper json and send an email to the user with the link to publish
+    Validate the paper json and insert it as a new record
     Handler for POST: /api/publish
 
-    :return: Metadata object using the id provided for the metadata
+    :return: {"success": True, "id": <new record id>}
     """
     # Production ownership rule: every NEW record must have a verified owner,
     # so publishing now requires an authenticated session (Google in
@@ -319,19 +319,16 @@ def publish(paper):
         return {"msg": "Authentication is required to publish."}, 401
 
     # The owner always comes from the SESSION; a client-provided value is
-    # discarded before stamping. The stamped payload is what gets stored and
-    # later inserted on /verify.
-    # A graph that cannot be stored is refused HERE, while the curator is
-    # still looking at it, rather than at /verify where the only thing left
-    # to do is fail an email link. Legacy shapes and papers with no workflow
-    # pass through untouched -- see project/workflow.py.
+    # discarded before stamping. A graph that cannot be stored is refused
+    # here, before anything is written. Legacy shapes and papers with no
+    # workflow pass through untouched -- see project/workflow.py.
     try:
         validate_workflow(paper)
     except WorkflowError as e:
         return {"error": str(e)}, 400
 
-    # The curator's email is optional on the form; the verification link
-    # then goes to the signed-in account that is publishing.
+    # The curator's email is optional on the form; it then defaults to the
+    # signed-in account that is publishing.
     info = paper.setdefault("info", {})
     curator = info.get("insertedBy")
     if not isinstance(curator, dict):
@@ -341,21 +338,20 @@ def publish(paper):
 
     paper.pop("owner_email", None)
     stamp_owner(paper)
-    origin = (request.headers.get('origin') or request.host_url or "").strip()
-    origin = origin.rstrip("/")
-    result = Publish().publish(paper, origin)
-
-    if isinstance(result, int):
-        return {"success": True}, 200
-    if isinstance(result, dict) and "code" in result:
+    # Inserted immediately: the session already proves who is publishing.
+    result = Publish().publish(paper)
+    if "code" in result:
         return {"msg": result['msg']}, result['code']
-    return {"success": True, **result}, 200
+    return {"success": True, "id": result["id"]}, 200
 
 
 def verify(id):
     """
     Add the paper specified by the ID provided from the wait list to the database
     Handler for GET: /api/verify
+
+    Only for verification links emailed before publishing became immediate;
+    new publishes never queue.
 
     :return: Object containing ID for the paper added in it
      Otherwise error,

@@ -14,8 +14,9 @@ environment variables on the staging backend container.
 - [ ] `QRESP_GOOGLE_REDIRECT_URI=https://localhost:8443/api/auth/google/callback`
       (must match an authorized redirect URI on the Google OAuth client; use
       the public staging hostname instead if testing without the tunnel)
-- [ ] `QRESP_PUBLISH_SKIP_EMAIL=1` (staging QA only: show the publish verify
-      link in the browser instead of sending SMTP email; never in production)
+- [ ] `QRESP_PUBLISH_SKIP_EMAIL=1` (staging QA only: show the account
+      confirmation link in the browser instead of sending SMTP email; never in
+      production)
 - [ ] `QRESP_OAUTHLIB_INSECURE_TRANSPORT=1` **only if** the callback is served
       over plain HTTP (not needed for the HTTPS tunnel; never in production)
 - [ ] **Cleanup after this deploy:** CILogon was removed from the code.
@@ -141,16 +142,13 @@ confirmation link") instead of being emailed.
 - [ ] Anonymous `PUT /api/paper/{id}` → 401
 - [ ] `/api/ui/` swagger page loads
 
-## Publish → verify → account round trip
+## Publish → account round trip
 
-- [ ] Signed in, publish a staging test record → success dialog says
-      "Queued for verification…" with the verification link and an
-      "Open verification link" button (QRESP_PUBLISH_SKIP_EMAIL=1 mode)
-- [ ] Open the link → verify page succeeds through the tunnel
-      (`https://localhost:8443/verify/PUBLISH_<id>?server=https://localhost:8443`
-      — SSR reaches the backend via QRESP_INTERNAL_API_URL, not localhost)
-- [ ] "Go to Paper" shows the new record; the permission notice says you can
-      edit it (owner)
+- [ ] Signed in, publish a staging test record → success dialog says "Your
+      record is published" with a "View the record" button; no email, no
+      verification link
+- [ ] "View the record" opens the new record; the permission notice says you
+      can edit it (owner)
 - [ ] Header name → `/account`: profile shows name/email/provider (+admin
       badge if allowlisted); the new record appears under "My published
       records" with working View / Edit in Curator links
@@ -614,20 +612,18 @@ is the complete management surface over every stored record.
 - [ ] Non-admins do not see the section; `GET /api/admin/ownerless-papers`
       with a non-admin cookie → 403
 
-## Verify link edge cases
+## Legacy verify links (emailed before publishing became immediate)
 
-- [ ] Re-click a verification link after publishing → still lands on the paper
+- [ ] Re-click an old verification link → still lands on the paper
       (idempotent), NOT an error, and no duplicate record is created
 - [ ] A tampered/unknown `/verify/PUBLISH_bogus?server=…` → "couldn't finish
       publishing" page with a specific message and a Browse link (not a blank
       "contact the administrators")
 
-Identity/verification model (documented, not configurable in UI): Google
-(or staging dev-login) provides the verified identity and owner_email;
-publishing still queues the record for a final verification step before DB
-insertion; production sends the verification email over SMTP, staging can
-set QRESP_PUBLISH_SKIP_EMAIL=1 to show the link instead. No Google
-Drive/Gmail scopes anywhere.
+Identity model (documented, not configurable in UI): the sign-in (Google,
+Microsoft, GitHub, a confirmed email/password account, or staging dev-login)
+provides the verified identity and owner_email, and publishing inserts the
+record at once. No Google Drive/Gmail scopes anywhere.
 
 ## Related Research (Related Literature Explorer prototype)
 
