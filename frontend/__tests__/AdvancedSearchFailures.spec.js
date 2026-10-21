@@ -10,7 +10,7 @@
  * These tests drive the REAL form inside the REAL page, so they exercise the
  * ownership question too: who holds the results, and who holds the status.
  */
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const routerEvents = {
@@ -60,22 +60,43 @@ const setAlert = jest.fn();
 const showLoader = jest.fn();
 const hideLoader = jest.fn();
 
-const renderSearch = ({ papers = {}, error = NO_SSR_ERROR, selected } = {}) =>
-  render(
+// How the page loaded: every node answers its first, client-side fetch, with
+// `pageLoad.papers[node]` as its records and `pageLoad.filters[node]` naming
+// filter endpoints that fail. Advanced Search requests (`/api/search?…`) are
+// answered by `respondWith` below.
+let pageLoad = { papers: {}, filters: {} };
+let searchAnswer = () => Promise.resolve({ data: [] });
+
+const answer = (url) => {
+  const [server, rest] = url.split("/api/");
+  if (rest.startsWith("search?")) return searchAnswer(url);
+  if ((pageLoad.filters[server] || []).includes(rest)) {
+    return Promise.reject(new Error("filter unavailable"));
+  }
+  if (rest === "search") {
+    return Promise.resolve({ data: pageLoad.papers[server] || [] });
+  }
+  return Promise.resolve({ data: dataWith({})[rest] || [] });
+};
+
+const renderSearch = async ({ papers = {}, error = NO_SSR_ERROR, selected } = {}) => {
+  pageLoad = { papers, filters: (error && error.filters) || {} };
+  axios.get.mockImplementation(answer);
+  const view = render(
     <AlertContext.Provider value={{ setAlert, unsetAlert: jest.fn() }}>
       <LoadingContext.Provider value={{ showLoader, hideLoader }}>
         <ServerContext.Provider
           value={{ setSelected: jest.fn(), selected: selected || [ALPHA, BETA] }}
         >
-          <Search
-            initialdata={dataWith(papers)}
-            error={error}
-            selectedservers={selected || [ALPHA, BETA]}
-          />
+          <Search selectedservers={selected || [ALPHA, BETA]} />
         </ServerContext.Provider>
       </LoadingContext.Provider>
     </AlertContext.Provider>
   );
+  // Let the page's own load settle before the test drives the form.
+  await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  return view;
+};
 
 // The form lives behind a Collapse; open it, then submit.
 const runAdvancedSearch = async (user) => {
@@ -83,15 +104,17 @@ const runAdvancedSearch = async (user) => {
   await user.click(screen.getByRole("button", { name: /^search$/i }));
 };
 
-// Answers `/api/search` per server, failing the ones named.
-const respondWith = (failing, records) =>
-  axios.get.mockImplementation((url) => {
+// Answers Advanced Search's `/api/search?…` per server, failing the ones named.
+const respondWith = (failing, records) => {
+  searchAnswer = (url) => {
     const server = url.startsWith(ALPHA) ? ALPHA : BETA;
     if (failing.includes(server)) {
       return Promise.reject(new Error("boom: internal detail 10.0.0.5"));
     }
     return Promise.resolve({ data: (records || {})[server] || [] });
-  });
+  };
+  axios.get.mockImplementation(answer);
+};
 
 describe("Advanced Search server failures", () => {
   beforeEach(() => {
@@ -105,7 +128,7 @@ describe("Advanced Search server failures", () => {
       [ALPHA]: [PAPER("a", "Alpha match")],
       [BETA]: [PAPER("b", "Beta match")],
     });
-    renderSearch();
+    await renderSearch();
     await runAdvancedSearch(user);
 
     expect(await screen.findByText("Alpha match")).toBeInTheDocument();
@@ -120,7 +143,7 @@ describe("Advanced Search server failures", () => {
   it("keeps the successful node's matches and warns inline about the other", async () => {
     const user = userEvent.setup();
     respondWith([BETA], { [ALPHA]: [PAPER("a", "Alpha match")] });
-    renderSearch();
+    await renderSearch();
     await runAdvancedSearch(user);
 
     expect(await screen.findByText("Alpha match")).toBeInTheDocument();
@@ -138,7 +161,7 @@ describe("Advanced Search server failures", () => {
   it("keeps the previous results when every node fails", async () => {
     const user = userEvent.setup();
     respondWith([ALPHA, BETA]);
-    renderSearch({ papers: { [ALPHA]: [PAPER("a", "Loaded earlier")] } });
+    await renderSearch({ papers: { [ALPHA]: [PAPER("a", "Loaded earlier")] } });
 
     expect(screen.getByTestId("record-count")).toHaveTextContent(
       "1 Records Available"
@@ -167,7 +190,7 @@ describe("Advanced Search server failures", () => {
   it("shows an unavailable state when everything fails and there was nothing", async () => {
     const user = userEvent.setup();
     respondWith([ALPHA, BETA]);
-    renderSearch({ papers: {} });
+    await renderSearch({ papers: {} });
     await runAdvancedSearch(user);
 
     const notice = await screen.findByTestId("advanced-search-failure");
@@ -184,7 +207,7 @@ describe("Advanced Search server failures", () => {
   it("reports a genuine empty result as an ordinary 0 records", async () => {
     const user = userEvent.setup();
     respondWith([], { [ALPHA]: [], [BETA]: [] });
-    renderSearch({ papers: { [ALPHA]: [PAPER("a", "Before")] } });
+    await renderSearch({ papers: { [ALPHA]: [PAPER("a", "Before")] } });
     await runAdvancedSearch(user);
 
     await waitFor(() =>
@@ -201,14 +224,16 @@ describe("Advanced Search server failures", () => {
   it("retries the same criteria against the same servers", async () => {
     const user = userEvent.setup();
     respondWith([BETA], { [ALPHA]: [PAPER("a", "Alpha match")] });
-    renderSearch();
+    await renderSearch();
 
     await user.click(screen.getByRole("button", { name: /advanced search/i }));
     await user.type(screen.getByPlaceholderText(/enter a title/i), "water");
     await user.click(screen.getByRole("button", { name: /^search$/i }));
 
     const notice = await screen.findByTestId("advanced-search-failure");
-    const firstCalls = axios.get.mock.calls.map(([url]) => url);
+    const firstCalls = axios.get.mock.calls
+      .map(([url]) => url)
+      .filter((url) => url.includes("/api/search?"));
     expect(firstCalls.every((url) => url.includes("paperTitle=water"))).toBe(
       true
     );
@@ -224,7 +249,9 @@ describe("Advanced Search server failures", () => {
       expect(screen.queryByTestId("advanced-search-failure")).toBeNull()
     );
     // Same criteria, same servers.
-    const retryCalls = axios.get.mock.calls.map(([url]) => url);
+    const retryCalls = axios.get.mock.calls
+      .map(([url]) => url)
+      .filter((url) => url.includes("/api/search?"));
     expect(retryCalls.every((url) => url.includes("paperTitle=water"))).toBe(
       true
     );
@@ -236,7 +263,7 @@ describe("Advanced Search server failures", () => {
   it("keeps what the curator typed after a failure", async () => {
     const user = userEvent.setup();
     respondWith([ALPHA, BETA]);
-    renderSearch();
+    await renderSearch();
 
     await user.click(screen.getByRole("button", { name: /advanced search/i }));
     await user.type(screen.getByPlaceholderText(/enter a title/i), "water");
@@ -251,7 +278,7 @@ describe("Advanced Search server failures", () => {
   it("clears the previous warning when a new search starts", async () => {
     const user = userEvent.setup();
     respondWith([BETA], { [ALPHA]: [PAPER("a", "Alpha match")] });
-    renderSearch();
+    await renderSearch();
     await runAdvancedSearch(user);
     await screen.findByTestId("advanced-search-failure");
 
@@ -269,7 +296,7 @@ describe("Advanced Search server failures", () => {
     // node. Both stay true.
     const user = userEvent.setup();
     respondWith([BETA], { [ALPHA]: [PAPER("a", "Alpha match")] });
-    renderSearch({
+    await renderSearch({
       papers: { [ALPHA]: [PAPER("a", "Alpha match")] },
       error: { ...NO_SSR_ERROR, is: true, filters: { [ALPHA]: ["authors"] } },
     });
@@ -287,7 +314,7 @@ describe("Advanced Search server failures", () => {
   it("keeps each surviving record's source server in its link", async () => {
     const user = userEvent.setup();
     respondWith([BETA], { [ALPHA]: [PAPER("a", "Alpha match")] });
-    renderSearch();
+    await renderSearch();
     await runAdvancedSearch(user);
     await screen.findByText("Alpha match");
 
@@ -305,7 +332,7 @@ describe("Advanced Search server failures", () => {
     for (const failing of [[], [BETA], [ALPHA, BETA]]) {
       jest.clearAllMocks();
       respondWith(failing, { [ALPHA]: [PAPER("a", "Alpha match")] });
-      const view = renderSearch();
+      const view = await renderSearch();
       await runAdvancedSearch(user);
       await waitFor(() => expect(hideLoader).toHaveBeenCalled());
       expect(showLoader).toHaveBeenCalledTimes(1);
@@ -317,7 +344,7 @@ describe("Advanced Search server failures", () => {
   it("never uses the global alert for a search failure", async () => {
     const user = userEvent.setup();
     respondWith([ALPHA, BETA]);
-    renderSearch({ papers: { [ALPHA]: [PAPER("a", "Before")] } });
+    await renderSearch({ papers: { [ALPHA]: [PAPER("a", "Before")] } });
     await runAdvancedSearch(user);
     await screen.findByTestId("advanced-search-failure");
     expect(setAlert).not.toHaveBeenCalled();

@@ -29,6 +29,7 @@ jest.mock("next/router", () => ({
 }));
 
 jest.mock("axios");
+import axios from "axios";
 
 import AlertContext from "../Context/Alert/alertContext";
 import LoadingContext from "../Context/Loading/loadingContext";
@@ -62,8 +63,39 @@ const dataWith = (papersByServer) => ({
 
 const setAlert = jest.fn();
 
-const renderSearch = (props) =>
-  render(
+// The page fetches every node in the browser. Each node answers from
+// `initialdata`; a node in `error.failed` is down (every endpoint fails), and
+// `error.filters[node]` names the filter endpoints that fail on a node whose
+// records did load.
+const serveNodes = (initialdata, error) =>
+  axios.get.mockImplementation((url) => {
+    const [server, endpoint] = url.split("/api/");
+    const failed = (error && error.failed) || [];
+    const filters = ((error && error.filters) || {})[server] || [];
+    if (failed.includes(server) || filters.includes(endpoint)) {
+      return Promise.reject(new Error("unreachable"));
+    }
+    if (endpoint === "search") {
+      return Promise.resolve({ data: (initialdata.papers || {})[server] || [] });
+    }
+    return Promise.resolve({ data: initialdata[endpoint] || [] });
+  });
+
+const renderSearch = async ({
+  initialdata = dataWith({}),
+  error = { is: false, msg: "", failed: [], total: false },
+  selectedservers,
+  ...props
+} = {}) => {
+  const servers = selectedservers || [
+    ...new Set([
+      ...Object.keys(initialdata.papers || {}),
+      ...((error && error.failed) || []),
+      ...Object.keys((error && error.filters) || {}),
+    ]),
+  ];
+  serveNodes(initialdata, error);
+  const view = render(
     <AlertContext.Provider value={{ setAlert, unsetAlert: jest.fn() }}>
       <LoadingContext.Provider
         value={{ showLoader: jest.fn(), hideLoader: jest.fn() }}
@@ -72,15 +104,17 @@ const renderSearch = (props) =>
         value={{ setSelected: jest.fn(), selected: [ALPHA] }}
       >
         <Search
-          initialdata={dataWith({})}
-          error={{ is: false, msg: "", failed: [], total: false }}
-          selectedservers={[ALPHA]}
+          selectedservers={servers.length ? servers : [ALPHA]}
           {...props}
         />
       </ServerContext.Provider>
       </LoadingContext.Provider>
     </AlertContext.Provider>
   );
+  // Let every node's requests settle.
+  await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  return view;
+};
 
 describe("search page states", () => {
   beforeEach(() => {
@@ -88,8 +122,8 @@ describe("search page states", () => {
     routerEvents.handlers = {};
   });
 
-  it("renders exactly the records the backend returned", () => {
-    renderSearch({
+  it("renders exactly the records the backend returned", async () => {
+    await renderSearch({
       initialdata: dataWith({
         [ALPHA]: [PAPER("a", "First paper"), PAPER("b", "Second paper")],
       }),
@@ -101,8 +135,8 @@ describe("search page states", () => {
     expect(screen.getByText("First paper")).toBeInTheDocument();
   });
 
-  it("never raises a blocking modal for a search failure", () => {
-    renderSearch({
+  it("never raises a blocking modal for a search failure", async () => {
+    await renderSearch({
       initialdata: dataWith({}),
       error: {
         is: true,
@@ -114,8 +148,8 @@ describe("search page states", () => {
     expect(setAlert).not.toHaveBeenCalled();
   });
 
-  it("shows an in-page unavailable state with Retry when every node failed", () => {
-    renderSearch({
+  it("shows an in-page unavailable state with Retry when every node failed", async () => {
+    await renderSearch({
       initialdata: dataWith({}),
       error: { is: true, msg: "", failed: [ALPHA], total: true },
     });
@@ -132,11 +166,11 @@ describe("search page states", () => {
     expect(reload).toHaveBeenCalled();
   });
 
-  it("shows the working sources' records with no warning at all", () => {
+  it("shows the working sources' records with no warning at all", async () => {
     // Federation is plumbing. A visitor did not choose which nodes back this
     // search and can do nothing about one being down, so a warning above a
     // page that is working asks them to worry about a move they do not have.
-    renderSearch({
+    await renderSearch({
       initialdata: dataWith({ [ALPHA]: [PAPER("a", "From alpha")] }),
       error: { is: true, msg: "", failed: [BETA], total: false },
     });
@@ -152,20 +186,20 @@ describe("search page states", () => {
     expect(setAlert).not.toHaveBeenCalled();
   });
 
-  it("offers no retry when the page is working, only when it is not", () => {
+  it("offers no retry when the page is working, only when it is not", async () => {
     // There is nothing to retry FROM: the records the reader asked for are
     // on screen. The retry belongs to the total failure, where they are not.
-    renderSearch({
+    await renderSearch({
       initialdata: dataWith({ [ALPHA]: [PAPER("a", "From alpha")] }),
       error: { is: true, msg: "", failed: [BETA], total: false },
     });
     expect(screen.queryByRole("button", { name: /retry/i })).toBeNull();
   });
 
-  it("names no institution when everything is down either", () => {
+  it("names no institution when everything is down either", async () => {
     // The registry knows this node as "Duke University". The error a reader
     // DOES see must not put an institution's name on an outage.
-    renderSearch({
+    await renderSearch({
       initialdata: dataWith({}),
       error: { is: true, msg: "", failed: [BETA], total: true },
       servernames: { [BETA]: "Duke University" },
@@ -176,8 +210,8 @@ describe("search page states", () => {
     expect(panel).not.toHaveTextContent(BETA);
   });
 
-  it("counts the sources when more than one is down", () => {
-    renderSearch({
+  it("counts the sources when more than one is down", async () => {
+    await renderSearch({
       initialdata: dataWith({}),
       error: { is: true, msg: "", failed: [BETA, "https://gamma.example.org"],
                total: true },
@@ -187,8 +221,8 @@ describe("search page states", () => {
     );
   });
 
-  it("shows a loading placeholder instead of a stale count during navigation", () => {
-    renderSearch({
+  it("shows a loading placeholder instead of a stale count during navigation", async () => {
+    await renderSearch({
       initialdata: dataWith({ [ALPHA]: [PAPER("a", "First")] }),
     });
 
@@ -204,16 +238,16 @@ describe("search page states", () => {
     expect(screen.getByTestId("record-count")).toBeInTheDocument();
   });
 
-  it("does not show loading for a navigation away from search", () => {
-    renderSearch({
+  it("does not show loading for a navigation away from search", async () => {
+    await renderSearch({
       initialdata: dataWith({ [ALPHA]: [PAPER("a", "First")] }),
     });
     act(() => routerEvents.emit("routeChangeStart", "/curator"));
     expect(screen.queryByTestId("search-loading")).toBeNull();
   });
 
-  it("clears the loading state when a navigation errors", () => {
-    renderSearch({
+  it("clears the loading state when a navigation errors", async () => {
+    await renderSearch({
       initialdata: dataWith({ [ALPHA]: [PAPER("a", "First")] }),
     });
     act(() => routerEvents.emit("routeChangeStart", "/search?servers=x"));
@@ -221,8 +255,8 @@ describe("search page states", () => {
     expect(screen.queryByTestId("search-loading")).toBeNull();
   });
 
-  it("keeps each record's source server for its detail link", () => {
-    renderSearch({
+  it("keeps each record's source server for its detail link", async () => {
+    await renderSearch({
       initialdata: dataWith({
         [ALPHA]: [PAPER("a", "From alpha")],
         [BETA]: [PAPER("b", "From beta")],
@@ -256,8 +290,8 @@ describe("search page: record-source vs filter failures", () => {
                ...overrides },
     });
 
-  it("says filters are incomplete, NOT that records are missing", () => {
-    withError({ filters: { [ALPHA]: ["authors", "collections"] } });
+  it("says filters are incomplete, NOT that records are missing", async () => {
+    await withError({ filters: { [ALPHA]: ["authors", "collections"] } });
 
     // The records are on the page...
     expect(screen.getByText("From alpha")).toBeInTheDocument();
@@ -266,11 +300,15 @@ describe("search page: record-source vs filter failures", () => {
     );
     // ...so the notice names the FILTERS that are short -- which is the part
     // a reader can act on -- and not the node, which is not.
+    // The summary counts the sources; which node and which filters sit
+    // behind "Details" for whoever wants them.
     const notice = screen.getByTestId("search-filter-failure");
-    expect(notice).toHaveTextContent(/search filters have fewer options/i);
+    const summary = notice.textContent.split("Details")[0];
+    expect(summary).toMatch(/search filters are incomplete/i);
+    expect(summary).toMatch(ONE_UNAVAILABLE);
+    expect(summary).not.toContain(ALPHA);
     expect(notice).toHaveTextContent(/authors/);
     expect(notice).toHaveTextContent(/collections/);
-    expect(notice).not.toHaveTextContent(ALPHA);
     // The wrong sentence must not appear anywhere.
     expect(screen.queryByText(/records are missing/i)).toBeNull();
     expect(screen.queryByTestId("search-partial-failure")).toBeNull();
@@ -278,21 +316,21 @@ describe("search page: record-source vs filter failures", () => {
     expect(setAlert).not.toHaveBeenCalled();
   });
 
-  it("says nothing at all when a node's records are missing but others answered", () => {
+  it("says nothing at all when a node's records are missing but others answered", async () => {
     // The distinction this describe block exists for is unchanged: a failed
     // RECORDS endpoint and a failed FILTER endpoint are different events.
     // What changed is that the first no longer warns while the page works.
-    withError({ failed: [BETA] });
+    await withError({ failed: [BETA] });
     expect(screen.queryByTestId("search-partial-failure")).toBeNull();
     expect(screen.queryByTestId("search-filter-failure")).toBeNull();
     expect(screen.getByText("From alpha")).toBeInTheDocument();
   });
 
-  it("keeps the filter notice when both kinds of failure happen together", () => {
+  it("keeps the filter notice when both kinds of failure happen together", async () => {
     // The filter notice survives because it is about something the reader
     // CAN act on -- a dropdown that is short of options, which changes what
     // they can search for. The missing-records banner does not.
-    withError({ failed: [BETA], filters: { [ALPHA]: ["authors"] } });
+    await withError({ failed: [BETA], filters: { [ALPHA]: ["authors"] } });
     expect(screen.queryByTestId("search-partial-failure")).toBeNull();
     expect(screen.getByTestId("search-filter-failure")).toHaveTextContent(
       /authors/
@@ -301,16 +339,16 @@ describe("search page: record-source vs filter failures", () => {
     expect(screen.queryByTestId("search-unavailable")).toBeNull();
   });
 
-  it("does not mention filters at all when nothing failed", () => {
-    renderSearch({
+  it("does not mention filters at all when nothing failed", async () => {
+    await renderSearch({
       initialdata: dataWith({ [ALPHA]: [PAPER("a", "From alpha")] }),
     });
     expect(screen.queryByTestId("search-filter-failure")).toBeNull();
     expect(screen.queryByTestId("search-partial-failure")).toBeNull();
   });
 
-  it("shows only the unavailable panel when every node's records failed", () => {
-    withError({ failed: [ALPHA], filters: { [ALPHA]: ["authors"] },
+  it("shows only the unavailable panel when every node's records failed", async () => {
+    await withError({ failed: [ALPHA], filters: { [ALPHA]: ["authors"] },
                 total: true }, {});
     expect(screen.getByTestId("search-unavailable")).toBeInTheDocument();
     // A filter notice beside "nothing loaded" would be noise.

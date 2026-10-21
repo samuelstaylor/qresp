@@ -37,7 +37,9 @@ const paper = {
   notebookFile: "",
   notebookPath: "",
   abstract: "Rareword resonance in gadgetite lattices.",
-  charts: [],
+  // One figure, so the (stubbed) figures section renders: a record with
+  // no figures shows none.
+  charts: [{ id: "c0", caption: "A figure", imageFile: "fig.png" }],
   fileServerPath: "https://files.example.org/subject",
   datasets: [],
   tools: [],
@@ -156,6 +158,8 @@ describe("Paper Details / Suggested Related Papers", () => {
     expect(
         screen.queryByText(/suggested related papers/i)
       ).not.toBeInTheDocument();
-    expect(axios.get).not.toHaveBeenCalled();
+    // The curator profile still loads on previews; related papers never do.
+    const urls = axios.get.mock.calls.map(([url]) => url);
+    expect(urls.filter((url) => /\/related/.test(url))).toEqual([]);
   });
 });

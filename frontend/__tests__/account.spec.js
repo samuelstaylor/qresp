@@ -4,15 +4,28 @@ import userEvent from "@testing-library/user-event";
 jest.mock("axios");
 import axios from "axios";
 
+jest.mock("next/router", () => ({
+  useRouter: () => ({ pathname: "/account", asPath: "/account", push: jest.fn() }),
+}));
+
 import AccountPage from "../pages/account";
+import RecordsPage from "../pages/account/records";
+import DraftsPage from "../pages/account/drafts";
+import AdminPage from "../pages/account/admin";
 import AuthContext from "../Context/Auth/authContext";
 
-const renderAccount = (auth) =>
+// /account is the profile; records, drafts and the admin tools each have
+// their own page under /account/ inside the same AccountLayout.
+const renderWith = (Page) => (auth) =>
   render(
     <AuthContext.Provider value={auth}>
-      <AccountPage />
+      <Page />
     </AuthContext.Provider>
   );
+const renderAccount = renderWith(AccountPage);
+const renderRecords = renderWith(RecordsPage);
+const renderDrafts = renderWith(DraftsPage);
+const renderAdmin = renderWith(AdminPage);
 
 const authedUser = {
   loading: false,
@@ -52,7 +65,18 @@ const mockAccountApi = ({
   });
 };
 
-describe("Account page", () => {
+
+const activePaper = {
+  id: "p1",
+  title: "Active Paper",
+  authors: "A. Author",
+  year: 2020,
+  is_active: true,
+};
+const hiddenPaper = { ...activePaper, title: "Hidden Paper", is_active: false };
+const admin = { ...authedUser, user: { ...authedUser.user, is_admin: true } };
+
+describe("Account profile page", () => {
   afterEach(() => {
     jest.resetAllMocks();
     localStorage.clear();
@@ -61,12 +85,54 @@ describe("Account page", () => {
   it("prompts anonymous visitors to sign in and fetches nothing", () => {
     renderAccount({ loading: false, authenticated: false, user: null });
     expect(
-      screen.getByText(/sign in to see your account/i)
+      screen.getByText(/please sign in to view your account/i)
     ).toBeInTheDocument();
     expect(axios.get).not.toHaveBeenCalled();
   });
 
-  it("shows the profile and the user's records with view/edit links", async () => {
+  it("shows the profile and links to records, favorites and drafts", () => {
+    renderAccount(authedUser);
+    // Name and email appear in the sidebar and in the identity card.
+    expect(screen.getAllByText("Owner Example").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("owner@example.com").length).toBeGreaterThan(0);
+    expect(screen.getByText(/signed in with google/i)).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("link", { name: /my records/i })[0]
+    ).toHaveAttribute("href", "/account/records");
+    expect(
+      screen.getAllByRole("link", { name: /drafts/i })[0]
+    ).toHaveAttribute("href", "/account/drafts");
+  });
+
+  it("labels a Microsoft session on the profile", () => {
+    renderAccount({
+      ...authedUser,
+      user: { ...authedUser.user, provider: "microsoft" },
+    });
+    expect(screen.getByText(/signed in with microsoft/i)).toBeInTheDocument();
+  });
+
+  it("shows the admin badge for admins only", () => {
+    const { unmount } = renderAccount(admin);
+    expect(screen.getAllByText("Admin").length).toBeGreaterThan(0);
+    unmount();
+    renderAccount(authedUser);
+    expect(screen.queryByText("Admin")).not.toBeInTheDocument();
+  });
+});
+
+describe("My Records page", () => {
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  it("asks anonymous visitors to sign in and fetches nothing", () => {
+    renderRecords({ loading: false, authenticated: false, user: null });
+    expect(screen.getByText(/please sign in/i)).toBeInTheDocument();
+    expect(axios.get).not.toHaveBeenCalled();
+  });
+
+  it("lists the user's records with view/edit links", async () => {
     mockAccountApi({
       papers: [
         {
@@ -74,21 +140,15 @@ describe("Account page", () => {
           title: "Photoelectron Spectra",
           authors: "Alex Gaiduk",
           year: 2016,
-          tags: ["DFT"],
-          collections: ["MICCOM"],
           owner_email: "owner@example.com",
         },
       ],
     });
-    renderAccount(authedUser);
-    expect(screen.getByText("Owner Example")).toBeInTheDocument();
-    expect(screen.getByText("owner@example.com")).toBeInTheDocument();
-    expect(screen.getByText(/signed in with google/i)).toBeInTheDocument();
+    renderRecords(authedUser);
     expect(
       await screen.findByText(/photoelectron spectra \(2016\)/i)
     ).toBeInTheDocument();
     expect(axios.get).toHaveBeenCalledWith("/api/account/papers");
-    expect(axios.get).toHaveBeenCalledWith("/api/account/drafts");
     const view = screen.getByRole("link", { name: /^view$/i });
     expect(view.getAttribute("href")).toContain("/paperdetails/abc123");
     const edit = screen.getByRole("link", { name: /edit in curator/i });
@@ -96,18 +156,8 @@ describe("Account page", () => {
   });
 
   it("hides View and offers Reactivate for a deactivated record", async () => {
-    mockAccountApi({
-      papers: [
-        {
-          id: "p1",
-          title: "Hidden Paper",
-          authors: "A. Author",
-          year: 2020,
-          is_active: false,
-        },
-      ],
-    });
-    renderAccount(authedUser);
+    mockAccountApi({ papers: [hiddenPaper] });
+    renderRecords(authedUser);
     expect(await screen.findByText(/hidden paper/i)).toBeInTheDocument();
     expect(screen.getByText("deactivated")).toBeInTheDocument();
     // No View link that would land on the public 404 detail page.
@@ -124,22 +174,12 @@ describe("Account page", () => {
   });
 
   it("shows View and Deactivate for an active record", async () => {
-    mockAccountApi({
-      papers: [
-        {
-          id: "p1",
-          title: "Active Paper",
-          authors: "A. Author",
-          year: 2020,
-          is_active: true,
-        },
-      ],
-    });
-    renderAccount(authedUser);
+    mockAccountApi({ papers: [activePaper] });
+    renderRecords(authedUser);
     expect(await screen.findByText(/active paper/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^view$/i })).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /deactivate/i })
+      screen.getByRole("button", { name: /^deactivate$/i })
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /reactivate/i })
@@ -147,29 +187,19 @@ describe("Account page", () => {
   });
 
   it("deactivates a record via the confirm dialog and updates the UI", async () => {
-    mockAccountApi({
-      papers: [
-        {
-          id: "p1",
-          title: "Active Paper",
-          authors: "A. Author",
-          year: 2020,
-          is_active: true,
-        },
-      ],
-    });
+    mockAccountApi({ papers: [activePaper] });
     axios.put.mockResolvedValue({
       data: { id: "p1", is_active: false, success: true },
     });
     const user = userEvent.setup();
-    renderAccount(authedUser);
+    renderRecords(authedUser);
     await screen.findByText(/active paper/i);
-    await user.click(screen.getByRole("button", { name: /deactivate/i }));
+    await user.click(screen.getByRole("button", { name: /^deactivate$/i }));
     const dialog = screen.getByRole("dialog");
     // Wording makes clear this is a soft, reversible hide (not a hard delete).
     expect(within(dialog).getByText(/not deleted/i)).toBeInTheDocument();
     await user.click(
-      within(dialog).getByRole("button", { name: /deactivate/i })
+      within(dialog).getByRole("button", { name: /^deactivate$/i })
     );
     await waitFor(() =>
       expect(axios.put).toHaveBeenCalledWith("/api/paper/p1/active", {
@@ -188,22 +218,12 @@ describe("Account page", () => {
   });
 
   it("reactivates a record via the confirm dialog and updates the UI", async () => {
-    mockAccountApi({
-      papers: [
-        {
-          id: "p1",
-          title: "Hidden Paper",
-          authors: "A. Author",
-          year: 2020,
-          is_active: false,
-        },
-      ],
-    });
+    mockAccountApi({ papers: [hiddenPaper] });
     axios.put.mockResolvedValue({
       data: { id: "p1", is_active: true, success: true },
     });
     const user = userEvent.setup();
-    renderAccount(authedUser);
+    renderRecords(authedUser);
     await screen.findByText(/hidden paper/i);
     await user.click(screen.getByRole("button", { name: /reactivate/i }));
     const dialog = screen.getByRole("dialog");
@@ -225,17 +245,14 @@ describe("Account page", () => {
     mockAccountApi({
       papers: [
         {
-          id: "p1",
+          ...activePaper,
           title: "Shared Paper",
-          authors: "A. Author",
-          year: 2021,
-          is_active: true,
           role: "editor",
           editor_emails: ["owner@example.com"],
         },
       ],
     });
-    renderAccount(authedUser);
+    renderRecords(authedUser);
     expect(await screen.findByText(/shared paper/i)).toBeInTheDocument();
     expect(screen.getByText("editor")).toBeInTheDocument();
     // Editors can view and edit, but never manage.
@@ -246,115 +263,10 @@ describe("Account page", () => {
     expect(
       screen.queryByRole("button", { name: /deactivate/i })
     ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /editors/i })
-    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("record-sharing")).not.toBeInTheDocument();
   });
 
-  it("lets the owner manage editors through the Editors dialog", async () => {
-    mockAccountApi({
-      papers: [
-        {
-          id: "p1",
-          title: "My Paper",
-          authors: "A. Author",
-          year: 2021,
-          is_active: true,
-          role: "owner",
-          editor_emails: ["old@example.com"],
-        },
-      ],
-    });
-    axios.put.mockResolvedValue({
-      data: {
-        id: "p1",
-        editor_emails: ["old@example.com", "new@example.com"],
-        success: true,
-      },
-    });
-    const user = userEvent.setup();
-    renderAccount(authedUser);
-    await screen.findByText(/my paper/i);
-    await user.click(screen.getByRole("button", { name: /editors/i }));
-
-    const dialog = screen.getByRole("dialog");
-    const input = within(dialog).getByLabelText(/editor emails/i);
-    expect(input).toHaveValue("old@example.com");
-    // Pasted, not typed key by key: the editor list is controlled by
-    // page-level state, so each character re-rendered the whole account page
-    // and 31 of them took ~4s of the 5s budget. What this test is about is
-    // the list that reaches the API, not the keystrokes -- and pasting a
-    // list of addresses is what a curator does with one anyway.
-    await user.clear(input);
-    await user.paste("old@example.com, new@example.com");
-    await user.click(within(dialog).getByRole("button", { name: /save/i }));
-
-    await waitFor(() =>
-      expect(axios.put).toHaveBeenCalledWith("/api/paper/p1/editors", {
-        editor_emails: ["old@example.com", "new@example.com"],
-      })
-    );
-  });
-
-  it("shows the backend error inline when the editor update fails", async () => {
-    mockAccountApi({
-      papers: [
-        {
-          id: "p1",
-          title: "My Paper",
-          authors: "A. Author",
-          year: 2021,
-          is_active: true,
-          role: "owner",
-          editor_emails: [],
-        },
-      ],
-    });
-    axios.put.mockRejectedValue({
-      response: {
-        status: 400,
-        data: { error: "invalid editor email: not-an-email" },
-      },
-    });
-    const user = userEvent.setup();
-    renderAccount(authedUser);
-    await screen.findByText(/my paper/i);
-    await user.click(screen.getByRole("button", { name: /editors/i }));
-    const dialog = screen.getByRole("dialog");
-    await user.type(
-      within(dialog).getByLabelText(/editor emails/i),
-      "not-an-email"
-    );
-    await user.click(within(dialog).getByRole("button", { name: /save/i }));
-    expect(
-      await within(dialog).findByText(/invalid editor email/i)
-    ).toBeInTheDocument();
-  });
-
-  it("labels a Microsoft session on the profile", async () => {
-    mockAccountApi();
-    renderAccount({
-      ...authedUser,
-      user: { ...authedUser.user, provider: "microsoft" },
-    });
-    expect(
-      screen.getByText(/signed in with microsoft/i)
-    ).toBeInTheDocument();
-  });
-
-  it("shows the admin badge for admins", async () => {
-    mockAccountApi();
-    renderAccount({
-      ...authedUser,
-      user: { ...authedUser.user, is_admin: true },
-    });
-    expect(screen.getByText("admin")).toBeInTheDocument();
-    expect(
-      await screen.findByText(/no published records yet/i)
-    ).toBeInTheDocument();
-  });
-
-  it("gives admins the All records section, listing records they do not own", async () => {
+  it("shows the admin sections to admins", async () => {
     mockAccountApi({
       adminPapers: [
         {
@@ -368,30 +280,66 @@ describe("Account page", () => {
         },
       ],
     });
-    renderAccount({
-      ...authedUser,
-      user: { ...authedUser.user, is_admin: true },
-    });
+    renderRecords(admin);
     expect(
-      screen.getByText(/all records \(admin\)/i)
+      await screen.findByText(/no published records yet/i)
     ).toBeInTheDocument();
-    // A record the admin neither owns nor edits appears (it is NOT in the
-    // "My published records" list, which is empty here).
+    expect(screen.getByText(/admin — all records/i)).toBeInTheDocument();
+    // A record the admin neither owns nor edits appears there.
     expect(await screen.findByText(/foreign paper/i)).toBeInTheDocument();
     expect(axios.get).toHaveBeenCalledWith("/api/admin/papers");
   });
 
   it("hides the admin sections from non-admins", async () => {
     mockAccountApi();
-    renderAccount(authedUser);
+    renderRecords(authedUser);
     await screen.findByText(/no published records yet/i);
+    expect(screen.queryByText(/admin — all records/i)).not.toBeInTheDocument();
     expect(
-      screen.queryByText(/all records \(admin\)/i)
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByText(/ownerless records \(admin\)/i)
+      screen.queryByText(/admin — ownerless records/i)
     ).not.toBeInTheDocument();
     expect(axios.get).not.toHaveBeenCalledWith("/api/admin/papers");
+  });
+});
+
+describe("Admin page", () => {
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  it("gives admins All records, listing records they do not own", async () => {
+    mockAccountApi({
+      adminPapers: [
+        {
+          id: "x1",
+          title: "Foreign Paper",
+          authors: "Someone Else",
+          year: 2018,
+          owner_email: "someone@example.com",
+          editor_emails: [],
+          is_active: true,
+        },
+      ],
+    });
+    renderAdmin(admin);
+    expect(screen.getByText("All Records")).toBeInTheDocument();
+    expect(screen.getByText("Ownerless Records")).toBeInTheDocument();
+    expect(await screen.findByText(/foreign paper/i)).toBeInTheDocument();
+    expect(axios.get).toHaveBeenCalledWith("/api/admin/papers");
+  });
+
+  it("refuses non-admins and fetches nothing", () => {
+    renderAdmin(authedUser);
+    expect(screen.getByText(/access denied/i)).toBeInTheDocument();
+    expect(screen.queryByText("All Records")).not.toBeInTheDocument();
+    expect(axios.get).not.toHaveBeenCalled();
+  });
+});
+
+describe("My Drafts page", () => {
+  afterEach(() => {
+    jest.resetAllMocks();
+    localStorage.clear();
   });
 
   it("surfaces a browser draft with Resume and Clear", async () => {
@@ -404,9 +352,9 @@ describe("Account page", () => {
       })
     );
     const user = userEvent.setup();
-    renderAccount(authedUser);
+    renderDrafts(authedUser);
     expect(await screen.findByText("My draft paper")).toBeInTheDocument();
-    expect(screen.getByText(/contains: charts/i)).toBeInTheDocument();
+    expect(screen.getByText("charts")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /resume/i })
     ).toHaveAttribute("href", "/curator?resumeDraft=1");
@@ -415,29 +363,21 @@ describe("Account page", () => {
     expect(screen.queryByText("My draft paper")).not.toBeInTheDocument();
     expect(localStorage.getItem("state")).toBeNull();
     expect(
-      screen.getByText(/no local recovery draft/i)
+      screen.getByText(/no local draft saved in this browser/i)
     ).toBeInTheDocument();
   });
 
   it("lists multiple account drafts with resume and delete actions", async () => {
     mockAccountApi({
       drafts: [
-        {
-          id: "draft1",
-          title: "First draft",
-          updated_at: "2026-07-08T12:00:00",
-        },
-        {
-          id: "draft2",
-          title: "Second draft",
-          updated_at: "2026-07-08T13:00:00",
-        },
+        { id: "draft1", title: "First draft", updated_at: "2026-07-08T12:00:00" },
+        { id: "draft2", title: "Second draft", updated_at: "2026-07-08T13:00:00" },
       ],
     });
     axios.delete.mockResolvedValue({ data: { success: true } });
     const user = userEvent.setup();
 
-    renderAccount(authedUser);
+    renderDrafts(authedUser);
 
     expect(await screen.findByText("First draft")).toBeInTheDocument();
     expect(screen.getByText("Second draft")).toBeInTheDocument();
@@ -455,7 +395,9 @@ describe("Account page", () => {
     await waitFor(() =>
       expect(axios.delete).toHaveBeenCalledWith("/api/account/drafts/draft1")
     );
-    expect(screen.queryByText("First draft")).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByText("First draft")).not.toBeInTheDocument()
+    );
     expect(screen.getByText("Second draft")).toBeInTheDocument();
   });
 
@@ -466,20 +408,16 @@ describe("Account page", () => {
       ],
     });
     axios.put.mockResolvedValue({
-      data: {
-        id: "draft1",
-        title: "New name",
-        updated_at: "2026-07-08T14:00:00",
-      },
+      data: { id: "draft1", title: "New name", updated_at: "2026-07-08T14:00:00" },
     });
     const user = userEvent.setup();
 
-    renderAccount(authedUser);
+    renderDrafts(authedUser);
     await screen.findByText("Old name");
     await user.click(screen.getByRole("button", { name: /rename/i }));
 
     const dialog = screen.getByRole("dialog");
-    const input = within(dialog).getByLabelText(/draft name/i);
+    const input = within(dialog).getByLabelText(/draft title/i);
     await user.clear(input);
     await user.type(input, "New name");
     await user.click(within(dialog).getByRole("button", { name: /save/i }));

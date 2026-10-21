@@ -33,7 +33,7 @@ describe("/login", () => {
     mockReplace.mockReset();
   });
 
-  it("offers exactly the two supported OAuth providers as links", async () => {
+  it("offers exactly the three supported OAuth providers as links", async () => {
     anonymous();
     renderLogin();
 
@@ -41,9 +41,11 @@ describe("/login", () => {
       name: /continue with microsoft/i,
     });
     const google = screen.getByRole("link", { name: /continue with google/i });
+    const github = screen.getByRole("link", { name: /continue with github/i });
     expect(microsoft).toHaveAttribute("href", "/api/auth/microsoft?next=%2F");
     expect(google).toHaveAttribute("href", "/api/auth/google?next=%2F");
-    expect(screen.getAllByRole("link")).toHaveLength(2);
+    expect(github).toHaveAttribute("href", "/api/auth/github?next=%2F");
+    expect(screen.getAllByRole("link")).toHaveLength(3);
   });
 
   it("shows a heading and email/password form with OAuth providers always visible", async () => {
@@ -56,7 +58,7 @@ describe("/login", () => {
     expect(heading).toBeInTheDocument();
     // Email/password form fields are visible in sign-in mode.
     expect(screen.getByLabelText(/email address/i)).toBeVisible();
-    expect(screen.getByLabelText(/^password$/i)).toBeVisible();
+    expect(screen.getByLabelText(/^password\b/i)).toBeVisible();
     // Nothing gates the providers behind an accordion.
     expect(screen.queryByRole("button", { name: /expand/i })).toBeNull();
     expect(document.querySelector(".MuiAccordion-root")).toBeNull();
@@ -174,7 +176,7 @@ describe("/login", () => {
     await screen.findByRole("heading", { name: /sign in to qresp/i });
 
     fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: "a@b.com" } });
-    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "secret123" } });
+    fireEvent.change(screen.getByLabelText(/^password\b/i), { target: { value: "secret123" } });
     fireEvent.click(screen.getByRole("button", { name: /sign in with email/i }));
 
     await waitFor(() =>
@@ -195,7 +197,7 @@ describe("/login", () => {
     await screen.findByRole("heading", { name: /sign in to qresp/i });
 
     fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: "a@b.com" } });
-    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "wrong" } });
+    fireEvent.change(screen.getByLabelText(/^password\b/i), { target: { value: "wrong" } });
     fireEvent.click(screen.getByRole("button", { name: /sign in with email/i }));
 
     expect(await screen.findByText(/invalid email or password/i)).toBeInTheDocument();
@@ -208,7 +210,7 @@ describe("/login", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /create account/i }));
     fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: "x@y.com" } });
-    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "abcdefgh" } });
+    fireEvent.change(screen.getByLabelText(/^password\b/i), { target: { value: "abcdefgh" } });
     fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: "different" } });
     fireEvent.click(screen.getByRole("button", { name: /create account with email/i }));
 

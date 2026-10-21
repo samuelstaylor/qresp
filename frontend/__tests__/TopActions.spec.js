@@ -98,10 +98,10 @@ describe("TopActions toolbar contents", () => {
     // The remaining toolbar controls are unchanged (tooltip names; Export
     // renders as a download link, the rest as buttons).
     [
-      /save this work as a draft in your account/i,
-      /continue with an existing metadata file \(json\)/i,
-      /clear the session and start afresh/i,
-      /preview the curated paper/i,
+      /save this work as a named draft in your account/i,
+      /load a previously exported metadata json file/i,
+      /clear the form and start a fresh submission/i,
+      /preview how this paper will look when published/i,
     ].forEach((name) => {
       expect(
         screen.getAllByRole("button", { name }).length
@@ -109,7 +109,7 @@ describe("TopActions toolbar contents", () => {
     });
     expect(
       screen.getAllByRole("link", {
-        name: /export metadata of the paper being curated/i,
+        name: /export the current metadata as a json file/i,
       }).length
     ).toBeGreaterThan(0);
   });
@@ -122,7 +122,7 @@ describe("TopActions draft controls", () => {
 
     await user.click(
       screen.getAllByRole("button", {
-        name: /save this work as a draft in your account/i,
+        name: /save this work as a named draft in your account/i,
       })[0]
     );
 
@@ -139,7 +139,7 @@ describe("TopActions draft controls", () => {
 
     await user.click(
       screen.getAllByRole("button", {
-        name: /save this work as a draft in your account/i,
+        name: /save this work as a named draft in your account/i,
       })[0]
     );
 
@@ -159,7 +159,7 @@ describe("TopActions draft controls", () => {
 
     await user.click(
       screen.getAllByRole("button", {
-        name: /clear the session and start afresh/i,
+        name: /clear the form and start a fresh submission/i,
       })[0]
     );
 
@@ -195,7 +195,7 @@ describe("TopActions draft controls", () => {
 
     await user.click(
       screen.getAllByRole("button", {
-        name: /clear the session and start afresh/i,
+        name: /clear the form and start a fresh submission/i,
       })[0]
     );
 
@@ -226,7 +226,7 @@ describe("TopActions draft controls", () => {
 
     await user.click(
       screen.getAllByRole("button", {
-        name: /clear the session and start afresh/i,
+        name: /clear the form and start a fresh submission/i,
       })[0]
     );
 

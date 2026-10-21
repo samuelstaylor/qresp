@@ -78,7 +78,7 @@ describe("EditModeController", () => {
       auth: { loading: false, authenticated: false },
     });
     expect(
-      screen.getByText(/sign in to curate and publish a record/i)
+      screen.getByText(/sign in to start curating/i)
     ).toBeInTheDocument();
     expect(screen.queryByText(/FORMS/)).not.toBeInTheDocument();
   });

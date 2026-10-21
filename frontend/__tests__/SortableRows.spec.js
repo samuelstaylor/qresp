@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { createEvent, fireEvent, render, screen } from "@testing-library/react";
 
 import SortableRows from "../components/Form/SortableRows";
 
@@ -48,14 +48,21 @@ beforeEach(() => {
 });
 afterEach(() => jest.restoreAllMocks());
 
+// jsdom has no DragEvent, so a drag event is a plain Event and an init
+// `clientY` is dropped; set it on the event itself.
+const pointerAt = (event, clientY) => {
+  Object.defineProperty(event, "clientY", { value: clientY });
+  return event;
+};
+
 const row = (i) => screen.getByTestId(`sortable-row-${i}`);
 const drag = (fromIndex, clientY, { onField = false } = {}) => {
   const press = onField ? row(fromIndex).querySelector("input") : row(fromIndex);
   fireEvent.mouseDown(press);
   fireEvent.dragStart(row(fromIndex), { dataTransfer: dataTransfer() });
   const list = row(0).parentElement.parentElement;
-  fireEvent.dragOver(list, { clientY, dataTransfer: dataTransfer() });
-  fireEvent.drop(list, { clientY, dataTransfer: dataTransfer() });
+  fireEvent(list, pointerAt(createEvent.dragOver(list, { dataTransfer: dataTransfer() }), clientY));
+  fireEvent(list, pointerAt(createEvent.drop(list, { dataTransfer: dataTransfer() }), clientY));
 };
 
 describe("reordering authors", () => {

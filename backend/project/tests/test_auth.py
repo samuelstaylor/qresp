@@ -179,8 +179,9 @@ class TestCallbackLogRedaction(unittest.TestCase):
 
 
 class TestRetiredProviders(unittest.TestCase):
-    """CILogon was removed: Microsoft Entra and Google are the only public
-    providers. Nothing may still route to the retired broker."""
+    """CILogon was removed: Microsoft Entra, Google, GitHub and email
+    accounts are the supported sign-in methods. Nothing may still route to
+    the retired broker."""
 
     def setUp(self):
         self.client = connexionapp.test_client()
@@ -201,7 +202,7 @@ class TestRetiredProviders(unittest.TestCase):
         self.assertTrue(callable(auth._oidc_signing_key))
         self.assertTrue(callable(auth._validate_microsoft_id_token))
 
-    def test_only_google_and_microsoft_are_advertised(self):
+    def test_only_supported_providers_are_advertised(self):
         import io
         import os
         import yaml
@@ -213,9 +214,10 @@ class TestRetiredProviders(unittest.TestCase):
         providers = sorted(
             path for path in spec["paths"] if path.startswith("/auth/"))
         self.assertEqual(
-            ["/auth/dev-login", "/auth/google", "/auth/google/callback",
+            ["/auth/dev-login", "/auth/github", "/auth/github/callback",
+             "/auth/google", "/auth/google/callback", "/auth/local-login",
              "/auth/logout", "/auth/me", "/auth/microsoft",
-             "/auth/microsoft/callback"],
+             "/auth/microsoft/callback", "/auth/profile", "/auth/register"],
             providers)
 
 

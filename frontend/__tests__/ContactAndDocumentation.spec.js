@@ -18,6 +18,10 @@ import {
 } from "../components/FolderStandard/content";
 import Header from "../components/header";
 
+jest.mock("next/router", () => ({
+  useRouter: () => ({ pathname: "/", asPath: "/", push: jest.fn() }),
+}));
+
 jest.mock("../components/AuthControls", () => {
   const AuthControls = () => null;
   return AuthControls;

@@ -23,8 +23,10 @@ const at = (tag) => {
 
 describe("where the curation workspace sits", () => {
   it("comes after the metadata a record cannot do without", () => {
-    // A record needs its title and its reference whatever else is done to it.
-    expect(at("FigureWorkspace")).toBeGreaterThan(at("PaperInfoElement"));
+    // A record needs its reference whatever else is done to it. The order
+    // follows the guided setup: who, the work, where its files are, then
+    // what is in them.
+    expect(at("FigureWorkspace")).toBeGreaterThan(at("CuratorElement"));
     expect(at("FigureWorkspace")).toBeGreaterThan(at("ReferenceInfoElement"));
   });
 
@@ -33,14 +35,18 @@ describe("where the curation workspace sits", () => {
     expect(at("FigureWorkspace")).toBeGreaterThan(at("FileServerElement"));
   });
 
-  it("is followed by the picture of what it produced", () => {
-    // "Build your workflow" is a read-only preview of the section above, so
-    // it belongs beside it rather than at the far end of the page.
+  it("is followed by the paper's details, then the picture of what it produced", () => {
+    // Keywords and the abstract come once the figures are in; "Build your
+    // workflow" is a read-only preview of the figures, so it stays close by
+    // rather than at the far end of the page.
     const between = source.slice(
       at("FigureWorkspace"),
       at("WorkflowInfoElement")
     );
-    expect(between.match(/<[A-Z]\w+ \/>/g)).toEqual(["<FigureWorkspace />"]);
+    expect(between.match(/<[A-Z]\w+ \/>/g)).toEqual([
+      "<FigureWorkspace />",
+      "<PaperInfoElement />",
+    ]);
   });
 
   it("comes, with its preview, before the optional documentation", () => {
